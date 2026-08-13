@@ -192,6 +192,12 @@
               window.recordUserLoginStatus('Online', user);
             }
           }
+          if (typeof window.trackUserLoginPresence === 'function') {
+            window.trackUserLoginPresence(user);
+          }
+          if (typeof window.subscribeToUserPresence === 'function') {
+            window.subscribeToUserPresence();
+          }
           if (typeof window.hideMandatoryLoginScreen === 'function') {
             window.hideMandatoryLoginScreen();
           }
@@ -202,6 +208,12 @@
               window.recordUserLoginStatus('Offline', lastKnownUserForLogout);
             }
             lastKnownUserForLogout = null;
+          }
+          if (typeof window.trackUserLoginPresence === 'function') {
+            window.trackUserLoginPresence(null);
+          }
+          if (typeof window.subscribeToUserPresence === 'function') {
+            window.subscribeToUserPresence();
           }
           if (typeof window.handleQuickLogin === 'function') {
             window.handleQuickLogin('ADMIN', 'ผู้ดูแลระบบ (Admin)', 'jaru072@gmail.com');
@@ -5009,9 +5021,6 @@
           if (isFirebaseReady && db) {
             try {
               await deleteDoc(doc(db, "equipment", id));
-              if (item.imageUrl) {
-                await deleteImageFromFirebaseStorage(item.imageUrl);
-              }
             } catch (e) {
               console.error("Error deleting item in Firestore:", e);
             }
@@ -11427,9 +11436,6 @@
         if (isFirebaseReady && db) {
           try { await deleteDoc(doc(db, "employees", empId)); } catch(e){}
         }
-        if (emp.photoUrl) {
-          await deleteImageFromFirebaseStorage(emp.photoUrl);
-        }
 
         if (typeof logAuditAction === 'function') {
           logAuditAction('บุคลากร', 'ลบ', `ลบข้อมูลบุคลากร "${emp.name}" [${emp.id}] (แผนก: ${emp.department || '-'})`, empId);
@@ -11572,10 +11578,6 @@
         }
       }
 
-      if (item && item.imageUrl) {
-        await deleteImageFromFirebaseStorage(item.imageUrl);
-      }
-
       if (typeof logAuditAction === 'function') {
         logAuditAction('อุปกรณ์', 'ลบ', `ลบรายการอุปกรณ์ "${displayName}" [${displayCode}]`, id);
       }
@@ -11712,7 +11714,7 @@
 
         // 3. Delete all documents in Firestore collections if Firestore ready
         if (isFirebaseReady && db) {
-          const collectionsToPurge = ["equipment", "employees", "transactions", "attendance", "categories", "departments", "system_metadata"];
+          const collectionsToPurge = ["equipment", "employees", "transactions", "attendance", "categories", "departments", "locations", "system_metadata"];
           for (const colName of collectionsToPurge) {
             try {
               const colRef = collection(db, colName);
@@ -11733,6 +11735,10 @@
         transactionHistory = [];
         attendanceLogs = [];
         categoriesList = [];
+        departmentsList = [];
+        locationsList = [];
+        window.departmentsList = [];
+        window.locationsList = [];
 
         // 5. Clear LocalStorage keys
         localStorage.removeItem('flora_employees');
@@ -11741,11 +11747,13 @@
         localStorage.removeItem('flora_attendance');
         localStorage.removeItem('flora_categories');
         localStorage.removeItem('flora_departments');
+        localStorage.removeItem('flora_locations');
         localStorage.removeItem('flora_db_initialized');
         localStorage.removeItem('flora_fs_seeded_employees');
         localStorage.removeItem('flora_fs_seeded_attendance');
         localStorage.removeItem('flora_fs_seeded_categories');
         localStorage.removeItem('flora_fs_seeded_equipment');
+        localStorage.removeItem('flora_fs_seeded_locations');
 
         saveToLocalStorage();
 
@@ -11769,6 +11777,102 @@
       } catch (err) {
         console.error("Purge error:", err);
         alert("เกิดข้อผิดพลาดขณะลบฐานข้อมูล: " + err.message);
+      }
+    };
+
+    // Function to scan and purge only orphaned/unused images from Firebase Storage
+    window.scanAndCleanupOrphanedStorageImages = async function() {
+      if (!isFirebaseReady || !storage) {
+        showToast("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน กรุณาตรวจสอบการเชื่อมต่อระบบคลาวด์");
+        return;
+      }
+
+      showToast("🔍 กำลังสแกนตรวจสอบไฟล์รูปภาพขยะใน Firebase Storage...");
+
+      try {
+        // 1. Gather all active image URLs / paths in use
+        const activeImagePaths = new Set();
+        (equipmentList || []).forEach(eq => {
+          if (eq && eq.imageUrl) activeImagePaths.add(String(eq.imageUrl));
+        });
+        (employeeList || []).forEach(emp => {
+          if (emp && emp.photoUrl) activeImagePaths.add(String(emp.photoUrl));
+        });
+
+        // Convert URLs into readable decoded strings for matching
+        const decodedActiveStrings = new Set();
+        activeImagePaths.forEach(urlStr => {
+          try {
+            decodedActiveStrings.add(decodeURIComponent(urlStr));
+          } catch (e) {
+            decodedActiveStrings.add(urlStr);
+          }
+        });
+
+        // 2. Scan Storage folders
+        const folders = ["equipment_images", "employee_photos", "uploads"];
+        let totalFilesScanned = 0;
+        const orphanedItems = [];
+
+        for (const folder of folders) {
+          try {
+            const folderRef = ref(storage, folder);
+            const res = await listAll(folderRef);
+            totalFilesScanned += res.items.length;
+
+            for (const itemRef of res.items) {
+              const fullPath = itemRef.fullPath; // e.g. "equipment_images/item1.jpeg"
+              const fileName = itemRef.name;     // e.g. "item1.jpeg"
+
+              let isUsed = false;
+              for (const activeStr of decodedActiveStrings) {
+                if (activeStr.includes(fullPath) || activeStr.includes(fileName)) {
+                  isUsed = true;
+                  break;
+                }
+              }
+
+              if (!isUsed) {
+                orphanedItems.push(itemRef);
+              }
+            }
+          } catch (folderErr) {
+            console.warn(`Storage folder scan notice (${folder}):`, folderErr.message);
+          }
+        }
+
+        if (orphanedItems.length === 0) {
+          alert(`✅ ไม่พบไฟล์รูปภาพขยะใน Firebase Storage!\n\n• ไฟล์รูปภาพทั้งหมดใน Storage (${totalFilesScanned} ไฟล์) กำลังถูกใช้งานในระบบปัจจุบันทั้งหมดครับ`);
+          showToast(`✅ สแกนเสร็จสิ้น: ไม่พบไฟล์รูปภาพขยะใน Storage`);
+          return;
+        }
+
+        // 3. Prompt user for deletion
+        const confirmMsg = `🧹 ตรวจพบไฟล์รูปภาพขยะที่ไม่ถูกใช้งาน ${orphanedItems.length} ไฟล์ (จากทั้งหมด ${totalFilesScanned} ไฟล์ใน Storage)\n\nรูปภาพเหล่านี้คือรูปภาพของอุปกรณ์หรือพนักงานที่เคยถูกลบออกจากระบบไปแล้ว\n\nต้องการลบไฟล์รูปภาพขยะทั้ง ${orphanedItems.length} ไฟล์ ออกจาก Firebase Storage หรือไม่?`;
+        if (!confirm(confirmMsg)) return;
+
+        showToast(`⏳ กำลังลบไฟล์รูปภาพขยะ ${orphanedItems.length} ไฟล์ ออกจาก Firebase Storage...`);
+
+        let deletedCount = 0;
+        for (const itemRef of orphanedItems) {
+          try {
+            await deleteObject(itemRef);
+            deletedCount++;
+          } catch (delErr) {
+            console.warn(`Failed to delete orphaned storage item ${itemRef.fullPath}:`, delErr);
+          }
+        }
+
+        if (typeof logAuditAction === 'function') {
+          logAuditAction('STORAGE_CLEANUP', currentUser ? currentUser.displayName || currentUser.email : 'Admin', `สแกนและลบไฟล์รูปภาพขยะใน Firebase Storage จำนวน ${deletedCount} ไฟล์`);
+        }
+
+        alert(`🎉 ลบไฟล์รูปภาพขยะใน Firebase Storage เรียบร้อยแล้ว!\n\n• ลบไฟล์ขยะตกค้างสำเร็จ: ${deletedCount} ไฟล์\n• คืนพื้นที่ Storage ให้ระบบเรียบร้อยแล้วครับ`);
+        showToast(`🧹 ลบรูปภาพขยะ ${deletedCount} ไฟล์ เรียบร้อยแล้ว!`);
+
+      } catch (err) {
+        console.error("scanAndCleanupOrphanedStorageImages error:", err);
+        alert("เกิดข้อผิดพลาดในการสแกนไฟล์รูปภาพขยะ: " + err.message);
       }
     };
 
@@ -12594,9 +12698,6 @@
         const empName = empObj ? empObj.name : recordId;
         employeeList = employeeList.filter(x => x.id !== recordId);
         if (isFirebaseReady && db) { try { await deleteDoc(doc(db, "employees", recordId)); } catch(e){} }
-        if (empObj && empObj.photoUrl) {
-          try { await deleteImageFromFirebaseStorage(empObj.photoUrl); } catch(e){}
-        }
         renderEmployeeDirectory();
         populateEmployeeDropdowns();
         if (typeof logAuditAction === 'function') {

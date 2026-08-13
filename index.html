@@ -3255,6 +3255,9 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fs-7" onclick="exportDatabaseJson()">
                   <i class="bi bi-download me-1"></i> ส่งออก JSON
                 </button>
+                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 fs-7" onclick="scanAndCleanupOrphanedStorageImages()" title="สแกนหาไฟล์รูปภาพขยะที่ไม่ถูกใช้ใน Firestore แล้วลบออกจาก Storage">
+                  <i class="bi bi-broom me-1"></i> สแกนและลบรูปขยะ
+                </button>
                 <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fs-7" onclick="purgeEntireDatabaseAndStorage()" title="ลบข้อมูลและรูปภาพทั้งหมดในระบบและ Firebase Storage">
                   <i class="bi bi-trash3-fill me-1"></i> ลบฐานข้อมูลทั้งหมด (รวม Firebase & Storage)
                 </button>
@@ -4189,6 +4192,12 @@
                       </div>
                     </button>
                   </div>
+                  <div class="col-12 mt-2">
+                    <button type="button" class="btn btn-outline-danger fw-bold w-100 py-2 rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2 fs-7" onclick="scanAndCleanupOrphanedStorageImages()">
+                      <i class="bi bi-broom-fill text-danger fs-6"></i>
+                      <span>สแกนและลบรูปขยะใน Storage (Delete Orphaned Images)</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Live Auto Sync Status / Diff Log Alert -->
@@ -4257,6 +4266,9 @@
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <button class="btn btn-outline-warning btn-sm rounded-pill fw-semibold fs-8" onclick="clearDatabaseCache()" title="ล้างแคชข้อมูลที่บันทึกชั่วคราวในเบราว์เซอร์">
               <i class="bi bi-arrow-clockwise me-1"></i> ล้างแคชฐานข้อมูล
+            </button>
+            <button class="btn btn-outline-danger btn-sm rounded-pill fw-semibold fs-8" onclick="scanAndCleanupOrphanedStorageImages()" title="สแกนหาและลบไฟล์รูปภาพขยะที่ไม่ถูกใช้ใน Storage">
+              <i class="bi bi-broom me-1"></i> ลบรูปขยะ
             </button>
             <button class="btn btn-outline-light btn-sm rounded-pill fw-semibold fs-8" onclick="openBackupRestoreModalFromDbEditor()">
               <i class="bi bi-download me-1"></i> สำรอง/กู้คืน JSON

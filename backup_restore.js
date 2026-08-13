@@ -20,12 +20,7 @@ async function replaceCollectionInFirestore(collName, newList) {
 
     for (const docSnap of snap.docs) {
       if (!newIds.has(docSnap.id)) {
-        const data = docSnap.data();
-        const imgUrl = data.imageUrl || data.photoUrl;
         await deleteDoc(doc(window.db, collName, docSnap.id));
-        if (imgUrl && !newImageUrls.has(imgUrl)) {
-          await window.deleteImageFromFirebaseStorage(imgUrl);
-        }
       }
     }
     for (const item of (newList || [])) {
