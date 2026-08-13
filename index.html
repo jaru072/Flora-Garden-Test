@@ -411,6 +411,7 @@
               <div class="input-group">
                 <span class="input-group-text bg-light border-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="catalogSearchInput" class="form-control border-0 bg-light" placeholder="ค้นหาชื่ออุปกรณ์, รหัสสินค้า..." oninput="renderCatalogGrid()" />
+                <button class="btn btn-outline-secondary border-0 bg-light text-muted" type="button" onclick="clearCatalogSearch()" title="ล้างคำค้นหา"><i class="bi bi-x-circle-fill"></i></button>
                 <button class="btn btn-warning fw-bold px-3 d-flex align-items-center gap-1" type="button" onclick="openBarcodeQrScannerModal()" title="สแกนบาร์โค้ดค้นชื่ออุปกรณ์">
                   <i class="bi bi-barcode"></i>
                   <span class="fs-8 d-none d-sm-inline">สแกนบาร์โค้ดอุปกรณ์</span>
@@ -849,19 +850,30 @@
               <!-- <span class="text-muted fs-7">จัดการข้อมูลพนักงาน เพิ่ม แก้ไข ลบ รายชื่อ และพิมพ์บัตรประจำตัว</span> -->
             </div>
             
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
               <div class="input-group" style="width: 220px;">
                 <span class="input-group-text bg-light border-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="empSearchInput" class="form-control border-0 bg-light fs-7" placeholder="ค้นหาพนักงาน..." oninput="renderEmployeeDirectory()" />
+                <button class="btn btn-outline-secondary btn-sm border-0 bg-light text-muted" type="button" onclick="clearEmpSearch()" title="ล้างคำค้นหา"><i class="bi bi-x-circle-fill"></i></button>
               </div>
 
-              <div class="input-group" style="width: 270px;">
+              <div class="input-group" style="width: 260px;">
                 <span class="input-group-text bg-light border-0"><i class="bi bi-sort-down text-success"></i></span>
                 <select id="empSortSelect" class="form-select border-0 bg-light fs-7 fw-semibold text-dark" onchange="renderEmployeeDirectory()" title="เลือกการเรียงลำดับรายชื่อ">
                   <option value="id" selected>เรียงตาม: รหัสพนักงาน (Default)</option>
                   <option value="name">เรียงตาม: ชื่อ-นามสกุล (ก-ฮ)</option>
                   <option value="department">เรียงตาม: แผนก</option>
                 </select>
+              </div>
+
+              <!-- View Switch Buttons -->
+              <div class="btn-group btn-group-sm rounded-pill p-0.5 bg-light border" role="group" aria-label="View switch">
+                <button type="button" class="btn btn-sm rounded-pill px-2.5 py-1 fw-semibold text-dark btn-light active shadow-2xs" id="btnEmpTableView" onclick="setEmpViewMode('table')" title="มุมมองตาราง (Table View)">
+                  <i class="bi bi-table me-1"></i>ตาราง
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill px-2.5 py-1 fw-semibold text-muted" id="btnEmpCardView" onclick="setEmpViewMode('card')" title="มุมมองการ์ด (Card View)">
+                  <i class="bi bi-grid-fill me-1"></i>การ์ด
+                </button>
               </div>
 
               <!-- Import Excel Button (Admin Only) -->
@@ -880,7 +892,61 @@
             </div>
           </div>
 
-          <div class="row g-3" id="employeeCardsContainer">
+          <!-- Bulk Action Bar for Selected Employees -->
+          <div id="empBulkActionBar" class="card border-0 shadow-sm rounded-4 p-3 bg-primary bg-opacity-10 border-start border-4 border-primary mb-3 d-none">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+              <div class="d-flex align-items-center gap-2">
+                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                  <i class="bi bi-check2-square fs-5"></i>
+                </div>
+                <div>
+                  <span class="fs-7 text-dark fw-bold">เลือกบุคลากรอยู่ <span id="empSelectedCountText" class="badge bg-primary fs-7 rounded-pill px-2.5">0</span> คน</span>
+                  <small class="text-muted d-block fs-8">เลือกหลายรายการพร้อมกัน สามารถอัปเดตแผนก ตำแหน่ง หรือพิมพ์บัตรแบบกลุ่มได้ทันที</small>
+                </div>
+              </div>
+
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="openBulkUpdateEmpModal()">
+                  <i class="bi bi-pencil-square me-1"></i> แก้ไขแผนก / ตำแหน่งแบบกลุ่ม
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="executeBulkPrintBadges()">
+                  <i class="bi bi-printer-fill me-1"></i> พิมพ์บัตรรายการที่เลือก
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="executeBulkDeleteEmployees()">
+                  <i class="bi bi-trash-fill me-1"></i> ลบที่เลือก
+                </button>
+                <button type="button" class="btn btn-sm btn-link text-muted fw-semibold text-decoration-none" onclick="clearEmployeeSelections()">
+                  <i class="bi bi-x-circle me-1"></i> ยกเลิกการเลือก
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table View Container -->
+          <div id="employeeTableContainer" class="table-responsive rounded-3 border mb-3">
+            <table class="table table-hover align-middle mb-0 fs-7">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3 py-3" style="width: 40px;">
+                    <input type="checkbox" id="selectAllEmpCheckbox" class="form-check-input cursor-pointer" onchange="toggleSelectAllEmployees(this.checked)" title="เลือกทั้งหมด">
+                  </th>
+                  <th class="py-3" style="width: 60px;">รูปถ่าย</th>
+                  <th class="py-3" style="width: 120px;">รหัสบุคลากร</th>
+                  <th class="py-3">ชื่อ-นามสกุล / ชื่อเล่น</th>
+                  <th class="py-3">แผนก (Department)</th>
+                  <th class="py-3">ตำแหน่ง / รายละเอียด</th>
+                  <th class="py-3">เบอร์โทรศัพท์</th>
+                  <th class="text-center py-3" style="width: 180px;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="employeeTableBody">
+                <!-- Dynamically loaded employee rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Card View Container -->
+          <div class="row g-3 d-none" id="employeeCardsContainer">
             <!-- Dynamically loaded employee cards -->
           </div>
         </div>
@@ -1110,6 +1176,9 @@
 
             <!-- Validation Badge Alert Banner -->
             <div id="firestoreValidationBadge" class="mb-3"></div>
+
+            <!-- Daily Activity Summary Overview Card -->
+            <div id="dailyTransactionSummaryContainer"></div>
 
             <!-- Search, Filter Toolbar for Transactions -->
             <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
@@ -1375,6 +1444,9 @@
                       </th>
                       <th class="border-0 py-3" style="cursor: pointer; user-select: none;" onclick="setUserLoginSort('userEmail')" title="คลิกเพื่อเรียงลำดับ User Email (มากไปหาน้อย / น้อยไปมาก)">
                         <span>User Email</span> <span id="sort-icon-userlogin-userEmail" class="ms-1"><i class="bi bi-arrow-down-up text-muted fs-8 opacity-50"></i></span>
+                      </th>
+                      <th class="border-0 py-3" style="cursor: pointer; user-select: none;" onclick="setUserLoginSort('duration')" title="คลิกเพื่อเรียงลำดับ ระยะเวลาใช้งาน (มากไปหาน้อย / น้อยไปมาก)">
+                        <span>ระยะเวลาใช้งาน (Duration)</span> <span id="sort-icon-userlogin-duration" class="ms-1"><i class="bi bi-arrow-down-up text-muted fs-8 opacity-50"></i></span>
                       </th>
                       <th class="text-center border-0 py-3 super-admin-only-element d-none" id="userLoginActionHeader" style="width: 80px;">จัดการ</th>
                     </tr>
@@ -4676,6 +4748,89 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- ==================== MODAL: BULK UPDATE EMPLOYEES ==================== -->
+  <div class="modal fade" id="bulkUpdateEmpModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header bg-primary text-white py-3 rounded-top-4">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-people-fill fs-4 text-warning"></i>
+            <div>
+              <h5 class="modal-title fw-bold mb-0">แก้ไขแผนกและตำแหน่งบุคลากรแบบกลุ่ม</h5>
+              <small class="text-white-50 fs-8">อัปเดตข้อมูลแผนก หรือ ตำแหน่ง ให้กับบุคลากรที่เลือกหลายรายการพร้อมกัน</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3 p-md-4">
+          <div class="alert alert-primary border-0 bg-primary bg-opacity-10 text-primary rounded-3 mb-3 p-2.5 fs-8">
+            <i class="bi bi-info-circle-fill me-1"></i> กำลังอัปเดตข้อมูลให้บุคลากรที่เลือกทั้งหมด <strong id="bulkEmpSelectedCountText" class="text-dark">0</strong> คน
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold fs-7 text-dark">
+              <i class="bi bi-person-check-fill me-1 text-primary"></i> รายชื่อบุคลากรที่เลือก:
+            </label>
+            <div id="bulkEmpItemsSummary" class="p-2 border rounded-3 bg-light d-flex flex-wrap gap-1 style-scrollbar" style="max-height: 110px; overflow-y: auto;">
+              <!-- Badges populated dynamically -->
+            </div>
+          </div>
+
+          <div class="card border-0 bg-light p-3 rounded-3">
+            <!-- Update Department Section -->
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input cursor-pointer" type="checkbox" id="chkUpdateEmpDept" onchange="toggleBulkEmpDeptField(this.checked)">
+              <label class="form-check-label fw-bold fs-7 text-dark cursor-pointer" for="chkUpdateEmpDept">
+                <i class="bi bi-building me-1 text-success"></i> เปลี่ยนแผนก (Department)
+              </label>
+            </div>
+            <div id="bulkEmpDeptContainer" class="ps-4 mb-3 d-none">
+              <select id="bulkEmpDeptSelect" class="form-select rounded-3 fs-7 mb-2" onchange="toggleBulkEmpCustomDeptInput(this.value)">
+                <!-- Populated dynamically -->
+              </select>
+              <input type="text" id="bulkEmpCustomDeptInput" class="form-control rounded-3 fs-7 d-none" placeholder="ระบุชื่อแผนกใหม่..." />
+            </div>
+
+            <hr class="my-2 text-muted opacity-25">
+
+            <!-- Update Position Section -->
+            <div class="form-check form-switch mb-2 pt-1">
+              <input class="form-check-input cursor-pointer" type="checkbox" id="chkUpdateEmpPos" onchange="toggleBulkEmpPosField(this.checked)">
+              <label class="form-check-label fw-bold fs-7 text-dark cursor-pointer" for="chkUpdateEmpPos">
+                <i class="bi bi-person-badge me-1 text-primary"></i> เปลี่ยนตำแหน่ง (Position)
+              </label>
+            </div>
+            <div id="bulkEmpPosContainer" class="ps-4 d-none">
+              <select id="bulkEmpPosSelect" class="form-select rounded-3 fs-7">
+                <option value="">-- กรุณาเลือกตำแหน่ง --</option>
+                <option value="พระภิกษุ">พระภิกษุ</option>
+                <option value="เจ้าหน้าที่ธุรการ">เจ้าหน้าที่ธุรการ</option>
+                <option value="นักวิชาการ">นักวิชาการ</option>
+                <option value="พนักงาน">พนักงาน</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0 py-2 px-4 rounded-bottom-4">
+          <button type="button" class="btn btn-secondary rounded-pill px-4 fw-bold fs-7" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold fs-7 shadow-sm" onclick="executeBulkUpdateEmployees()">
+            <i class="bi bi-check-circle-fill me-1"></i> บันทึกการแก้ไขแบบกลุ่ม
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Scroll Navigation Widget (Back to Top & Go to Bottom) -->
+  <div id="scrollNavContainer" class="floating-scroll-nav">
+    <button type="button" id="btnScrollToTop" class="btn btn-flora-scroll shadow-lg" onclick="scrollToPageTop()" title="ขึ้นบนสุด (Back to Top)">
+      <i class="bi bi-chevron-up"></i>
+    </button>
+    <button type="button" id="btnScrollToBottom" class="btn btn-flora-scroll shadow-lg" onclick="scrollToPageBottom()" title="ลงล่างสุด (Go to Bottom)">
+      <i class="bi bi-chevron-down"></i>
+    </button>
   </div>
 
   <!-- Toast Container -->

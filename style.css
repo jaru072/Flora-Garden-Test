@@ -475,3 +475,70 @@ body {
     margin: 8mm 6mm 6mm 6mm;
   }
 }
+
+/* Floating Scroll Navigation Widget (Back to Top & Go to Bottom) */
+.floating-scroll-nav {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9990;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+}
+
+.floating-scroll-nav.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.btn-flora-scroll {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--flora-green);
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-flora-scroll:hover {
+  background: var(--flora-green-dark);
+  color: #ffffff;
+  transform: scale(1.12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.btn-flora-scroll:active {
+  transform: scale(0.95);
+}
+
+@media print {
+  .floating-scroll-nav {
+    display: none !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .floating-scroll-nav {
+    bottom: 16px;
+    right: 16px;
+  }
+  .btn-flora-scroll {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+}

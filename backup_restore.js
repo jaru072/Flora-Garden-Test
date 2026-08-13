@@ -54,6 +54,26 @@ function safeJsonClone(obj) {
   }
 }
 
+function getComprehensiveDepartmentsList() {
+  const set = new Set(window.departmentsList || []);
+  (window.employeeList || []).forEach(emp => {
+    if (emp && emp.department && typeof emp.department === 'string' && emp.department.trim()) {
+      set.add(emp.department.trim());
+    }
+  });
+  return Array.from(set).filter(Boolean);
+}
+
+function getComprehensiveLocationsList() {
+  const set = new Set(window.locationsList || []);
+  (window.equipmentList || []).forEach(eq => {
+    if (eq && eq.location && typeof eq.location === 'string' && eq.location.trim()) {
+      set.add(eq.location.trim());
+    }
+  });
+  return Array.from(set).filter(Boolean);
+}
+
 // 1. Open Backup/Restore Modal
 window.openBackupRestoreModal = function() {
   const role = window.currentRole || (typeof currentRole !== 'undefined' ? currentRole : null);
@@ -482,7 +502,8 @@ window.exportBackupToSelectedFolder = async function() {
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
       categoriesList: window.categoriesList || [],
-      departmentsList: window.departmentsList || [],
+      departmentsList: getComprehensiveDepartmentsList(),
+      locationsList: getComprehensiveLocationsList(),
       imagesBase64Map: imagesBase64Map
     };
 
@@ -565,7 +586,8 @@ window.downloadBackupAsZipPackage = async function() {
     attendanceLogs: window.attendanceLogs || [],
     auditLogs: window.auditLogs || [],
     categoriesList: window.categoriesList || [],
-    departmentsList: window.departmentsList || [],
+    departmentsList: getComprehensiveDepartmentsList(),
+    locationsList: getComprehensiveLocationsList(),
     imagesBase64Map: {}
   };
 
@@ -626,7 +648,8 @@ window.downloadDatabaseBackup = async function() {
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
       categoriesList: window.categoriesList || [],
-      departmentsList: window.departmentsList || [],
+      departmentsList: getComprehensiveDepartmentsList(),
+      locationsList: getComprehensiveLocationsList(),
       imagesBase64Map: {}
     };
 
@@ -1199,7 +1222,26 @@ window.displayRestoreSummary = function(parsed, fileName) {
     const attC = (parsed.attendanceLogs || []).length;
     const audC = (parsed.auditLogs || []).length;
     const catC = (parsed.categoriesList || []).length;
-    const depC = (parsed.departmentsList || []).length;
+
+    let depts = parsed.departmentsList || [];
+    if (!Array.isArray(depts) || depts.length === 0) {
+      const deptSet = new Set();
+      (parsed.employeeList || []).forEach(e => {
+        if (e && e.department && typeof e.department === 'string' && e.department.trim()) deptSet.add(e.department.trim());
+      });
+      depts = Array.from(deptSet);
+    }
+    const depC = depts.length;
+
+    let locs = parsed.locationsList || [];
+    if (!Array.isArray(locs) || locs.length === 0) {
+      const locSet = new Set();
+      (parsed.equipmentList || []).forEach(eq => {
+        if (eq && eq.location && typeof eq.location === 'string' && eq.location.trim()) locSet.add(eq.location.trim());
+      });
+      locs = Array.from(locSet);
+    }
+    const locC = locs.length;
 
     let imgC = 0;
     if (parsed.imagesBase64Map && Object.keys(parsed.imagesBase64Map).length > 0) {
@@ -1217,6 +1259,7 @@ window.displayRestoreSummary = function(parsed, fileName) {
       <div class="col-6 col-md-4">• บันทึกเวลาเข้า-ออก: <strong class="text-info">${attC}</strong> รายการ</div>
       <div class="col-6 col-md-4">• หมวดหมู่อุปกรณ์: <strong class="text-secondary">${catC}</strong> หมวด</div>
       <div class="col-6 col-md-4">• แผนก / สวน: <strong class="text-dark">${depC}</strong> แผนก</div>
+      <div class="col-6 col-md-4">• สถานที่จัดเก็บ: <strong class="text-secondary">${locC}</strong> แห่ง</div>
       <div class="col-12 text-success fw-semibold mt-1"><i class="bi bi-check-circle-fill me-1"></i> ระบบจะกู้คืนข้อมูลพร้อมลิงก์รูปภาพ (หากมีในไฟล์สำรอง)</div>
     `;
   }
@@ -1253,6 +1296,23 @@ window.executeRestoreDatabase = async function() {
     let auditLogs = window.auditLogs || [];
     let categoriesList = window.categoriesList || [];
     let departmentsList = window.departmentsList || [];
+    let locationsList = window.locationsList || [];
+
+    let restoredDepts = Array.isArray(tempParsedRestoreData.departmentsList) ? [...tempParsedRestoreData.departmentsList] : [];
+    (tempParsedRestoreData.employeeList || []).forEach(emp => {
+      if (emp && emp.department && typeof emp.department === 'string' && emp.department.trim()) {
+        const dName = emp.department.trim();
+        if (!restoredDepts.includes(dName)) restoredDepts.push(dName);
+      }
+    });
+
+    let restoredLocs = Array.isArray(tempParsedRestoreData.locationsList) ? [...tempParsedRestoreData.locationsList] : [];
+    (tempParsedRestoreData.equipmentList || []).forEach(eq => {
+      if (eq && eq.location && typeof eq.location === 'string' && eq.location.trim()) {
+        const lName = eq.location.trim();
+        if (!restoredLocs.includes(lName)) restoredLocs.push(lName);
+      }
+    });
 
     if (mode === 'REPLACE') {
       equipmentList = (tempParsedRestoreData.equipmentList || []).map(item => ({ ...item }));
@@ -1261,7 +1321,8 @@ window.executeRestoreDatabase = async function() {
       attendanceLogs = tempParsedRestoreData.attendanceLogs || [];
       auditLogs = tempParsedRestoreData.auditLogs || [];
       if (tempParsedRestoreData.categoriesList) categoriesList = tempParsedRestoreData.categoriesList;
-      if (tempParsedRestoreData.departmentsList) departmentsList = tempParsedRestoreData.departmentsList;
+      departmentsList = restoredDepts;
+      locationsList = restoredLocs;
     } else {
       const newEquip = tempParsedRestoreData.equipmentList || [];
       newEquip.forEach(item => {
@@ -1316,13 +1377,13 @@ window.executeRestoreDatabase = async function() {
         });
       }
 
-      if (Array.isArray(tempParsedRestoreData.departmentsList)) {
-        tempParsedRestoreData.departmentsList.forEach(d => {
-          if (!departmentsList.includes(d)) {
-            departmentsList.push(d);
-          }
-        });
-      }
+      restoredDepts.forEach(d => {
+        if (!departmentsList.includes(d)) departmentsList.push(d);
+      });
+
+      restoredLocs.forEach(l => {
+        if (!locationsList.includes(l)) locationsList.push(l);
+      });
     }
 
     equipmentList.forEach(item => {
@@ -1338,15 +1399,29 @@ window.executeRestoreDatabase = async function() {
     window.auditLogs = auditLogs;
     window.categoriesList = categoriesList;
     window.departmentsList = departmentsList;
+    window.locationsList = locationsList;
 
     window.updateBackupProgress(70, "กำลังบันทึกข้อมูลลงเครื่อง...", "บันทึกใน LocalStorage", true, "bg-warning");
     if (typeof window.saveToLocalStorage === 'function') {
       window.saveToLocalStorage();
     }
+    try {
+      localStorage.setItem('flora_departments', JSON.stringify(departmentsList));
+      localStorage.setItem('flora_locations', JSON.stringify(locationsList));
+    } catch(e) {}
 
     if (window.db && window.isFirebaseReady) {
-      window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมด", true, "bg-warning");
+      window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมดรวมถึงแผนกและสถานที่จัดเก็บ", true, "bg-warning");
       try {
+        const deptDocs = departmentsList.map((d, i) => ({
+          id: 'dept_' + (encodeURIComponent(d).replace(/%/g, '_') || i),
+          name: d
+        }));
+        const locDocs = locationsList.map((l, i) => ({
+          id: 'loc_' + (encodeURIComponent(l).replace(/%/g, '_') || i),
+          name: l
+        }));
+
         if (mode === 'REPLACE') {
           await replaceCollectionInFirestore("equipment", equipmentList);
           await replaceCollectionInFirestore("employees", employeeList);
@@ -1354,6 +1429,8 @@ window.executeRestoreDatabase = async function() {
           await replaceCollectionInFirestore("attendance", attendanceLogs);
           await replaceCollectionInFirestore("categories", categoriesList);
           await replaceCollectionInFirestore("audit_logs", auditLogs);
+          await replaceCollectionInFirestore("departments", deptDocs);
+          await replaceCollectionInFirestore("locations", locDocs);
         } else {
           for (const eq of equipmentList) {
             if (eq && eq.id) await setDoc(doc(window.db, "equipment", eq.id), eq);
@@ -1372,6 +1449,12 @@ window.executeRestoreDatabase = async function() {
           }
           for (const aud of (auditLogs || [])) {
             if (aud && aud.id) await setDoc(doc(window.db, "audit_logs", aud.id), aud);
+          }
+          for (const deptObj of deptDocs) {
+            await setDoc(doc(window.db, "departments", deptObj.id), deptObj);
+          }
+          for (const locObj of locDocs) {
+            await setDoc(doc(window.db, "locations", locObj.id), locObj);
           }
         }
       } catch (fsErr) {

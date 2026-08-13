@@ -1262,7 +1262,7 @@
           try {
             departmentsList = JSON.parse(savedDepts);
           } catch(e) {
-            departmentsList = [...defaultCategoriesList];
+            departmentsList = [...defaultDepartmentsList];
           }
         } else {
           departmentsList = [...defaultDepartmentsList];
@@ -3933,13 +3933,48 @@
       document.getElementById('catalogGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
+    window.clearCatalogSearch = function() {
+      const input = document.getElementById('catalogSearchInput');
+      if (input) {
+        input.value = '';
+        renderCatalogGrid();
+      }
+    };
+
+    function highlightSearchText(text, rawQuery) {
+      if (text === null || text === undefined) return '';
+      const str = String(text);
+      if (!rawQuery || typeof rawQuery !== 'string') {
+        return typeof escapeHtml === 'function' ? escapeHtml(str) : str;
+      }
+
+      const trimmedQuery = rawQuery.trim();
+      if (!trimmedQuery) {
+        return typeof escapeHtml === 'function' ? escapeHtml(str) : str;
+      }
+
+      try {
+        const escapedQuery = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedQuery})`, 'gi');
+        return str.split(regex).map(part => {
+          if (part.toLowerCase() === trimmedQuery.toLowerCase()) {
+            return `<mark class="bg-warning text-dark rounded-1 px-1 py-0 fw-bold shadow-2xs">${typeof escapeHtml === 'function' ? escapeHtml(part) : part}</mark>`;
+          }
+          return typeof escapeHtml === 'function' ? escapeHtml(part) : part;
+        }).join('');
+      } catch (e) {
+        return typeof escapeHtml === 'function' ? escapeHtml(str) : str;
+      }
+    }
+
     // Render Helpers
-    function renderCatalogGrid() {
+    window.renderCatalogGrid = function renderCatalogGrid() {
       const container = document.getElementById('catalogGrid');
       const emptyState = document.getElementById('catalogEmptyState');
-      const searchQuery = document.getElementById('catalogSearchInput').value.toLowerCase().trim();
-      const selectedCat = document.getElementById('catalogCategorySelect').value;
-      const selectedStatus = document.getElementById('catalogStatusSelect').value;
+      const rawSearchInput = document.getElementById('catalogSearchInput')?.value || '';
+      const searchQuery = rawSearchInput.toLowerCase().trim();
+      const selectedCat = document.getElementById('catalogCategorySelect')?.value || 'ALL';
+      const selectedStatus = document.getElementById('catalogStatusSelect')?.value || 'ALL';
 
       let filtered = equipmentList.filter(item => {
         const nameStr = String(item.name || '').toLowerCase();
@@ -4020,12 +4055,15 @@
         const isWorker = currentRole === 'WORKER';
         const isStaff = currentRole === 'STAFF' || currentRole === 'ADMIN' || currentRole === 'MANAGER';
 
+        const highlightedName = highlightSearchText(item.name, rawSearchInput);
+        const highlightedCode = highlightSearchText(item.code, rawSearchInput);
+
         html += `
           <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
             <div class="equipment-card">
               <div class="equipment-img-container ${isStaff ? 'cursor-pointer' : ''} position-relative" ${isStaff ? `onclick="openEquipmentPopupMenu('${item.id}')" title="คลิกรูปภาพเพื่อเปิดเมนู (Popup Menu)"` : ''}>
-                <img src="${item.imageUrl}" loading="lazy" class="equipment-img" alt="${item.name}" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
-                <span class="badge-code">${item.code}</span>
+                <img src="${item.imageUrl}" loading="lazy" class="equipment-img" alt="${escapeHtml(item.name)}" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
+                <span class="badge-code">${highlightedCode}</span>
                 ${isStaff ? `
                   <span class="badge bg-dark bg-opacity-75 text-white position-absolute top-0 end-0 m-2 rounded-pill fs-8 shadow-sm">
                     <i class="bi bi-sliders me-1"></i>เมนู
@@ -4036,22 +4074,22 @@
 
               <div class="card-body p-3 d-flex flex-column justify-content-between">
                 <div>
-                  <div class="text-success fs-7 fw-semibold mb-1">${item.category}</div>
-                  <h6 class="fw-bold text-dark mb-2 text-truncate" title="${item.name}">${item.name}</h6>
+                  <div class="text-success fs-7 fw-semibold mb-1">${escapeHtml(item.category || '')}</div>
+                  <h6 class="fw-bold text-dark mb-2 text-truncate" title="${escapeHtml(item.name || '')}">${highlightedName}</h6>
                   <p class="text-secondary fs-7 mb-3 text-truncate-2" style="min-height: 2.4rem;">
-                    ${item.description || 'ไม่มีรายละเอียดสเปกเพิ่มเติม'}
+                    ${item.description ? escapeHtml(item.description) : 'ไม่มีรายละเอียดสเปกเพิ่มเติม'}
                   </p>
                 </div>
 
                 <div>
                   <div class="d-flex justify-content-between align-items-center mb-2 bg-light p-2 rounded-3 fs-7">
-                    <div><i class="bi bi-geo-alt-fill text-danger me-1"></i> ${item.location || 'คลังกลาง'}</div>
+                    <div><i class="bi bi-geo-alt-fill text-danger me-1"></i> ${escapeHtml(item.location || 'คลังกลาง')}</div>
                     ${(item.borrowedCount || 0) > 0 ? `
                       <button type="button" class="btn btn-xs btn-outline-warning text-dark fw-bold rounded-pill px-2 py-0.5 shadow-sm d-inline-flex align-items-center gap-1" onclick="showEquipmentBorrowersModal('${item.id}')" title="กดดูรายชื่อผู้ยืมอุปกรณ์นี้">
                         <i class="bi bi-people-fill text-warning"></i> ถูกยืม: ${item.borrowedCount} ${item.unit} <span class="badge bg-dark text-white rounded-pill ms-0.5" style="font-size: 8px; padding: 2px 4px;">ดูผู้ยืม</span>
                       </button>
                     ` : `
-                      <div class="text-secondary fs-8 fw-semibold">ถูกยืม: 0 ${item.unit}</div>
+                      <div class="text-secondary fs-8 fw-semibold">ถูกยืม: 0 ${escapeHtml(item.unit || '')}</div>
                     `}
                   </div>
 
@@ -4145,8 +4183,96 @@
       navUl.innerHTML = navHtml;
     }
 
+    // Personnel Bulk Selection State
+    let selectedEmpIds = new Set();
+    let empViewMode = 'table'; // 'table' or 'card'
+
+    window.setEmpViewMode = function(mode) {
+      empViewMode = mode;
+      const btnTable = document.getElementById('btnEmpTableView');
+      const btnCard = document.getElementById('btnEmpCardView');
+
+      if (btnTable && btnCard) {
+        if (mode === 'table') {
+          btnTable.classList.add('active', 'btn-light', 'shadow-2xs');
+          btnTable.classList.remove('text-muted');
+          btnCard.classList.remove('active', 'btn-light', 'shadow-2xs');
+          btnCard.classList.add('text-muted');
+        } else {
+          btnCard.classList.add('active', 'btn-light', 'shadow-2xs');
+          btnCard.classList.remove('text-muted');
+          btnTable.classList.remove('active', 'btn-light', 'shadow-2xs');
+          btnTable.classList.add('text-muted');
+        }
+      }
+
+      renderEmployeeDirectory();
+    };
+
+    window.clearEmpSearch = function() {
+      const input = document.getElementById('empSearchInput');
+      if (input) {
+        input.value = '';
+        renderEmployeeDirectory();
+      }
+    };
+
+    window.toggleEmployeeSelection = function(empId, isChecked) {
+      if (isChecked) {
+        selectedEmpIds.add(empId);
+      } else {
+        selectedEmpIds.delete(empId);
+      }
+      updateEmpBulkActionBar();
+      renderEmployeeDirectory();
+    };
+
+    window.toggleSelectAllEmployees = function(isChecked) {
+      const queryInput = document.getElementById('empSearchInput');
+      const query = queryInput ? queryInput.value.toLowerCase().trim() : '';
+
+      let currentFiltered = employeeList.filter(emp => {
+        const nick = (emp.nickname || '').toLowerCase();
+        const empCode = (emp.code || emp.id || '').toLowerCase();
+        return !query || (emp.name && emp.name.toLowerCase().includes(query)) || nick.includes(query) || empCode.includes(query) || (emp.department && emp.department.toLowerCase().includes(query));
+      });
+
+      if (isChecked) {
+        currentFiltered.forEach(emp => selectedEmpIds.add(emp.id));
+      } else {
+        currentFiltered.forEach(emp => selectedEmpIds.delete(emp.id));
+      }
+
+      updateEmpBulkActionBar();
+      renderEmployeeDirectory();
+    };
+
+    window.clearEmployeeSelections = function() {
+      selectedEmpIds.clear();
+      const mainCheck = document.getElementById('selectAllEmpCheckbox');
+      if (mainCheck) mainCheck.checked = false;
+      updateEmpBulkActionBar();
+      renderEmployeeDirectory();
+    };
+
+    window.updateEmpBulkActionBar = function() {
+      const bar = document.getElementById('empBulkActionBar');
+      const countText = document.getElementById('empSelectedCountText');
+
+      if (selectedEmpIds.size > 0) {
+        if (bar) bar.classList.remove('d-none');
+        if (countText) countText.textContent = selectedEmpIds.size;
+      } else {
+        if (bar) bar.classList.add('d-none');
+        const mainCheck = document.getElementById('selectAllEmpCheckbox');
+        if (mainCheck) mainCheck.checked = false;
+      }
+    };
+
     function renderEmployeeDirectory() {
-      const container = document.getElementById('employeeCardsContainer');
+      const cardsContainer = document.getElementById('employeeCardsContainer');
+      const tableContainer = document.getElementById('employeeTableContainer');
+      const tableBody = document.getElementById('employeeTableBody');
       const queryInput = document.getElementById('empSearchInput');
       const query = queryInput ? queryInput.value.toLowerCase().trim() : '';
       const sortSelect = document.getElementById('empSortSelect');
@@ -4155,7 +4281,7 @@
       let filtered = employeeList.filter(emp => {
         const nick = (emp.nickname || '').toLowerCase();
         const empCode = (emp.code || emp.id || '').toLowerCase();
-        return !query || (emp.name && emp.name.toLowerCase().includes(query)) || nick.includes(query) || empCode.includes(query) || (emp.department && emp.department.toLowerCase().includes(query));
+        return !query || (emp.name && emp.name.toLowerCase().includes(query)) || nick.includes(query) || empCode.includes(query) || (emp.department && emp.department.toLowerCase().includes(query)) || (emp.details && emp.details.toLowerCase().includes(query));
       });
 
       function getEmpCodeStr(emp) {
@@ -4200,65 +4326,400 @@
 
       filtered.sort((a, b) => {
         if (sortVal === 'name') {
-          // Sort by Name (Thai ก-ฮ), then Employee Code
           const comp = compareNames(a, b);
           if (comp !== 0) return comp;
           return compareCodes(a, b);
         } else if (sortVal === 'department') {
-          // Sort by Department, then Employee Code
           const comp = compareDepts(a, b);
           if (comp !== 0) return comp;
           const codeComp = compareCodes(a, b);
           if (codeComp !== 0) return codeComp;
           return compareNames(a, b);
         } else {
-          // Default: Sort by Employee Code (ตัวอักษร-รหัส)
           const comp = compareCodes(a, b);
           if (comp !== 0) return comp;
           return compareNames(a, b);
         }
       });
 
-      let html = '';
-      filtered.forEach(emp => {
-        const deptName = emp.department ? (emp.department.startsWith('แผนก') ? emp.department : 'แผนก' + emp.department) : 'ไม่ระบุแผนก';
-        const displayName = formatEmpName(emp);
-        const empCodeDisplay = emp.code || emp.id;
+      // Update Select All checkbox status
+      const selectAllCheck = document.getElementById('selectAllEmpCheckbox');
+      if (selectAllCheck) {
+        if (filtered.length > 0) {
+          const allSelected = filtered.every(e => selectedEmpIds.has(e.id));
+          selectAllCheck.checked = allSelected;
+        } else {
+          selectAllCheck.checked = false;
+        }
+      }
 
-        html += `
-          <div class="col-12 col-md-6 col-lg-4">
-            <div class="employee-card p-3 d-flex align-items-center justify-content-between gap-2">
-              <div class="d-flex align-items-center gap-3">
-                <img src="${emp.photoUrl}" class="avatar-circle border" alt="${emp.name || ''}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
-                <div>
-                  <div class="fw-bold text-dark mb-1 fs-6">${displayName}</div>
-                  <div class="fs-7 text-success fw-bold mb-1"><i class="bi bi-building me-1"></i>[${empCodeDisplay}] ${deptName}</div>
-                  ${emp.details ? `<div class="fs-8 text-secondary text-truncate" style="max-width: 220px;" title="${emp.details}"><i class="bi bi-card-text me-1"></i> ${emp.details}</div>` : ''}
-                  <div class="fs-8 text-muted"><i class="bi bi-telephone me-1"></i> ${emp.phone || '-'}</div>
+      // Handle View Mode Toggle Visibility
+      if (empViewMode === 'table') {
+        if (tableContainer) tableContainer.classList.remove('d-none');
+        if (cardsContainer) cardsContainer.classList.add('d-none');
+      } else {
+        if (tableContainer) tableContainer.classList.add('d-none');
+        if (cardsContainer) cardsContainer.classList.remove('d-none');
+      }
+
+      // 1. Render Table Rows
+      if (tableBody) {
+        if (filtered.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="8" class="text-center py-5 text-muted">
+                <i class="bi bi-people fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                <div>ไม่พบข้อมูลบุคลากรตามคำค้นหาที่ระบุ</div>
+              </td>
+            </tr>
+          `;
+        } else {
+          let tableHtml = '';
+          filtered.forEach(emp => {
+            const isChecked = selectedEmpIds.has(emp.id);
+            const deptName = emp.department ? (emp.department.startsWith('แผนก') ? emp.department : 'แผนก' + emp.department) : 'ไม่ระบุแผนก';
+            const displayName = formatEmpName(emp);
+            const empCodeDisplay = emp.code || emp.id;
+            const posDisplay = emp.details || emp.position || '-';
+
+            tableHtml += `
+              <tr class="${isChecked ? 'table-primary bg-opacity-10' : ''}">
+                <td class="ps-3">
+                  <input type="checkbox" class="form-check-input emp-select-checkbox cursor-pointer" value="${emp.id}" ${isChecked ? 'checked' : ''} onchange="toggleEmployeeSelection('${emp.id}', this.checked)">
+                </td>
+                <td>
+                  <img src="${emp.photoUrl}" class="avatar-circle border" style="width: 38px; height: 38px; object-fit: cover;" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                </td>
+                <td>
+                  <span class="badge bg-dark font-monospace px-2 py-1 fs-8">${typeof escapeHtml === 'function' ? escapeHtml(empCodeDisplay) : empCodeDisplay}</span>
+                </td>
+                <td>
+                  <div class="fw-bold text-dark">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>
+                  ${emp.nickname ? `<small class="text-muted fs-8">(${typeof escapeHtml === 'function' ? escapeHtml(emp.nickname) : emp.nickname})</small>` : ''}
+                </td>
+                <td>
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle fw-semibold px-2 py-1 fs-8"><i class="bi bi-building me-1"></i>${typeof escapeHtml === 'function' ? escapeHtml(deptName) : deptName}</span>
+                </td>
+                <td>
+                  <span class="text-secondary fs-8">${typeof escapeHtml === 'function' ? escapeHtml(posDisplay) : posDisplay}</span>
+                </td>
+                <td>
+                  <span class="text-muted font-monospace fs-8"><i class="bi bi-telephone me-1 text-secondary"></i>${typeof escapeHtml === 'function' ? escapeHtml(emp.phone || '-') : (emp.phone || '-')}</span>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex align-items-center justify-content-center gap-1">
+                    <button class="btn btn-outline-success btn-xs rounded-pill px-2 py-0.5 fs-8 fw-semibold" title="สั่งพิมพ์บัตรประจำตัว" onclick="openPrintEmployeeBadgeModal('${emp.id}')">
+                      <i class="bi bi-person-badge"></i> พิมพ์
+                    </button>
+                    <button class="btn btn-outline-info btn-xs rounded-pill px-2 py-0.5 fs-8 fw-semibold" title="ดูประวัติการเบิก-ยืม" onclick="openEmployeeBorrowHistoryModal('${emp.id}')">
+                      <i class="bi bi-clock-history"></i> ประวัติ
+                    </button>
+                    <button class="btn btn-outline-primary btn-xs rounded-pill px-2 py-0.5 fs-8" title="แก้ไขข้อมูล" onclick="openEditEmployeeModal('${emp.id}')">
+                      <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-xs rounded-pill px-2 py-0.5 fs-8" title="ลบ" onclick="deleteEmployee('${emp.id}')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+          tableBody.innerHTML = tableHtml;
+        }
+      }
+
+      // 2. Render Card View
+      if (cardsContainer) {
+        if (filtered.length === 0) {
+          cardsContainer.innerHTML = `
+            <div class="col-12 text-center py-5 text-muted">
+              <i class="bi bi-people fs-1 text-secondary opacity-50 d-block mb-2"></i>
+              <div>ไม่พบข้อมูลบุคลากรตามคำค้นหาที่ระบุ</div>
+            </div>
+          `;
+        } else {
+          let cardHtml = '';
+          filtered.forEach(emp => {
+            const isChecked = selectedEmpIds.has(emp.id);
+            const deptName = emp.department ? (emp.department.startsWith('แผนก') ? emp.department : 'แผนก' + emp.department) : 'ไม่ระบุแผนก';
+            const displayName = formatEmpName(emp);
+            const empCodeDisplay = emp.code || emp.id;
+
+            cardHtml += `
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="employee-card p-3 d-flex align-items-center justify-content-between gap-2 border ${isChecked ? 'border-primary bg-primary bg-opacity-10 shadow-sm' : ''}" style="position: relative;">
+                  <div class="position-absolute top-0 start-0 m-2">
+                    <input type="checkbox" class="form-check-input cursor-pointer" value="${emp.id}" ${isChecked ? 'checked' : ''} onchange="toggleEmployeeSelection('${emp.id}', this.checked)" title="เลือกบุคลากร">
+                  </div>
+                  <div class="d-flex align-items-center gap-3 ms-4">
+                    <img src="${emp.photoUrl}" class="avatar-circle border" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                    <div>
+                      <div class="fw-bold text-dark mb-1 fs-6">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>
+                      <div class="fs-7 text-success fw-bold mb-1"><i class="bi bi-building me-1"></i>[${typeof escapeHtml === 'function' ? escapeHtml(empCodeDisplay) : empCodeDisplay}] ${typeof escapeHtml === 'function' ? escapeHtml(deptName) : deptName}</div>
+                      ${emp.details ? `<div class="fs-8 text-secondary text-truncate" style="max-width: 180px;" title="${typeof escapeHtml === 'function' ? escapeHtml(emp.details) : emp.details}"><i class="bi bi-card-text me-1"></i> ${typeof escapeHtml === 'function' ? escapeHtml(emp.details) : emp.details}</div>` : ''}
+                      <div class="fs-8 text-muted"><i class="bi bi-telephone me-1"></i> ${typeof escapeHtml === 'function' ? escapeHtml(emp.phone || '-') : (emp.phone || '-')}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="d-flex flex-column gap-1">
+                    <button class="btn btn-outline-success btn-sm rounded-pill fs-7 fw-semibold" title="สั่งพิมพ์บัตรประจำตัวรายบุคคล" onclick="openPrintEmployeeBadgeModal('${emp.id}')">
+                      <i class="bi bi-person-badge me-1"></i> พิมพ์
+                    </button>
+                    <button class="btn btn-outline-info btn-sm rounded-pill fs-7 fw-semibold" title="ดูประวัติการเบิก-ยืม" onclick="openEmployeeBorrowHistoryModal('${emp.id}')">
+                      <i class="bi bi-clock-history me-1"></i> ประวัติฯ
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm rounded-pill fs-7" title="แก้ไขข้อมูลพนักงาน" onclick="openEditEmployeeModal('${emp.id}')">
+                      <i class="bi bi-pencil-square me-1"></i> แก้ไข
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm rounded-pill fs-7" title="ลบรายชื่อพนักงาน" onclick="deleteEmployee('${emp.id}')">
+                      <i class="bi bi-trash me-1"></i> ลบ
+                    </button>
+                  </div>
                 </div>
               </div>
-              
-              <div class="d-flex flex-column gap-1">
-                <button class="btn btn-outline-success btn-sm rounded-pill fs-7 fw-semibold" title="สั่งพิมพ์บัตรประจำตัวรายบุคคล" onclick="openPrintEmployeeBadgeModal('${emp.id}')">
-                  <i class="bi bi-person-badge me-1"></i> พิมพ์
-                </button>
-                <button class="btn btn-outline-info btn-sm rounded-pill fs-7 fw-semibold" title="ดูประวัติการเบิก-ยืม" onclick="openEmployeeBorrowHistoryModal('${emp.id}')">
-                  <i class="bi bi-clock-history me-1"></i> ประวัติฯ
-                </button>
-                <button class="btn btn-outline-primary btn-sm rounded-pill fs-7" title="แก้ไขข้อมูลพนักงาน" onclick="openEditEmployeeModal('${emp.id}')">
-                  <i class="bi bi-pencil-square me-1"></i> แก้ไข
-                </button>
-                <button class="btn btn-outline-danger btn-sm rounded-pill fs-7" title="ลบรายชื่อพนักงาน" onclick="deleteEmployee('${emp.id}')">
-                  <i class="bi bi-trash me-1"></i> ลบ
-                </button>
-              </div>
-            </div>
-          </div>
-        `;
-      });
+            `;
+          });
+          cardsContainer.innerHTML = cardHtml;
+        }
+      }
 
-      container.innerHTML = html;
+      updateEmpBulkActionBar();
     }
+    window.renderEmployeeDirectory = renderEmployeeDirectory;
+
+    // --- BULK UPDATE EMPLOYEES LOGIC ---
+    window.openBulkUpdateEmpModal = function() {
+      if (selectedEmpIds.size === 0) {
+        showToast("⚠️ กรุณาเลือกบุคลากรอย่างน้อย 1 รายการเพื่อทำรายการแบบกลุ่ม");
+        return;
+      }
+
+      const countText = document.getElementById('bulkEmpSelectedCountText');
+      if (countText) countText.textContent = selectedEmpIds.size;
+
+      const summaryContainer = document.getElementById('bulkEmpItemsSummary');
+      if (summaryContainer) {
+        let summaryHtml = '';
+        selectedEmpIds.forEach(empId => {
+          const emp = employeeList.find(x => x.id === empId);
+          if (emp) {
+            const name = formatEmpName(emp);
+            const dept = emp.department || 'ไม่ระบุ';
+            const safeName = typeof escapeHtml === 'function' ? escapeHtml(name) : name;
+            const safeDept = typeof escapeHtml === 'function' ? escapeHtml(dept) : dept;
+            summaryHtml += `<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle py-1 px-2.5 rounded-pill fs-8"><i class="bi bi-person-fill me-1"></i>${safeName} <small class="text-muted">(${safeDept})</small></span>`;
+          }
+        });
+        summaryContainer.innerHTML = summaryHtml || '<span class="text-muted fs-8">ไม่มีรายการ</span>';
+      }
+
+      // Populate Department Dropdown in Modal
+      const deptSelect = document.getElementById('bulkEmpDeptSelect');
+      if (deptSelect) {
+        deptSelect.innerHTML = '<option value="">-- เลือกแผนกที่ต้องการเปลี่ยน --</option>';
+        if (typeof departmentsList !== 'undefined' && Array.isArray(departmentsList)) {
+          departmentsList.forEach(dept => {
+            const opt = document.createElement('option');
+            opt.value = dept;
+            opt.textContent = dept;
+            deptSelect.appendChild(opt);
+          });
+        }
+        const customOpt = document.createElement('option');
+        customOpt.value = 'CUSTOM';
+        customOpt.textContent = '➕ กำหนดชื่อแผนกใหม่...';
+        deptSelect.appendChild(customOpt);
+      }
+
+      // Reset form states
+      const chkDept = document.getElementById('chkUpdateEmpDept');
+      const chkPos = document.getElementById('chkUpdateEmpPos');
+      if (chkDept) chkDept.checked = false;
+      if (chkPos) chkPos.checked = false;
+
+      const posSelect = document.getElementById('bulkEmpPosSelect');
+      if (posSelect) posSelect.value = '';
+      const customDeptInput = document.getElementById('bulkEmpCustomDeptInput');
+      if (customDeptInput) customDeptInput.value = '';
+
+      window.toggleBulkEmpDeptField(false);
+      window.toggleBulkEmpPosField(false);
+
+      const modalElem = document.getElementById('bulkUpdateEmpModal');
+      if (modalElem && typeof bootstrap !== 'undefined') {
+        const bsModal = new bootstrap.Modal(modalElem);
+        bsModal.show();
+      }
+    };
+
+    window.toggleBulkEmpDeptField = function(enabled) {
+      const container = document.getElementById('bulkEmpDeptContainer');
+      if (container) {
+        if (enabled) container.classList.remove('d-none');
+        else container.classList.add('d-none');
+      }
+    };
+
+    window.toggleBulkEmpCustomDeptInput = function(val) {
+      const customInput = document.getElementById('bulkEmpCustomDeptInput');
+      if (customInput) {
+        if (val === 'CUSTOM') customInput.classList.remove('d-none');
+        else customInput.classList.add('d-none');
+      }
+    };
+
+    window.toggleBulkEmpPosField = function(enabled) {
+      const container = document.getElementById('bulkEmpPosContainer');
+      if (container) {
+        if (enabled) container.classList.remove('d-none');
+        else container.classList.add('d-none');
+      }
+    };
+
+    window.executeBulkUpdateEmployees = async function() {
+      if (selectedEmpIds.size === 0) {
+        showToast("⚠️ กรุณาเลือกบุคลากรอย่างน้อย 1 รายการ");
+        return;
+      }
+
+      const updateDeptChecked = document.getElementById('chkUpdateEmpDept')?.checked;
+      const updatePosChecked = document.getElementById('chkUpdateEmpPos')?.checked;
+
+      if (!updateDeptChecked && !updatePosChecked) {
+        showToast("⚠️ กรุณาเปิดใช้งานอย่างน้อย 1 หัวข้อที่ต้องการอัปเดต (แผนก หรือ ตำแหน่ง)");
+        return;
+      }
+
+      let newDept = null;
+      if (updateDeptChecked) {
+        const deptSelectVal = document.getElementById('bulkEmpDeptSelect')?.value;
+        if (deptSelectVal === 'CUSTOM') {
+          newDept = (document.getElementById('bulkEmpCustomDeptInput')?.value || '').trim();
+        } else {
+          newDept = deptSelectVal;
+        }
+
+        if (!newDept) {
+          showToast("⚠️ กรุณาระบุชื่อแผนกที่ต้องการอัปเดต");
+          return;
+        }
+      }
+
+      let newPos = null;
+      if (updatePosChecked) {
+        newPos = (document.getElementById('bulkEmpPosSelect')?.value || document.getElementById('bulkEmpPosInput')?.value || '').trim();
+        if (!newPos) {
+          showToast("⚠️ กรุณาเลือกตำแหน่งที่ต้องการอัปเดต");
+          return;
+        }
+      }
+
+      let updatedCount = 0;
+      const promises = [];
+
+      for (const empId of selectedEmpIds) {
+        const emp = employeeList.find(x => x.id === empId);
+        if (emp) {
+          const updateData = {};
+          if (updateDeptChecked && newDept) {
+            emp.department = newDept;
+            updateData.department = newDept;
+          }
+          if (updatePosChecked && newPos) {
+            emp.details = newPos;
+            emp.position = newPos;
+            updateData.details = newPos;
+            updateData.position = newPos;
+          }
+
+          updatedCount++;
+
+          if (isFirebaseReady && db) {
+            try {
+              promises.push(updateDoc(doc(db, "employees", emp.id), updateData));
+            } catch (err) {
+              console.warn("Firestore bulk employee update error:", err);
+            }
+          }
+        }
+      }
+
+      if (promises.length > 0) {
+        try {
+          await Promise.all(promises);
+        } catch (err) {
+          console.warn("Bulk update employees promise error:", err);
+        }
+      }
+
+      saveToLocalStorage();
+
+      if (typeof logAuditAction === 'function') {
+        const changesText = [
+          newDept ? `แผนก -> "${newDept}"` : '',
+          newPos ? `ตำแหน่ง -> "${newPos}"` : ''
+        ].filter(Boolean).join(' และ ');
+        logAuditAction('บุคลากร', 'แก้ไขแบบกลุ่ม', `อัปเดตข้อมูลบุคลากร ${updatedCount} คน: ${changesText}`, 'BULK_UPDATE');
+      }
+
+      showToast(`⚡ อัปเดตข้อมูลบุคลากรเรียบร้อยแล้วจำนวน ${updatedCount} คน`);
+
+      // Close Modal
+      const modalElem = document.getElementById('bulkUpdateEmpModal');
+      if (modalElem && typeof bootstrap !== 'undefined') {
+        const bsModal = bootstrap.Modal.getInstance(modalElem);
+        if (bsModal) bsModal.hide();
+      }
+
+      clearEmployeeSelections();
+      populateEmployeeDropdowns();
+      if (typeof populateDepartmentDropdowns === 'function') populateDepartmentDropdowns();
+      renderEmployeeDirectory();
+    };
+
+    window.executeBulkDeleteEmployees = async function() {
+      if (selectedEmpIds.size === 0) return;
+
+      if (!confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลบุคลากรที่เลือกไว้จำนวน ${selectedEmpIds.size} คน?`)) {
+        return;
+      }
+
+      let deletedCount = 0;
+      const deleteIds = Array.from(selectedEmpIds);
+
+      for (const empId of deleteIds) {
+        const idx = employeeList.findIndex(x => x.id === empId);
+        if (idx !== -1) {
+          employeeList.splice(idx, 1);
+          deletedCount++;
+
+          if (isFirebaseReady && db) {
+            try {
+              await deleteDoc(doc(db, "employees", empId));
+            } catch (err) {
+              console.warn("Firestore bulk employee delete error:", err);
+            }
+          }
+        }
+      }
+
+      saveToLocalStorage();
+
+      if (typeof logAuditAction === 'function') {
+        logAuditAction('บุคลากร', 'ลบแบบกลุ่ม', `ลบข้อมูลบุคลากรจำนวน ${deletedCount} คน`, 'BULK_DELETE');
+      }
+
+      showToast(`🗑️ ลบข้อมูลบุคลากรเรียบร้อยแล้วจำนวน ${deletedCount} คน`);
+      clearEmployeeSelections();
+      populateEmployeeDropdowns();
+      renderEmployeeDirectory();
+    };
+
+    window.executeBulkPrintBadges = function() {
+      if (selectedEmpIds.size === 0) return;
+      openPrintEmployeeBadgeModal('ALL');
+    };
 
     function renderAttendanceTable() {
       const tbody = document.getElementById('attendanceTableBody');
@@ -5187,10 +5648,115 @@
       renderHistoryTable();
     };
 
+    window.updateDailyTransactionSummary = function updateDailyTransactionSummary() {
+      const container = document.getElementById('dailyTransactionSummaryContainer');
+      if (!container) return;
+
+      const now = new Date();
+      const todayYear = now.getFullYear();
+      const todayMonth = now.getMonth();
+      const todayDate = now.getDate();
+
+      let issueCount = 0;
+      let borrowCount = 0;
+      let returnCount = 0;
+      let receiveCount = 0;
+      let totalToday = 0;
+
+      const txs = Array.isArray(window.transactionHistory) ? window.transactionHistory : [];
+
+      txs.forEach(tx => {
+        if (!tx) return;
+        const ms = typeof window.getRecordTimestampMs === 'function' ? window.getRecordTimestampMs(tx) : 0;
+        if (ms <= 0) return;
+
+        const txDate = new Date(ms);
+        if (isNaN(txDate.getTime())) return;
+
+        if (txDate.getFullYear() === todayYear &&
+            txDate.getMonth() === todayMonth &&
+            txDate.getDate() === todayDate) {
+
+          totalToday++;
+          const type = (tx.type || '').trim();
+
+          if (type === 'เบิกจ่าย' || type === 'เบิก' || type.toLowerCase().includes('issue')) {
+            issueCount++;
+          } else if (type === 'ยืมอุปกรณ์' || type === 'ยืม' || type.toLowerCase().includes('borrow')) {
+            borrowCount++;
+          } else if (type === 'คืนอุปกรณ์' || type === 'คืน' || type.toLowerCase().includes('return')) {
+            returnCount++;
+          } else if (type.includes('รับเข้า') || type.includes('เติม') || type.toLowerCase().includes('receive')) {
+            receiveCount++;
+          } else {
+            if (type.includes('เบิก')) issueCount++;
+            else if (type.includes('ยืม')) borrowCount++;
+            else if (type.includes('คืน')) returnCount++;
+            else receiveCount++;
+          }
+        }
+      });
+
+      const thaiDateStr = now.toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      container.innerHTML = `
+        <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white border-start border-4 border-primary">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2.5">
+              <div class="bg-primary-subtle text-primary p-2 rounded-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 42px; height: 42px;">
+                <i class="bi bi-calendar2-check-fill fs-5"></i>
+              </div>
+              <div>
+                <h6 class="fw-bold mb-0 text-dark">สรุปรายการวันนี้ (Daily Overview)</h6>
+                <span class="text-muted fs-8"><i class="bi bi-clock-history me-1"></i>ประจำวันที่ ${thaiDateStr}</span>
+              </div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+              <div class="bg-danger-subtle text-danger border border-danger-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-arrow-up-right-circle me-1 text-danger"></i>เบิก (Issue)</div>
+                <div class="fs-5 fw-extrabold text-danger mb-0">${issueCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
+              </div>
+
+              <div class="bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-up-right me-1 text-warning-emphasis"></i>ยืม (Borrow)</div>
+                <div class="fs-5 fw-extrabold text-dark mb-0">${borrowCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
+              </div>
+
+              <div class="bg-info-subtle text-info-emphasis border border-info-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-in-down-left me-1 text-info-emphasis"></i>คืน (Return)</div>
+                <div class="fs-5 fw-extrabold text-primary mb-0">${returnCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
+              </div>
+
+              <div class="bg-success-subtle text-success border border-success-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-plus-circle me-1 text-success"></i>รับเข้า (Receive)</div>
+                <div class="fs-5 fw-extrabold text-success mb-0">${receiveCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
+              </div>
+
+              <div class="bg-primary text-white rounded-3 px-3 py-1.5 text-center shadow-sm" style="min-width: 105px;">
+                <div class="fs-9 text-uppercase fw-bold text-white-70 mb-0"><i class="bi bi-hash me-1"></i>รวมวันนี้</div>
+                <div class="fs-5 fw-extrabold text-white mb-0">${totalToday} <span class="fs-9 text-white-70 font-normal">รายการ</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
     window.renderHistoryTable = function renderHistoryTable() {
       const tbody = document.getElementById('historyTableBody');
       const filterType = document.getElementById('historyFilterType')?.value || 'ALL';
       const searchQuery = (document.getElementById('historySearchInput')?.value || '').toLowerCase().trim();
+
+      // Update Daily Summary Overview Card
+      if (typeof window.updateDailyTransactionSummary === 'function') {
+        window.updateDailyTransactionSummary();
+      }
+
       if (!tbody) return;
 
       // Update sort header icons
@@ -5920,6 +6486,84 @@
       renderUserLoginLogsTable();
     };
 
+    window.calculateSessionDurations = function(logs) {
+      if (!Array.isArray(logs) || logs.length === 0) return {};
+
+      // Sort chronologically ascending (oldest to newest)
+      const sorted = [...logs].sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+
+      const userMap = {};
+      sorted.forEach(log => {
+        const emailKey = (log.userEmail || log.userName || 'unknown').toLowerCase().trim();
+        if (!userMap[emailKey]) userMap[emailKey] = [];
+        userMap[emailKey].push(log);
+      });
+
+      const durationMap = {};
+      const nowMs = Date.now();
+
+      Object.keys(userMap).forEach(emailKey => {
+        const userLogs = userMap[emailKey];
+        let pendingOnlineLog = null;
+
+        userLogs.forEach(log => {
+          const logTime = new Date(log.timestamp || 0).getTime();
+          const status = (log.status || '').toLowerCase().trim();
+
+          if (status === 'online') {
+            pendingOnlineLog = log;
+            const diffMs = Math.max(0, nowMs - logTime);
+            const totalMins = Math.floor(diffMs / 60000);
+            durationMap[log.id] = {
+              minutes: totalMins,
+              diffMs: diffMs,
+              text: totalMins < 1 ? '< 1 นาที (กำลังใช้งาน)' : `${totalMins} นาที (กำลังใช้งาน)`,
+              isLive: true
+            };
+          } else if (status === 'offline') {
+            if (pendingOnlineLog) {
+              const onlineTime = new Date(pendingOnlineLog.timestamp || 0).getTime();
+              const diffMs = Math.max(0, logTime - onlineTime);
+              const totalMins = Math.floor(diffMs / 60000);
+
+              let formattedText = '';
+              if (totalMins < 1) {
+                const secs = Math.round(diffMs / 1000);
+                formattedText = `${secs} วินาที (< 1 นาที)`;
+              } else if (totalMins < 60) {
+                formattedText = `${totalMins} นาที`;
+              } else {
+                const hrs = Math.floor(totalMins / 60);
+                const mins = totalMins % 60;
+                formattedText = `${hrs} ชม. ${mins} นาที (${totalMins} นาที)`;
+              }
+
+              const durObj = {
+                minutes: totalMins,
+                diffMs: diffMs,
+                text: formattedText,
+                isLive: false
+              };
+
+              durationMap[log.id] = durObj;
+              durationMap[pendingOnlineLog.id] = durObj;
+
+              pendingOnlineLog = null;
+            } else {
+              durationMap[log.id] = {
+                minutes: 0,
+                diffMs: 0,
+                text: '-',
+                isLive: false
+              };
+            }
+          }
+        });
+      });
+
+      return durationMap;
+    };
+
     window.renderUserLoginLogsTable = function() {
       const tbody = document.getElementById('userLoginLogsTableBody');
       if (!tbody) return;
@@ -5927,8 +6571,11 @@
       const searchInput = (document.getElementById('userLoginSearchInput')?.value || '').trim().toLowerCase();
       const statusFilter = document.getElementById('userLoginStatusFilter')?.value || 'ALL';
 
+      // Pre-calculate session durations for all logs
+      const durationMap = window.calculateSessionDurations(userLoginLogs || []);
+
       // Update sort icons in table header
-      ['status', 'date', 'time', 'userName', 'userEmail'].forEach(col => {
+      ['status', 'date', 'time', 'userName', 'userEmail', 'duration'].forEach(col => {
         const iconElem = document.getElementById(`sort-icon-userlogin-${col}`);
         if (iconElem) {
           if (userLoginSortColumn === col || (userLoginSortColumn === 'timestamp' && col === 'date')) {
@@ -5959,12 +6606,14 @@
           const formatted = formatThaiBuddhistDateAndTime(log.timestamp);
           const dateStr = (formatted.dateBE || '').toLowerCase();
           const timeStr = (formatted.time24 || '').toLowerCase();
+          const durText = (durationMap[log.id]?.text || '').toLowerCase();
 
           return name.includes(searchInput) || 
                  email.includes(searchInput) || 
                  status.includes(searchInput) || 
                  dateStr.includes(searchInput) || 
-                 timeStr.includes(searchInput);
+                 timeStr.includes(searchInput) ||
+                 durText.includes(searchInput);
         }
 
         return true;
@@ -5990,6 +6639,10 @@
           result = (a.userName || '').localeCompare(b.userName || '', 'th');
         } else if (userLoginSortColumn === 'userEmail') {
           result = (a.userEmail || '').localeCompare(b.userEmail || '');
+        } else if (userLoginSortColumn === 'duration') {
+          const durA = durationMap[a.id]?.diffMs || 0;
+          const durB = durationMap[b.id]?.diffMs || 0;
+          result = durA - durB;
         }
 
         if (result === 0) {
@@ -6020,7 +6673,7 @@
       if (pageItems.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" class="text-center py-5 text-muted">
+            <td colspan="7" class="text-center py-5 text-muted">
               <i class="bi bi-person-badge-clock fs-1 d-block mb-2 text-secondary opacity-50"></i>
               <span class="fw-semibold">ไม่พบประวัติการเข้า-ออกจากระบบ (User Online/Offline)</span>
             </td>
@@ -6039,6 +6692,8 @@
           ? '<span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2.5 py-1.5 fw-bold fs-8 d-inline-flex align-items-center gap-1.5"><i class="bi bi-circle-fill text-success fs-9"></i> Online</span>'
           : '<span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2.5 py-1.5 fw-bold fs-8 d-inline-flex align-items-center gap-1.5"><i class="bi bi-circle-fill text-danger fs-9"></i> Offline</span>';
 
+        const durInfo = durationMap[log.id] || { text: '-', isLive: false };
+
         return `
           <tr>
             <td class="ps-3 py-3">
@@ -6055,6 +6710,15 @@
             </td>
             <td class="py-3 fs-8">
               <span class="text-secondary fw-semibold"><code>${escapeHtml(log.userEmail || 'N/A')}</code></span>
+            </td>
+            <td class="py-3 fs-8 fw-semibold text-dark">
+              ${durInfo.isLive ? 
+                `<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1.5"><i class="bi bi-stopwatch me-1"></i>${escapeHtml(durInfo.text)}</span>` : 
+                (durInfo.text && durInfo.text !== '-' ? 
+                  `<span class="badge bg-light text-dark border border-secondary-subtle rounded-pill px-2.5 py-1.5"><i class="bi bi-hourglass-split me-1 text-primary"></i>${escapeHtml(durInfo.text)}</span>` : 
+                  `<span class="text-muted fs-8">-</span>`
+                )
+              }
             </td>
             <td class="text-center py-3 super-admin-only-element ${isSuperAdmin ? '' : 'd-none'}">
               <button class="btn btn-sm btn-outline-danger border-0 rounded-circle" onclick="deleteSingleUserLoginLog('${log.id}')" title="ลบประวัติ">
@@ -6167,11 +6831,14 @@
         return;
       }
 
+      const durationMap = window.calculateSessionDurations ? window.calculateSessionDurations(userLoginLogs) : {};
+
       let csvContent = "\uFEFF"; // UTF-8 BOM
-      csvContent += "ลำดับ,สถานะ,วัน/เดือน/ปี (พ.ศ.),เวลา (24 ชม.),ชื่อผู้ใช้,Email,Timestamp_ISO\n";
+      csvContent += "ลำดับ,สถานะ,วัน/เดือน/ปี (พ.ศ.),เวลา (24 ชม.),ชื่อผู้ใช้,Email,ระยะเวลาใช้งาน,Timestamp_ISO\n";
 
       userLoginLogs.forEach((log, index) => {
         const { dateBE, time24 } = formatThaiBuddhistDateAndTime(log.timestamp);
+        const durText = durationMap[log.id]?.text || '-';
         const row = [
           index + 1,
           `"${(log.status || '').replace(/"/g, '""')}"`,
@@ -6179,6 +6846,7 @@
           `"${(time24 || '').replace(/"/g, '""')}"`,
           `"${(log.userName || '').replace(/"/g, '""')}"`,
           `"${(log.userEmail || '').replace(/"/g, '""')}"`,
+          `"${(durText || '').replace(/"/g, '""')}"`,
           `"${(log.timestamp || '').replace(/"/g, '""')}"`
         ];
         csvContent += row.join(",") + "\n";
@@ -12872,20 +13540,50 @@
             "แผนกไม้ประดับใบ (Indoor Flora)"
           ];
 
-          if (snapshot.empty) {
-            departmentsList = [];
-          } else {
+          let fsDepts = [];
+          if (!snapshot.empty) {
             snapshot.docs.forEach(async (dSnap) => {
               if (legacyDepts.includes(dSnap.data().name)) {
                 try { await deleteDoc(dSnap.ref); } catch(e){}
               }
             });
 
-            const fsDepts = snapshot.docs
+            fsDepts = snapshot.docs
               .map(d => (d.data().name || d.id))
               .filter(d => d && !legacyDepts.includes(d));
+          }
 
-            departmentsList = Array.from(new Set(fsDepts));
+          // Gather unique departments from employeeList as well to ensure no department is ever lost
+          const empDepts = (employeeList || [])
+            .map(e => e ? e.department : '')
+            .filter(d => d && typeof d === 'string' && d.trim() !== '' && !legacyDepts.includes(d.trim()));
+
+          // Merge fsDepts, empDepts, and current departmentsList
+          const mergedSet = new Set([...fsDepts, ...empDepts]);
+
+          if (mergedSet.size === 0 && (departmentsList || []).length > 0) {
+            (departmentsList || []).forEach(d => {
+              if (d && !legacyDepts.includes(d)) mergedSet.add(d);
+            });
+          }
+
+          if (mergedSet.size === 0) {
+            defaultDepartmentsList.forEach(d => mergedSet.add(d));
+          }
+
+          departmentsList = Array.from(mergedSet);
+
+          // Auto-heal Firestore if any department in departmentsList is missing from Firestore collection
+          if (isFirebaseReady && db) {
+            const missingInFs = departmentsList.filter(d => !fsDepts.includes(d));
+            for (const d of missingInFs) {
+              try {
+                const deptId = 'dept_' + (encodeURIComponent(d).replace(/%/g, '_'));
+                await setDoc(doc(db, "departments", deptId), { id: deptId, name: d });
+              } catch(e) {
+                console.warn("Auto sync missing dept to Firestore error:", e);
+              }
+            }
           }
 
           saveToLocalStorage();
@@ -12898,13 +13596,41 @@
         });
 
         onSnapshot(collection(db, "locations"), async (snapshot) => {
-          if (snapshot.empty) {
-            locationsList = [];
-          } else {
-            const fsLocs = snapshot.docs
+          let fsLocs = [];
+          if (!snapshot.empty) {
+            fsLocs = snapshot.docs
               .map(d => (d.data().name || d.id))
               .filter(Boolean);
-            locationsList = Array.from(new Set(fsLocs));
+          }
+
+          const eqLocs = (equipmentList || [])
+            .map(eq => eq ? eq.location : '')
+            .filter(l => l && typeof l === 'string' && l.trim() !== '');
+
+          const mergedSet = new Set([...fsLocs, ...eqLocs]);
+
+          if (mergedSet.size === 0 && (locationsList || []).length > 0) {
+            (locationsList || []).forEach(l => {
+              if (l) mergedSet.add(l);
+            });
+          }
+
+          if (mergedSet.size === 0) {
+            defaultLocationsList.forEach(l => mergedSet.add(l));
+          }
+
+          locationsList = Array.from(mergedSet);
+
+          if (isFirebaseReady && db) {
+            const missingInFs = locationsList.filter(l => !fsLocs.includes(l));
+            for (const l of missingInFs) {
+              try {
+                const locId = 'loc_' + (encodeURIComponent(l).replace(/%/g, '_'));
+                await setDoc(doc(db, "locations", locId), { id: locId, name: l });
+              } catch(e) {
+                console.warn("Auto sync missing loc to Firestore error:", e);
+              }
+            }
           }
 
           saveToLocalStorage();
@@ -13522,12 +14248,89 @@
       }
     }
 
+    // ==================== FLOATING SCROLL NAVIGATION (BACK TO TOP & GO TO BOTTOM) ====================
+    window.scrollToPageTop = function() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.scrollToPageBottom = function() {
+      const maxScroll = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+        document.body.offsetHeight,
+        document.documentElement.offsetHeight
+      );
+      window.scrollTo({ top: maxScroll, behavior: 'smooth' });
+    };
+
+    function initScrollNavWatcher() {
+      const scrollContainer = document.getElementById('scrollNavContainer');
+      const btnTop = document.getElementById('btnScrollToTop');
+      const btnBottom = document.getElementById('btnScrollToBottom');
+      if (!scrollContainer) return;
+
+      function updateScrollButtonsVisibility() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const windowHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const docHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.offsetHeight
+        );
+
+        const isPageScrollable = docHeight > (windowHeight + 100);
+
+        if (isPageScrollable) {
+          scrollContainer.classList.add('show');
+        } else {
+          scrollContainer.classList.remove('show');
+        }
+
+        if (btnTop) {
+          if (scrollTop > 100) {
+            btnTop.style.opacity = '1';
+            btnTop.style.pointerEvents = 'auto';
+            btnTop.removeAttribute('disabled');
+          } else {
+            btnTop.style.opacity = '0.35';
+            btnTop.style.pointerEvents = 'none';
+            btnTop.setAttribute('disabled', 'true');
+          }
+        }
+
+        if (btnBottom) {
+          const isNearBottom = (scrollTop + windowHeight) >= (docHeight - 100);
+          if (!isNearBottom) {
+            btnBottom.style.opacity = '1';
+            btnBottom.style.pointerEvents = 'auto';
+            btnBottom.removeAttribute('disabled');
+          } else {
+            btnBottom.style.opacity = '0.35';
+            btnBottom.style.pointerEvents = 'none';
+            btnBottom.setAttribute('disabled', 'true');
+          }
+        }
+      }
+
+      window.addEventListener('scroll', updateScrollButtonsVisibility, { passive: true });
+      window.addEventListener('resize', updateScrollButtonsVisibility, { passive: true });
+      try {
+        const observer = new MutationObserver(updateScrollButtonsVisibility);
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch(e) {}
+
+      updateScrollButtonsVisibility();
+    }
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         initApp();
+        initScrollNavWatcher();
         setTimeout(runAutoMigration, 2000);
       });
     } else {
       initApp();
+      initScrollNavWatcher();
       setTimeout(runAutoMigration, 2000);
     }
