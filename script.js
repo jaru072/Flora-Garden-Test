@@ -12203,7 +12203,17 @@
 
       if (isFirebaseReady && db) {
         try {
-          const deptId = 'dept_' + Date.now();
+          const qSnap = await getDocs(collection(db, "departments"));
+          let maxNum = 0;
+          qSnap.forEach(dSnap => {
+            const match = dSnap.id.match(/^dept_v3_(\d+)$/);
+            if (match) {
+              const n = parseInt(match[1], 10);
+              if (n > maxNum) maxNum = n;
+            }
+          });
+          const nextIndex = maxNum > 0 ? maxNum + 1 : (departmentsList.length || 1);
+          const deptId = `dept_v3_${nextIndex}`;
           await setDoc(doc(db, "departments", deptId), { id: deptId, name: newName });
         } catch (err) {
           console.warn("Firestore add department notice:", err);
@@ -12270,7 +12280,16 @@
             }
           });
           if (!updated) {
-            const deptId = 'dept_' + Date.now();
+            let maxNum = 0;
+            qSnap.forEach(dSnap => {
+              const match = dSnap.id.match(/^dept_v3_(\d+)$/);
+              if (match) {
+                const n = parseInt(match[1], 10);
+                if (n > maxNum) maxNum = n;
+              }
+            });
+            const nextIndex = maxNum > 0 ? maxNum + 1 : (departmentsList.length || 1);
+            const deptId = `dept_v3_${nextIndex}`;
             await setDoc(doc(db, "departments", deptId), { id: deptId, name: trimmed });
           }
         } catch(err) {
@@ -14040,48 +14059,37 @@
 
           let fsDepts = [];
           if (!snapshot.empty) {
-            snapshot.docs.forEach(async (dSnap) => {
-              if (legacyDepts.includes(dSnap.data().name)) {
+            const validDocs = [];
+            for (const dSnap of snapshot.docs) {
+              const data = dSnap.data();
+              const name = (data.name || dSnap.id || '').trim();
+              if (legacyDepts.includes(name)) {
                 try { await deleteDoc(dSnap.ref); } catch(e){}
+              } else if (name) {
+                validDocs.push({ id: dSnap.id, name });
               }
+            }
+
+            // Sort by numerical index in doc id if format is dept_v3_X
+            validDocs.sort((a, b) => {
+              const numA = parseInt((a.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
+              const numB = parseInt((b.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
+              if (numA !== numB) return numA - numB;
+              return a.name.localeCompare(b.name, 'th');
             });
 
-            fsDepts = snapshot.docs
-              .map(d => (d.data().name || d.id))
-              .filter(d => d && !legacyDepts.includes(d));
-          }
-
-          // Gather unique departments from employeeList as well to ensure no department is ever lost
-          const empDepts = (employeeList || [])
-            .map(e => e ? e.department : '')
-            .filter(d => d && typeof d === 'string' && d.trim() !== '' && !legacyDepts.includes(d.trim()));
-
-          // Merge fsDepts, empDepts, and current departmentsList
-          const mergedSet = new Set([...fsDepts, ...empDepts]);
-
-          if (mergedSet.size === 0 && (departmentsList || []).length > 0) {
-            (departmentsList || []).forEach(d => {
-              if (d && !legacyDepts.includes(d)) mergedSet.add(d);
-            });
-          }
-
-          if (mergedSet.size === 0) {
-            defaultDepartmentsList.forEach(d => mergedSet.add(d));
-          }
-
-          departmentsList = Array.from(mergedSet);
-
-          // Auto-heal Firestore if any department in departmentsList is missing from Firestore collection
-          if (isFirebaseReady && db) {
-            const missingInFs = departmentsList.filter(d => !fsDepts.includes(d));
-            for (const d of missingInFs) {
-              try {
-                const safeName = d.replace(/[\/\\]/g, '_').trim();
-                const deptId = 'dept_' + (safeName || Date.now());
-                await setDoc(doc(db, "departments", deptId), { id: deptId, name: d });
-              } catch(e) {
-                console.warn("Auto sync missing dept to Firestore error:", e);
+            const seen = new Set();
+            validDocs.forEach(d => {
+              if (!seen.has(d.name.toLowerCase())) {
+                seen.add(d.name.toLowerCase());
+                fsDepts.push(d.name);
               }
+            });
+            departmentsList = fsDepts;
+          } else {
+            // Only if collection is completely empty, keep current local departmentsList or defaults
+            if (!departmentsList || departmentsList.length === 0) {
+              departmentsList = [...defaultDepartmentsList];
             }
           }
 

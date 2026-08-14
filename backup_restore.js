@@ -55,13 +55,26 @@ function safeJsonClone(obj) {
 }
 
 function getComprehensiveDepartmentsList() {
-  const set = new Set(window.departmentsList || []);
-  (window.employeeList || []).forEach(emp => {
-    if (emp && emp.department && typeof emp.department === 'string' && emp.department.trim()) {
-      set.add(emp.department.trim());
+  const seen = new Set();
+  const list = [];
+  const addDept = (item) => {
+    if (!item) return;
+    const name = (typeof item === 'object' ? (item.name || item.id || '') : String(item)).trim();
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      list.push(name);
     }
-  });
-  return Array.from(set).filter(Boolean);
+  };
+  if (Array.isArray(window.departmentsList) && window.departmentsList.length > 0) {
+    window.departmentsList.forEach(addDept);
+  } else if (Array.isArray(window.employeeList)) {
+    window.employeeList.forEach(emp => {
+      if (emp && emp.department) {
+        addDept(emp.department);
+      }
+    });
+  }
+  return list;
 }
 
 function getComprehensiveLocationsList() {
@@ -1223,25 +1236,44 @@ window.displayRestoreSummary = function(parsed, fileName) {
     const audC = (parsed.auditLogs || []).length;
     const catC = (parsed.categoriesList || []).length;
 
-    let depts = parsed.departmentsList || [];
-    if (!Array.isArray(depts) || depts.length === 0) {
-      const deptSet = new Set();
-      (parsed.employeeList || []).forEach(e => {
-        if (e && e.department && typeof e.department === 'string' && e.department.trim()) deptSet.add(e.department.trim());
+    // Deduplicate and count unique departments accurately directly from parsed.departmentsList
+    const deptSet = new Set();
+    const cleanDepts = [];
+    const addPreviewDept = (d) => {
+      if (!d) return;
+      const name = (typeof d === 'object' ? (d.name || d.id || '') : String(d)).trim();
+      if (name && !deptSet.has(name.toLowerCase())) {
+        deptSet.add(name.toLowerCase());
+        cleanDepts.push(name);
+      }
+    };
+    if (Array.isArray(parsed.departmentsList)) {
+      parsed.departmentsList.forEach(addPreviewDept);
+    } else if (Array.isArray(parsed.employeeList)) {
+      parsed.employeeList.forEach(e => {
+        if (e && e.department) addPreviewDept(e.department);
       });
-      depts = Array.from(deptSet);
     }
-    const depC = depts.length;
+    const depC = cleanDepts.length;
 
-    let locs = parsed.locationsList || [];
-    if (!Array.isArray(locs) || locs.length === 0) {
-      const locSet = new Set();
-      (parsed.equipmentList || []).forEach(eq => {
-        if (eq && eq.location && typeof eq.location === 'string' && eq.location.trim()) locSet.add(eq.location.trim());
+    const locSet = new Set();
+    const cleanLocs = [];
+    const addPreviewLoc = (l) => {
+      if (!l) return;
+      const name = (typeof l === 'object' ? (l.name || l.id || '') : String(l)).trim();
+      if (name && !locSet.has(name.toLowerCase())) {
+        locSet.add(name.toLowerCase());
+        cleanLocs.push(name);
+      }
+    };
+    if (Array.isArray(parsed.locationsList)) {
+      parsed.locationsList.forEach(addPreviewLoc);
+    } else if (Array.isArray(parsed.equipmentList)) {
+      parsed.equipmentList.forEach(eq => {
+        if (eq && eq.location) addPreviewLoc(eq.location);
       });
-      locs = Array.from(locSet);
     }
-    const locC = locs.length;
+    const locC = cleanLocs.length;
 
     let imgC = 0;
     if (parsed.imagesBase64Map && Object.keys(parsed.imagesBase64Map).length > 0) {
@@ -1260,7 +1292,7 @@ window.displayRestoreSummary = function(parsed, fileName) {
       <div class="col-6 col-md-4">• หมวดหมู่อุปกรณ์: <strong class="text-secondary">${catC}</strong> หมวด</div>
       <div class="col-6 col-md-4">• แผนก / สวน: <strong class="text-dark">${depC}</strong> แผนก</div>
       <div class="col-6 col-md-4">• สถานที่จัดเก็บ: <strong class="text-secondary">${locC}</strong> แห่ง</div>
-      <div class="col-12 text-success fw-semibold mt-1"><i class="bi bi-check-circle-fill me-1"></i> ระบบจะกู้คืนข้อมูลพร้อมลิงก์รูปภาพ (หากมีในไฟล์สำรอง)</div>
+      <div class="col-12 text-success fw-semibold mt-1"><i class="bi bi-check-circle-fill me-1"></i> ระบบจะกู้คืนข้อมูลพร้อมตรวจสอบความถูกต้องและตัดชื่อแผนกที่ซ้ำซ้อนออกอัตโนมัติ</div>
     `;
   }
 
@@ -1295,7 +1327,7 @@ window.executeRestoreDatabase = async function() {
   if (!confirmed) return;
 
   try {
-    window.updateBackupProgress(10, "กำลังเริ่มฟื้นฟูข้อมูล...", "อ่านและปรับแต่งโครงสร้างข้อมูลพร้อมลิงก์รูปภาพ", true, "bg-warning");
+    window.updateBackupProgress(10, "กำลังเริ่มฟื้นฟูข้อมูล...", "อ่านและปรับแต่งโครงสร้างข้อมูลพร้อมตรวจสอบความถูกต้องของแผนก", true, "bg-warning");
 
     let equipmentList = window.equipmentList || [];
     let employeeList = window.employeeList || [];
@@ -1306,21 +1338,42 @@ window.executeRestoreDatabase = async function() {
     let departmentsList = window.departmentsList || [];
     let locationsList = window.locationsList || [];
 
-    let restoredDepts = Array.isArray(tempParsedRestoreData.departmentsList) ? [...tempParsedRestoreData.departmentsList] : [];
-    (tempParsedRestoreData.employeeList || []).forEach(emp => {
-      if (emp && emp.department && typeof emp.department === 'string' && emp.department.trim()) {
-        const dName = emp.department.trim();
-        if (!restoredDepts.includes(dName)) restoredDepts.push(dName);
+    // Extract strictly unique departments from backup file (must equal departmentsList in .json)
+    const seenRestoredDept = new Set();
+    const restoredDepts = [];
+    const addRestoredDept = (d) => {
+      if (!d) return;
+      const name = (typeof d === 'object' ? (d.name || d.id || '') : String(d)).trim();
+      if (name && !seenRestoredDept.has(name.toLowerCase())) {
+        seenRestoredDept.add(name.toLowerCase());
+        restoredDepts.push(name);
       }
-    });
+    };
+    if (Array.isArray(tempParsedRestoreData.departmentsList)) {
+      tempParsedRestoreData.departmentsList.forEach(addRestoredDept);
+    } else if (Array.isArray(tempParsedRestoreData.employeeList)) {
+      tempParsedRestoreData.employeeList.forEach(emp => {
+        if (emp && emp.department) addRestoredDept(emp.department);
+      });
+    }
 
-    let restoredLocs = Array.isArray(tempParsedRestoreData.locationsList) ? [...tempParsedRestoreData.locationsList] : [];
-    (tempParsedRestoreData.equipmentList || []).forEach(eq => {
-      if (eq && eq.location && typeof eq.location === 'string' && eq.location.trim()) {
-        const lName = eq.location.trim();
-        if (!restoredLocs.includes(lName)) restoredLocs.push(lName);
+    const seenRestoredLoc = new Set();
+    const restoredLocs = [];
+    const addRestoredLoc = (l) => {
+      if (!l) return;
+      const name = (typeof l === 'object' ? (l.name || l.id || '') : String(l)).trim();
+      if (name && !seenRestoredLoc.has(name.toLowerCase())) {
+        seenRestoredLoc.add(name.toLowerCase());
+        restoredLocs.push(name);
       }
-    });
+    };
+    if (Array.isArray(tempParsedRestoreData.locationsList)) {
+      tempParsedRestoreData.locationsList.forEach(addRestoredLoc);
+    } else if (Array.isArray(tempParsedRestoreData.equipmentList)) {
+      tempParsedRestoreData.equipmentList.forEach(eq => {
+        if (eq && eq.location) addRestoredLoc(eq.location);
+      });
+    }
 
     if (mode === 'REPLACE') {
       equipmentList = (tempParsedRestoreData.equipmentList || []).map(item => ({ ...item }));
@@ -1385,13 +1438,30 @@ window.executeRestoreDatabase = async function() {
         });
       }
 
-      restoredDepts.forEach(d => {
-        if (!departmentsList.includes(d)) departmentsList.push(d);
-      });
+      // Merge departments preventing duplicates
+      const mergeDeptMap = new Map();
+      const addMergeDept = (item) => {
+        if (!item) return;
+        const name = (typeof item === 'object' ? (item.name || item.id || '') : String(item)).trim();
+        if (name && !mergeDeptMap.has(name.toLowerCase())) {
+          mergeDeptMap.set(name.toLowerCase(), name);
+        }
+      };
+      departmentsList.forEach(addMergeDept);
+      restoredDepts.forEach(addMergeDept);
+      departmentsList = Array.from(mergeDeptMap.values());
 
-      restoredLocs.forEach(l => {
-        if (!locationsList.includes(l)) locationsList.push(l);
-      });
+      const mergeLocMap = new Map();
+      const addMergeLoc = (item) => {
+        if (!item) return;
+        const name = (typeof item === 'object' ? (item.name || item.id || '') : String(item)).trim();
+        if (name && !mergeLocMap.has(name.toLowerCase())) {
+          mergeLocMap.set(name.toLowerCase(), name);
+        }
+      };
+      locationsList.forEach(addMergeLoc);
+      restoredLocs.forEach(addMergeLoc);
+      locationsList = Array.from(mergeLocMap.values());
     }
 
     equipmentList.forEach(item => {
@@ -1399,6 +1469,18 @@ window.executeRestoreDatabase = async function() {
         item.minQuantity = 3;
       }
     });
+
+    // Final deduplication pass for departments
+    const finalDeptSet = new Set();
+    const finalDepartmentsList = [];
+    departmentsList.forEach(d => {
+      const name = (typeof d === 'object' ? (d.name || d.id || '') : String(d)).trim();
+      if (name && !finalDeptSet.has(name.toLowerCase())) {
+        finalDeptSet.add(name.toLowerCase());
+        finalDepartmentsList.push(name);
+      }
+    });
+    departmentsList = finalDepartmentsList;
 
     window.equipmentList = equipmentList;
     window.employeeList = employeeList;
@@ -1421,9 +1503,8 @@ window.executeRestoreDatabase = async function() {
     if (window.db && window.isFirebaseReady) {
       window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมดรวมถึงแผนกและสถานที่จัดเก็บ", true, "bg-warning");
       try {
-        const deptDocs = departmentsList.map((d, i) => {
-          const dName = typeof d === 'object' ? (d.name || d.id) : String(d).trim();
-          const safeId = typeof d === 'object' && d.id ? d.id : ('dept_' + (dName.replace(/[\/\\]/g, '_') || i));
+        const deptDocs = departmentsList.map((dName, i) => {
+          const safeId = `dept_v3_${i + 1}`;
           return { id: safeId, name: dName };
         });
         const locDocs = locationsList.map((l, i) => {
