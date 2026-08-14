@@ -93,12 +93,16 @@
     Object.defineProperty(window, 'userLoginLogs', { get: () => userLoginLogs, set: (v) => { userLoginLogs = v; }, configurable: true });
 
     const defaultCategoriesList = [
-      { id: 'cat-1', name: 'เครื่องมือตัดแต่ง', prefix: 'CT', icon: '✂️', label: 'เครื่องมือตัดแต่งกิ่งไม้/ดอกไม้' },
-      { id: 'cat-2', name: 'ระบบรดน้ำ', prefix: 'IR', icon: '💧', label: 'ระบบรดน้ำ/สายยาง/สปรินเกอร์' },
-      { id: 'cat-3', name: 'อุปกรณ์เตรียมดิน', prefix: 'SL', icon: '⛏️', label: 'อุปกรณ์เตรียมดิน/จอบ/เสียม/พรวน' },
-      { id: 'cat-4', name: 'สารบำรุงและปุ๋ย', prefix: 'FT', icon: '🧪', label: 'สารบำรุง/ปุ๋ยเคมี/ชีวภาพ' },
-      { id: 'cat-5', name: 'ภาชนะและบรรจุภัณฑ์', prefix: 'PT', icon: '🪴', label: 'กระถาง/ตะกร้า/เข่งใส่ดอกไม้' },
-      { id: 'cat-6', name: 'อุปกรณ์เซฟตี้และทั่วไป', prefix: 'SF', icon: '🧤', label: 'ถุงมือ/ชุดเซฟตี้/อุปกรณ์ทั่วไป' }
+      { id: "cat-1785829092423", name: "น้ำมัน", prefix: "FG", label: "น้ำมันส่วนกลางทั้งหมด", icon: "🛢️" },
+      { id: "cat-1785831991090", name: "งานธุรการ", prefix: "EQ", label: "อุปกรณ์ธุรการ", icon: "📝" },
+      { id: "cat-1785832428510", name: "อุปกรณ์ทำความสะอาด", prefix: "SK", label: "อุปกรณ์ทำความสะอาดทั้งหมด", icon: "🧹" },
+      { id: "cat-1785832486525", name: "ฮาร์ดแวร์,เคมีภัณฑ์", prefix: "FT", label: "น้ำยาเคมี/สี/วัสดุอุดรอยต่อ", icon: "🧪" },
+      { id: "cat-1785832555031", name: "เครื่องมือช่าง", prefix: "AX", label: "อุปกรณ์สำหรับทำงานช่าง", icon: "🛠️" },
+      { id: "cat-1785832659836", name: "เมล็ดพันธ์", prefix: "OP", label: "เมล็ดพันธ์ต่างๆ", icon: "🌱" },
+      { id: "cat-1785913185572", name: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", prefix: "SF", label: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", icon: "🌾" },
+      { id: "cat-1785913283730", name: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", prefix: "SL", label: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", icon: "🚜" },
+      { id: "cat-1785928782619", name: "ระบบไฟ", prefix: "EQ", label: "ระบบไฟ", icon: "💡" },
+      { id: "cat-1785928789887", name: "ระบบน้ำ", prefix: "EQ", label: "ระบบน้ำ", icon: "💧" }
     ];
 
     const defaultDepartmentsList = [
@@ -109,11 +113,25 @@
       "แผนกทีมแปลง A-B",
       "แผนกทีมแปลง E/P11",
       "แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน",
-      "แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)"
+      "แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)",
+      "พระประจำ",
+      "ทีมตัดหญ้า",
+      "ทีมวิหารหลวงปู่",
+      "ไม้โต๊ะกลาง / หมักแกลบ",
+      "ทั่วไป"
     ];
 
     const defaultLocationsList = [
+      "สโตว์กรงเหล็ก",
+      "โรงเก็บเครื่องมือ A",
+      "ชั้นอุปกรณ์ระบบน้ำ",
+      "โรงน้ำมัน",
+      "พระธรรมศักดิ์ ทดสอบ",
       "โรงเก็บ A - ชั้น 1",
+      "คลังวัสดุเพาะชำ",
+      "เรือนกระจก 1",
+      "คลังปุ๋ยและสารบำรุง",
+      "ตู้เซฟตี้ 1",
       "โรงเก็บ A - ชั้น 2",
       "โรงเก็บ A - ชั้น 3",
       "โรงเก็บ B - ล็อก 1",
@@ -121,12 +139,7 @@
       "อาคารเครื่องจักร 1",
       "อาคารเครื่องจักร 2",
       "คลังอุปกรณ์หนัก",
-      "อาคารเคมีเกษตร",
-      "คลังวัสดุเพาะชำ",
-      "เรือนกระจก 1",
-      "คลังปุ๋ยและสารบำรุง",
-      "ตู้เซฟตี้ 1",
-      "โรงเก็บเครื่องมือ A"
+      "อาคารเคมีเกษตร"
     ];
 
     // Initialize Firebase & Auth gracefully with long polling for iframe sandbox resilience
@@ -2431,7 +2444,13 @@
 
     // Clear broken link
     window.clearBrokenImageLink = async function(id, itemType) {
-      if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างลิงก์รูปภาพที่เสียรายการนี้ออก?")) return;
+      const ok = await window.showConfirmDialog({
+        title: "ล้างลิงก์รูปภาพ",
+        message: "ต้องการล้างลิงก์รูปภาพที่เสียรายการนี้ออกหรือไม่?",
+        type: "warning",
+        confirmText: "ล้างลิงก์"
+      });
+      if (!ok) return;
 
       const list = itemType === 'EQUIPMENT' ? equipmentList : employeeList;
       const item = (list || []).find(x => x && String(x.id) === String(id));
@@ -2457,21 +2476,26 @@
     // Repair all broken images
     window.repairAllBrokenImages = async function() {
       if (!isFirebaseReady || !storage) {
-        alert("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน กรุณาตรวจสอบว่าได้ตั้งค่า Firebase Storage ในโปรเจกต์แล้ว");
+        showToast("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน");
         return;
       }
 
       const brokenAndBase64Items = imageDiagnosticData.items.filter(x => x.status === 'BROKEN' || x.status === 'BASE64');
       if (brokenAndBase64Items.length === 0) {
-        alert("🎉 ไม่พบรูปภาพที่จำเป็นต้องซ่อมแซม รูปภาพทั้งหมดอยู่ในสถานะสมบูรณ์แล้ว");
+        showToast("🎉 รูปภาพทั้งหมดอยู่ในสถานะสมบูรณ์แล้ว");
         return;
       }
 
-      if (!confirm(`คุณต้องการซ่อมแซมและอัปโหลดรูปภาพจำนวน ${brokenAndBase64Items.length} รายการ ขึ้นสู่ Firebase Storage หรือไม่?`)) {
-        return;
-      }
+      const ok = await window.showConfirmDialog({
+        title: "ซ่อมแซมรูปภาพ",
+        message: `ต้องการซ่อมและอัปโหลดรูปภาพ ${brokenAndBase64Items.length} รายการ ขึ้น Firebase Storage หรือไม่?`,
+        type: "primary",
+        icon: "bi-wrench-adjustable-circle",
+        confirmText: "ซ่อมแซมรูป"
+      });
+      if (!ok) return;
 
-      showToast(`🛠️ กำลังเริ่มซ่อมแซมและอัปโหลดรูปภาพ ${brokenAndBase64Items.length} รายการไปยัง Firebase Storage...`);
+      showToast(`🛠️ กำลังซ่อมแซมและอัปโหลดรูปภาพ ${brokenAndBase64Items.length} รายการไปยัง Firebase Storage...`);
       let repairedCount = 0;
 
       for (const diagItem of brokenAndBase64Items) {
@@ -2792,9 +2816,13 @@
       }
 
       if (!silent) {
-        const isConfirmed = confirm(
-          "⚠️ คำเตือน (อันตราย): การรันปรับแก้ไขรหัสตามหมวดหมู่ อาจทำให้รูปภาพ กับ รหัสที่ปรับแก้ไม่ตรงกัน หรือคลาดเคลื่อนได้!\n\nคุณแน่ใจหรือไม่ว่าต้องการดำเนินการปรับแก้ไขรหัสอุปกรณ์ตามหมวดหมู่?"
-        );
+        const isConfirmed = await window.showConfirmDialog({
+          title: "ปรับรหัสอุปกรณ์ตามหมวดหมู่",
+          message: "การปรับรหัสอาจทำให้รูปภาพคลาดเคลื่อน ต้องการดำเนินการต่อหรือไม่?",
+          type: "warning",
+          icon: "bi-exclamation-triangle-fill",
+          confirmText: "ยืนยันปรับรหัส"
+        });
         if (!isConfirmed) return;
       }
 
@@ -3674,6 +3702,9 @@
 
       showToast(`✅ บันทึกเอกสาร${type} (${itemsToProcess.length} รายการ) เรียบร้อยแล้ว`);
 
+      // Check if user requested transaction voucher document (Default: false)
+      const requireVoucher = document.getElementById('transRequireVoucherDoc')?.checked || false;
+
       // Reset form & cart
       clearTransCart();
       document.getElementById('transactionForm')?.reset();
@@ -3700,8 +3731,10 @@
         switchNavTab('catalog-tab');
       }
 
-      // Open transaction voucher print modal
-      openPrintTransactionVoucherModal(newTx.id);
+      // Open transaction voucher print modal ONLY if explicitly checked
+      if (requireVoucher && typeof openPrintTransactionVoucherModal === 'function') {
+        openPrintTransactionVoucherModal(newTx.id);
+      }
     }
 
     // ==================== FIRESTORE DATA VALIDATION FUNCTIONS ====================
@@ -4759,9 +4792,13 @@
     window.executeBulkDeleteEmployees = async function() {
       if (selectedEmpIds.size === 0) return;
 
-      if (!confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลบุคลากรที่เลือกไว้จำนวน ${selectedEmpIds.size} คน?`)) {
-        return;
-      }
+      const ok = await window.showConfirmDialog({
+        title: "ลบข้อมูลบุคลากร",
+        message: `ต้องการลบข้อมูลบุคลากรที่เลือกจำนวน ${selectedEmpIds.size} คน ใช่หรือไม่?`,
+        type: "danger",
+        confirmText: `ลบ ${selectedEmpIds.size} คน`
+      });
+      if (!ok) return;
 
       let deletedCount = 0;
       const deleteIds = Array.from(selectedEmpIds);
@@ -5547,7 +5584,12 @@
         return;
       }
 
-      const confirmed = confirm(`⚠️ ยืนยันการลบอุปกรณ์ที่เลือกทั้งหมด ${selectedIds.length} รายการ?\nการดำเนินการนี้ไม่สามารถย้อนกลับได้!`);
+      const confirmed = await window.showConfirmDialog({
+        title: "ลบอุปกรณ์ที่เลือก",
+        message: `ต้องการลบอุปกรณ์ที่เลือกทั้งหมด ${selectedIds.length} รายการ ใช่หรือไม่?`,
+        type: "danger",
+        confirmText: `ลบ ${selectedIds.length} รายการ`
+      });
       if (!confirmed) return;
 
       let deletedCount = 0;
@@ -5591,9 +5633,13 @@
 
       const totalCount = transactionHistory.length;
 
-      if (!confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบ "ประวัติการทำรายการทั้งหมด" (${totalCount} รายการ)?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้!`)) {
-        return;
-      }
+      const ok = await window.showConfirmDialog({
+        title: "ลบประวัติทั้งหมด",
+        message: `ต้องการลบประวัติการทำรายการทั้งหมด (${totalCount} รายการ) ใช่หรือไม่?`,
+        type: "danger",
+        confirmText: "ลบประวัติทั้งหมด"
+      });
+      if (!ok) return;
 
       // Delete from Firestore if database is ready
       if (isFirebaseReady && db) {
@@ -5790,29 +5836,29 @@
                 <i class="bi bi-calendar2-check-fill fs-5"></i>
               </div>
               <div>
-                <h6 class="fw-bold mb-0 text-dark">สรุปรายการวันนี้ (Daily Overview)</h6>
+                <h6 class="fw-bold mb-0 text-dark">สรุปรายการวันนี้</h6>
                 <span class="text-muted fs-8"><i class="bi bi-clock-history me-1"></i>ประจำวันที่ ${thaiDateStr}</span>
               </div>
             </div>
 
             <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
               <div class="bg-danger-subtle text-danger border border-danger-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
-                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-arrow-up-right-circle me-1 text-danger"></i>เบิก (Issue)</div>
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-arrow-up-right-circle me-1 text-danger"></i>เบิก</div>
                 <div class="fs-5 fw-extrabold text-danger mb-0">${issueCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
               </div>
 
               <div class="bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
-                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-up-right me-1 text-warning-emphasis"></i>ยืม (Borrow)</div>
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-up-right me-1 text-warning-emphasis"></i>ยืม</div>
                 <div class="fs-5 fw-extrabold text-dark mb-0">${borrowCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
               </div>
 
               <div class="bg-info-subtle text-info-emphasis border border-info-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
-                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-in-down-left me-1 text-info-emphasis"></i>คืน (Return)</div>
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-box-arrow-in-down-left me-1 text-info-emphasis"></i>คืน</div>
                 <div class="fs-5 fw-extrabold text-primary mb-0">${returnCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
               </div>
 
               <div class="bg-success-subtle text-success border border-success-subtle rounded-3 px-3 py-1.5 text-center shadow-2xs" style="min-width: 100px;">
-                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-plus-circle me-1 text-success"></i>รับเข้า (Receive)</div>
+                <div class="fs-9 text-uppercase fw-bold text-muted mb-0"><i class="bi bi-plus-circle me-1 text-success"></i>รับเข้า</div>
                 <div class="fs-5 fw-extrabold text-success mb-0">${receiveCount} <span class="fs-9 text-muted font-normal">รายการ</span></div>
               </div>
 
@@ -6369,11 +6415,16 @@
     window.deleteSingleAuditLog = async function(logId) {
       if (!logId) return;
       if (!window.isThammaSrithongAdmin()) {
-        if (typeof showToast === 'function') showToast("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลง");
-        else alert("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลง");
+        showToast("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลง");
         return;
       }
-      if (confirm('คุณต้องการลบประวัติการเปลี่ยนแปลงรายการนี้ใช่หรือไม่?')) {
+      const ok = await window.showConfirmDialog({
+        title: "ลบประวัติการเปลี่ยนแปลง",
+        message: "ต้องการลบประวัติการเปลี่ยนแปลงรายการนี้ใช่หรือไม่?",
+        type: "danger",
+        confirmText: "ลบรายการ"
+      });
+      if (ok) {
         auditLogs = auditLogs.filter(x => x.id !== logId);
         renderAuditLogsTable();
         if (isFirebaseReady && db) {
@@ -6389,15 +6440,20 @@
 
     window.clearAllAuditLogs = async function() {
       if (!window.isThammaSrithongAdmin()) {
-        if (typeof showToast === 'function') showToast("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลงทั้งหมด");
-        else alert("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลงทั้งหมด");
+        showToast("⚠️ เฉพาะ Thamma Srithong (ผู้ดูแลระบบ) เท่านั้นที่มีสิทธิ์ลบประวัติการเปลี่ยนแปลงทั้งหมด");
         return;
       }
       if (!auditLogs || auditLogs.length === 0) {
         showToast("ไม่มีประวัติการเปลี่ยนแปลงให้ลบ");
         return;
       }
-      if (confirm(`⚠️ ยืนยันลบประวัติการเปลี่ยนแปลงข้อมูลทั้งหมดจำนวน ${auditLogs.length} รายการหรือไม่?\n\nการลบจะไม่สามารถย้อนคืนได้!`)) {
+      const ok = await window.showConfirmDialog({
+        title: "ลบประวัติทั้งหมด",
+        message: `ต้องการลบประวัติการเปลี่ยนแปลงทั้งหมด ${auditLogs.length} รายการ ใช่หรือไม่?`,
+        type: "danger",
+        confirmText: "ลบทั้งหมด"
+      });
+      if (ok) {
         const total = auditLogs.length;
         auditLogs = [];
         renderAuditLogsTable();
@@ -6863,7 +6919,13 @@
         showToast("⚠️ เฉพาะ Admin (jaru072@gmail.com) เท่านั้นที่มีสิทธิ์ลบประวัติ");
         return;
       }
-      if (confirm('คุณต้องการลบประวัติ Login รายการนี้ใช่หรือไม่?')) {
+      const ok = await window.showConfirmDialog({
+        title: "ลบประวัติการใช้งาน",
+        message: "ต้องการลบประวัติการใช้งานรายการนี้ใช่หรือไม่?",
+        type: "danger",
+        confirmText: "ลบประวัติ"
+      });
+      if (ok) {
         userLoginLogs = userLoginLogs.filter(x => x.id !== logId);
         renderUserLoginLogsTable();
         if (isFirebaseReady && db) {
@@ -6886,7 +6948,13 @@
         showToast("ไม่มีประวัติ Login ให้ลบ");
         return;
       }
-      if (confirm(`⚠️ ยืนยันลบประวัติการเข้า-ออกจากระบบทั้งหมดจำนวน ${userLoginLogs.length} รายการหรือไม่?`)) {
+      const ok = await window.showConfirmDialog({
+        title: "ลบประวัติทั้งหมด",
+        message: `ต้องการลบประวัติการเข้า-ออกระบบทั้งหมด ${userLoginLogs.length} รายการ ใช่หรือไม่?`,
+        type: "danger",
+        confirmText: "ลบทั้งหมด"
+      });
+      if (ok) {
         const total = userLoginLogs.length;
         userLoginLogs = [];
         renderUserLoginLogsTable();
@@ -7390,7 +7458,19 @@
           }
         }
 
+        const btnHeaderOverdue = document.getElementById('btnHeaderOverdue');
         const headerBadge = document.getElementById('headerOverdueBadge');
+        if (btnHeaderOverdue) {
+          if (overdueCount > 0) {
+            btnHeaderOverdue.classList.remove('d-none');
+            btnHeaderOverdue.classList.add('d-flex');
+            btnHeaderOverdue.classList.add('btn-overdue-blink');
+          } else {
+            btnHeaderOverdue.classList.add('d-none');
+            btnHeaderOverdue.classList.remove('d-flex');
+            btnHeaderOverdue.classList.remove('btn-overdue-blink');
+          }
+        }
         if (headerBadge) {
           if (overdueCount > 0) {
             headerBadge.classList.remove('d-none');
@@ -12210,15 +12290,17 @@
       const deptName = decodeURIComponent(encodedDeptName);
       const empCount = employeeList.filter(e => e.department === deptName).length;
 
-      if (empCount > 0) {
-        if (!confirm(`มีพนักงานในแผนก "${deptName}" จำนวน ${empCount} คน\n\nคุณแน่ใจหรือไม่ที่จะลบแผนกนี้ออกจากรายการ? (ข้อมูลแผนกของพนักงานจะยังคงเป็นชื่อเดิมจนกว่าจะแก้ไข)`)) {
-          return;
-        }
-      } else {
-        if (!confirm(`คุณต้องการลบแผนก/สวน "${deptName}" ออกจากรายการหรือไม่?`)) {
-          return;
-        }
-      }
+      const confirmMsg = empCount > 0 
+        ? `มีพนักงานในแผนกนี้ ${empCount} คน ต้องการลบแผนก "${deptName}" ออกจากรายการหรือไม่?` 
+        : `ต้องการลบแผนก/สวน "${deptName}" หรือไม่?`;
+
+      const ok = await window.showConfirmDialog({
+        title: "ลบแผนก/สวน",
+        message: confirmMsg,
+        type: "danger",
+        confirmText: "ลบแผนก"
+      });
+      if (!ok) return;
 
       departmentsList = departmentsList.filter(d => d !== deptName);
       saveToLocalStorage();
@@ -12435,15 +12517,17 @@
       const locName = decodeURIComponent(encodedLocName);
       const equipCount = (equipmentList || []).filter(e => e.location === locName).length;
 
-      if (equipCount > 0) {
-        if (!confirm(`มีอุปกรณ์จัดเก็บในสถานที่ "${locName}" จำนวน ${equipCount} รายการ\n\nคุณแน่ใจหรือไม่ที่จะลบสถานที่นี้ออกจากรายการ?`)) {
-          return;
-        }
-      } else {
-        if (!confirm(`คุณต้องการลบสถานที่จัดเก็บ "${locName}" ออกจากรายการหรือไม่?`)) {
-          return;
-        }
-      }
+      const confirmMsg = equipCount > 0
+        ? `มีอุปกรณ์ในสถานที่นี้ ${equipCount} รายการ ต้องการลบสถานที่ "${locName}" หรือไม่?`
+        : `ต้องการลบสถานที่จัดเก็บ "${locName}" ออกจากรายการหรือไม่?`;
+
+      const ok = await window.showConfirmDialog({
+        title: "ลบสถานที่จัดเก็บ",
+        message: confirmMsg,
+        type: "danger",
+        confirmText: "ลบสถานที่"
+      });
+      if (!ok) return;
 
       locationsList = locationsList.filter(l => l !== locName);
       saveToLocalStorage();
@@ -12475,7 +12559,13 @@
       const emp = employeeList.find(x => x.id === empId);
       if (!emp) return;
 
-      if (confirm(`คุณต้องการลบรายชื่อพนักงาน "${emp.name}" [${emp.id}] หรือไม่?`)) {
+      const ok = await window.showConfirmDialog({
+        title: "ลบข้อมูลพนักงาน",
+        message: `ต้องการลบพนักงาน "${emp.name}" [${emp.id}] หรือไม่?`,
+        type: "danger",
+        confirmText: "ลบพนักงาน"
+      });
+      if (ok) {
         employeeList = employeeList.filter(x => x.id !== empId);
         saveToLocalStorage();
         if (isFirebaseReady && db) {
@@ -12570,9 +12660,13 @@
       const displayCode = item ? (item.code || item.id) : id;
 
       if (!skipConfirm) {
-        if (!confirm(`คุณต้องการลบอุปกรณ์ "${displayName}" [${displayCode}] หรือไม่?`)) {
-          return;
-        }
+        const ok = await window.showConfirmDialog({
+          title: "ลบอุปกรณ์",
+          message: `ต้องการลบอุปกรณ์ "${displayName}" [${displayCode}] หรือไม่?`,
+          type: "danger",
+          confirmText: "ลบอุปกรณ์"
+        });
+        if (!ok) return;
       }
 
       // Filter out matching items from memory
@@ -12671,13 +12765,19 @@
       showToast("ส่งออกข้อมูล JSON ของฐานข้อมูลเรียบร้อยแล้ว");
     };
 
-    window.clearDatabaseCache = function() {
+    window.clearDatabaseCache = async function() {
       if (currentRole !== 'ADMIN') {
-        if (typeof showToast === 'function') showToast("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่มีสิทธิ์ล้างแคชและตั้งค่าระบบ");
-        else alert("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่มีสิทธิ์ล้างแคชและตั้งค่าระบบ");
+        showToast("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่มีสิทธิ์ล้างแคช");
         return;
       }
-      if (confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างแคชฐานข้อมูลท้องถิ่น (Local Cache)?\n\nการล้างแคชจะช่วยแก้ไขปัญหาข้อมูลค้างหรือไม่แสดงผลล่าสุด โดยระบบจะลบข้อมูลที่แคชไว้ในเครื่อง และรีโหลดข้อมูลสดล่าสุดจากเซิร์ฟเวอร์ (Firestore) ทันที")) {
+      const ok = await window.showConfirmDialog({
+        title: "ล้างแคชฐานข้อมูล",
+        message: "ต้องการล้างแคชข้อมูลในเครื่องและโหลดข้อมูลสดจากเซิร์ฟเวอร์ใหม่หรือไม่?",
+        type: "warning",
+        icon: "bi-arrow-clockwise",
+        confirmText: "ล้างแคชและรีโหลด"
+      });
+      if (ok) {
         try {
           localStorage.removeItem('flora_employees');
           localStorage.removeItem('flora_equipment');
@@ -12706,58 +12806,50 @@
       }
     };
 
-    // Function to completely purge/delete all data from LocalStorage, Firestore, and Firebase Storage
-    window.purgeEntireDatabaseAndStorage = async function() {
-      const confirm1 = confirm("⚠️ คำเตือนสูงสุด (Danger Area):\n\nคุณแน่ใจหรือไม่ว่าต้องการ 'ลบฐานข้อมูลและรูปภาพทั้งหมด' ?\n\nการลบนี้จะทำการลบข้อมูลทั้งหมด ได้แก่:\n- รายการอุปกรณ์และเครื่องมือทั้งหมด\n- รายชื่อพนักงานทั้งหมด\n- ประวัติการเบิก-คืน อุปกรณ์\n- ประวัติบันทึกเวลาเข้า-ออกงาน\n- หมวดหมู่และแผนกทั้งหมด\n- รูปภาพทั้งหมดใน Firebase Storage และ Firestore");
-      if (!confirm1) return;
-
-      const confirm2 = confirm("🚨 ยืนยันขั้นตอนสุดท้าย!\n\nข้อมูลและรูปภาพทั้งหมดจะถูกลบทิ้งอย่างถาวรทั้งในเครื่องและบนคลาวด์ (Firebase) ไม่สามารถกู้คืนได้อีก\n\nกด 'OK' เพื่อเริ่มทำการลบทุกอย่างทันที");
-      if (!confirm2) return;
-
-      if (typeof showToast === 'function') {
-        showToast("⏳ กำลังเริ่มประมวลผลลบฐานข้อมูลและรูปภาพทั้งหมดใน Firebase...");
+    // Function to show the custom confirmation modal for database purge (PRESERVING Firebase Storage images)
+    window.purgeEntireDatabaseAndStorage = function() {
+      const modalEl = document.getElementById('confirmPurgeDbModal');
+      const chk = document.getElementById('chkConfirmPurgeDb');
+      const btn = document.getElementById('btnConfirmPurgeDbAction');
+      
+      if (chk) chk.checked = false;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1.5"></i> ยืนยันลบฐานข้อมูลทันที';
       }
 
-      let deletedImagesCount = 0;
+      if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+      } else {
+        // Fallback confirmation
+        const c1 = confirm("⚠️ คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการ 'ลบฐานข้อมูลทั้งหมด' ?\n\n*หมายเหตุ: จะไม่ลบไฟล์รูปภาพใน Firebase Storage (รูปภาพจะยังคงอยู่ใน Storage ปลอดภัย)*");
+        if (c1) {
+          window.executeConfirmedPurgeDatabase();
+        }
+      }
+    };
+
+    // Execute the confirmed database purge
+    window.executeConfirmedPurgeDatabase = async function() {
+      const modalEl = document.getElementById('confirmPurgeDbModal');
+      const btn = document.getElementById('btnConfirmPurgeDbAction');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1.5" role="status" aria-hidden="true"></span> กำลังลบฐานข้อมูล...';
+      }
+
+      if (typeof showToast === 'function') {
+        showToast("⏳ กำลังเริ่มประมวลผลลบเอกสารฐานข้อมูลใน Firestore (คงรูปภาพใน Storage)...");
+      }
+
       let deletedDocsCount = 0;
 
       try {
-        // 1. Delete images individually from memory list
-        for (const eq of (equipmentList || [])) {
-          if (eq && eq.imageUrl) {
-            try {
-              await deleteImageFromFirebaseStorage(eq.imageUrl);
-              deletedImagesCount++;
-            } catch (e) {}
-          }
-        }
-        for (const emp of (employeeList || [])) {
-          if (emp && emp.photoUrl) {
-            try {
-              await deleteImageFromFirebaseStorage(emp.photoUrl);
-              deletedImagesCount++;
-            } catch (e) {}
-          }
-        }
+        // NOTE: We DO NOT delete images from Firebase Storage here as requested.
+        // Storage images remain intact and preserved in Firebase Storage.
 
-        // 2. Purge folders directly in Firebase Storage using listAll if storage ready
-        if (isFirebaseReady && storage) {
-          const folders = ["equipment_images", "employee_photos", "uploads"];
-          for (const folder of folders) {
-            try {
-              const folderRef = ref(storage, folder);
-              const res = await listAll(folderRef);
-              for (const itemRef of res.items) {
-                await deleteObject(itemRef);
-                deletedImagesCount++;
-              }
-            } catch (sErr) {
-              console.warn(`Storage folder purge notice (${folder}):`, sErr.message);
-            }
-          }
-        }
-
-        // 3. Delete all documents in Firestore collections if Firestore ready
+        // 1. Delete all documents in Firestore collections if Firestore ready
         if (isFirebaseReady && db) {
           const collectionsToPurge = ["equipment", "employees", "transactions", "attendance", "categories", "departments", "locations", "system_metadata"];
           for (const colName of collectionsToPurge) {
@@ -12774,7 +12866,7 @@
           }
         }
 
-        // 4. Clear local memory arrays
+        // 2. Clear local memory arrays
         equipmentList = [];
         employeeList = [];
         transactionHistory = [];
@@ -12785,7 +12877,7 @@
         window.departmentsList = [];
         window.locationsList = [];
 
-        // 5. Clear LocalStorage keys
+        // 3. Clear LocalStorage keys
         localStorage.removeItem('flora_employees');
         localStorage.removeItem('flora_equipment');
         localStorage.removeItem('flora_transactions');
@@ -12802,7 +12894,7 @@
 
         saveToLocalStorage();
 
-        // 6. Refresh UI components
+        // 4. Refresh UI components
         renderCatalogGrid();
         renderStaffTable();
         renderHistoryTable();
@@ -12816,12 +12908,25 @@
         if (typeof renderDbEditorTable === 'function') renderDbEditorTable();
         if (typeof openDatabaseInspector === 'function') openDatabaseInspector();
 
-        const successMsg = `🔥 ลบฐานข้อมูลและรูปภาพทั้งหมดสำเร็จแล้ว!\n\n• ลบไฟล์รูปภาพใน Firebase Storage: ${deletedImagesCount} ไฟล์\n• ลบเอกสารข้อมูลใน Firestore: ${deletedDocsCount} รายการ\n• เคลียร์ LocalStorage และข้อมูลในระบบเรียบร้อยแล้วครับ`;
-        alert(successMsg);
-        showToast("🔥 ลบฐานข้อมูลและรูปภาพทั้งหมดเรียบร้อยแล้ว!");
+        // Hide confirmation modal
+        if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+          const modalInstance = bootstrap.Modal.getInstance(modalEl);
+          if (modalInstance) modalInstance.hide();
+        }
+
+        showToast(`🗑️ ลบฐานข้อมูลสำเร็จแล้ว (${deletedDocsCount} รายการ) — รูปภาพใน Firebase Storage ยังคงปลอดภัย 100%`);
       } catch (err) {
         console.error("Purge error:", err);
-        alert("เกิดข้อผิดพลาดขณะลบฐานข้อมูล: " + err.message);
+        if (typeof showToast === 'function') {
+          showToast("❌ เกิดข้อผิดพลาดขณะลบฐานข้อมูล: " + err.message);
+        } else {
+          alert("เกิดข้อผิดพลาดขณะลบฐานข้อมูล: " + err.message);
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-trash3-fill me-1.5"></i> ยืนยันลบฐานข้อมูลทันที';
+        }
       }
     };
 
@@ -12887,14 +12992,19 @@
         }
 
         if (orphanedItems.length === 0) {
-          alert(`✅ ไม่พบไฟล์รูปภาพขยะใน Firebase Storage!\n\n• ไฟล์รูปภาพทั้งหมดใน Storage (${totalFilesScanned} ไฟล์) กำลังถูกใช้งานในระบบปัจจุบันทั้งหมดครับ`);
-          showToast(`✅ สแกนเสร็จสิ้น: ไม่พบไฟล์รูปภาพขยะใน Storage`);
+          showToast(`✅ ไม่พบไฟล์รูปภาพขยะใน Storage (${totalFilesScanned} ไฟล์ใช้งานปกติ)`);
           return;
         }
 
         // 3. Prompt user for deletion
-        const confirmMsg = `🧹 ตรวจพบไฟล์รูปภาพขยะที่ไม่ถูกใช้งาน ${orphanedItems.length} ไฟล์ (จากทั้งหมด ${totalFilesScanned} ไฟล์ใน Storage)\n\nรูปภาพเหล่านี้คือรูปภาพของอุปกรณ์หรือพนักงานที่เคยถูกลบออกจากระบบไปแล้ว\n\nต้องการลบไฟล์รูปภาพขยะทั้ง ${orphanedItems.length} ไฟล์ ออกจาก Firebase Storage หรือไม่?`;
-        if (!confirm(confirmMsg)) return;
+        const ok = await window.showConfirmDialog({
+          title: "ลบไฟล์รูปภาพขยะ",
+          message: `พบรูปภาพตกค้างไม่ได้ใช้ ${orphanedItems.length} ไฟล์ ต้องการลบเพื่อคืนพื้นที่ Storage หรือไม่?`,
+          type: "danger",
+          icon: "bi-trash3-fill",
+          confirmText: `ลบ ${orphanedItems.length} ไฟล์`
+        });
+        if (!ok) return;
 
         showToast(`⏳ กำลังลบไฟล์รูปภาพขยะ ${orphanedItems.length} ไฟล์ ออกจาก Firebase Storage...`);
 
@@ -13128,12 +13238,17 @@
       if (!cat) return;
 
       const affectedItems = equipmentList.filter(eq => eq.category === cat.name);
-      let confirmMsg = `คุณต้องการลบหมวดหมู่ "${cat.name}" ใช่หรือไม่?`;
-      if (affectedItems.length > 0) {
-        confirmMsg += `\n\n(มีอุปกรณ์ ${affectedItems.length} รายการที่ใช้หมวดหมู่นี้ อุปกรณ์ทั้งหมดจะถูกเปลี่ยนหมวดหมู่เป็น 'อุปกรณ์เซฟตี้และทั่วไป')`;
-      }
+      let confirmMsg = affectedItems.length > 0
+        ? `ต้องการลบหมวดหมู่ "${cat.name}" หรือไม่? (อุปกรณ์ ${affectedItems.length} รายการจะถูกย้ายไปหมวดทั่วไป)`
+        : `ต้องการลบหมวดหมู่อุปกรณ์ "${cat.name}" ใช่หรือไม่?`;
 
-      if (!confirm(confirmMsg)) return;
+      const ok = await window.showConfirmDialog({
+        title: "ลบหมวดหมู่อุปกรณ์",
+        message: confirmMsg,
+        type: "danger",
+        confirmText: "ลบหมวดหมู่"
+      });
+      if (!ok) return;
 
       if (affectedItems.length > 0) {
         const fallbackCategory = categoriesList.find(c => c.name !== cat.name)?.name || 'อุปกรณ์เซฟตี้และทั่วไป';
@@ -13732,7 +13847,13 @@
     };
 
     window.deleteDbRecord = async function(coll, recordId) {
-      if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายการข้อมูล ID: ${recordId} ออกจากฐานข้อมูล?`)) return;
+      const ok = await window.showConfirmDialog({
+        title: "ลบข้อมูลจากฐานข้อมูล",
+        message: `ต้องการลบข้อมูล ID: "${recordId}" ออกจากระบบใช่หรือไม่?`,
+        type: "danger",
+        confirmText: "ลบข้อมูล"
+      });
+      if (!ok) return;
 
       if (coll === 'equipment') {
         await window.deleteEquipment(recordId, true);
@@ -13955,7 +14076,8 @@
             const missingInFs = departmentsList.filter(d => !fsDepts.includes(d));
             for (const d of missingInFs) {
               try {
-                const deptId = 'dept_' + (encodeURIComponent(d).replace(/%/g, '_'));
+                const safeName = d.replace(/[\/\\]/g, '_').trim();
+                const deptId = 'dept_' + (safeName || Date.now());
                 await setDoc(doc(db, "departments", deptId), { id: deptId, name: d });
               } catch(e) {
                 console.warn("Auto sync missing dept to Firestore error:", e);
@@ -14002,7 +14124,8 @@
             const missingInFs = locationsList.filter(l => !fsLocs.includes(l));
             for (const l of missingInFs) {
               try {
-                const locId = 'loc_' + (encodeURIComponent(l).replace(/%/g, '_'));
+                const safeLoc = l.replace(/[\/\\]/g, '_').trim();
+                const locId = 'loc_' + (safeLoc || Date.now());
                 await setDoc(doc(db, "locations", locId), { id: locId, name: l });
               } catch(e) {
                 console.warn("Auto sync missing loc to Firestore error:", e);
@@ -14166,9 +14289,14 @@
       };
 
       window.batchOptimizeAllStorageImages = async function() {
-        if (!confirm("⚡ ต้องการบีบอัดและปรับขนาดรูปภาพทั้งหมดในระบบเพื่อประหยัดพื้นที่ Storage หรือไม่?\n\nระบบจะตรวจหารูปภาพขนาดใหญ่ แปลงเป็นไฟล์ WebP/JPEG คุณภาพสูงที่ย่อขนาดแล้ว และซิงก์อัปเดตลง Firebase Storage อัตโนมัติ")) {
-          return;
-        }
+        const ok = await window.showConfirmDialog({
+          title: "บีบอัดรูปภาพระบบ",
+          message: "ต้องการบีบอัดและปรับขนาดรูปภาพทั้งหมดเพื่อประหยัดพื้นที่ Storage หรือไม่?",
+          type: "primary",
+          icon: "bi-lightning-charge-fill",
+          confirmText: "เริ่มบีบอัดรูปภาพ"
+        });
+        if (!ok) return;
 
         let totalProcessed = 0;
         let totalSavedBytes = 0;
@@ -14237,12 +14365,249 @@
       };
     }
 
-    function showToast(msg) {
-      document.getElementById('toastMessage').innerHTML = `<i class="bi bi-check-circle-fill fs-5"></i> ${msg}`;
-      const toastEl = document.getElementById('liveToast');
-      const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
-      toast.show();
+    let feedbackTimer = null;
+    window.hideFeedbackPopup = function() {
+      const popup = document.getElementById('globalFeedbackPopup');
+      if (popup) popup.classList.add('d-none');
+      if (feedbackTimer) {
+        clearTimeout(feedbackTimer);
+        feedbackTimer = null;
+      }
+    };
+
+    // Global 3-Second Feedback Popup (Compact, positioned near active target or center-top, disappears in 3s without progress bar, replaces old bottom-right toast)
+    window.showFeedbackPopup = function(options = {}) {
+      if (typeof options === 'string') {
+        options = { message: options };
+      }
+      const title = options.title || 'บันทึก เสร็จแล้ว';
+      let message = options.message || options.text || 'บันทึก เสร็จแล้ว';
+      const type = options.type || 'success'; // 'success', 'primary', 'warning', 'info', 'danger'
+      const duration = typeof options.duration === 'number' ? options.duration : 3000;
+      
+      const iconClass = options.icon || (
+        type === 'success' ? 'bi-check-circle-fill' :
+        type === 'primary' ? 'bi-info-circle-fill' :
+        type === 'warning' ? 'bi-exclamation-triangle-fill' :
+        type === 'danger' ? 'bi-x-circle-fill' : 'bi-bell-fill'
+      );
+
+      const popup = document.getElementById('globalFeedbackPopup');
+      const titleEl = document.getElementById('globalFeedbackTitle');
+      const msgEl = document.getElementById('globalFeedbackMessage');
+      const iconEl = document.getElementById('globalFeedbackIcon');
+      const iconCont = document.getElementById('globalFeedbackIconContainer');
+
+      if (!popup) return;
+
+      if (titleEl) titleEl.textContent = title;
+      if (msgEl) msgEl.innerHTML = message;
+
+      const iconColor = type === 'warning' ? 'text-warning bg-warning' : type === 'primary' ? 'text-primary bg-primary' : type === 'info' ? 'text-info bg-info' : type === 'danger' ? 'text-danger bg-danger' : 'text-success bg-success';
+      if (iconCont) iconCont.className = `p-2 rounded-circle ${iconColor} bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0`;
+      if (iconEl) iconEl.className = `bi ${iconClass} fs-5`;
+
+      let target = options.target;
+      if (!target && window.event) {
+        target = window.event.target || window.event.currentTarget;
+      }
+      if (!target) {
+        target = document.activeElement;
+      }
+      if (typeof target === 'string') {
+        target = document.querySelector(target);
+      }
+      if (target && !(target instanceof HTMLElement)) {
+        target = target.target || target.currentTarget || null;
+      }
+
+      popup.classList.remove('d-none');
+      const boxWidth = Math.min(330, window.innerWidth - 24);
+      popup.style.width = `${boxWidth}px`;
+
+      if (target && target instanceof HTMLElement && typeof target.getBoundingClientRect === 'function' && target.tagName !== 'BODY') {
+        const rect = target.getBoundingClientRect();
+        const popupHeight = popup.offsetHeight || 80;
+        
+        let top = rect.top - popupHeight - 8;
+        if (top < 12) {
+          top = rect.bottom + 8;
+        }
+        if (top + popupHeight > window.innerHeight - 12) {
+          top = Math.max(12, window.innerHeight - popupHeight - 12);
+        }
+
+        let left = rect.left + (rect.width / 2) - (boxWidth / 2);
+        if (left < 12) left = 12;
+        if (left + boxWidth > window.innerWidth - 12) {
+          left = window.innerWidth - boxWidth - 12;
+        }
+
+        popup.style.top = `${Math.round(top)}px`;
+        popup.style.left = `${Math.round(left)}px`;
+        popup.style.right = 'auto';
+        popup.style.bottom = 'auto';
+        popup.style.transform = 'scale(1)';
+      } else {
+        // Center-top floating feedback notification
+        popup.style.top = '24px';
+        popup.style.left = '50%';
+        popup.style.right = 'auto';
+        popup.style.bottom = 'auto';
+        popup.style.transform = 'translateX(-50%) scale(1)';
+      }
+
+      if (feedbackTimer) clearTimeout(feedbackTimer);
+      feedbackTimer = setTimeout(() => {
+        window.hideFeedbackPopup();
+      }, duration);
+    };
+
+    function showToast(msg, options = {}) {
+      if (typeof options === 'string') {
+        options = { title: options };
+      }
+      window.showFeedbackPopup({
+        title: "บันทึก เสร็จแล้ว",
+        message: msg || "บันทึก เสร็จแล้ว",
+        duration: 3000,
+        ...options
+      });
     }
+
+    // Global UI Confirmation Dialog / Popover (Compact, positioned above/near clicked target, concise text)
+    window.showConfirmDialog = function(options = {}) {
+      return new Promise((resolve) => {
+        if (typeof options === 'string') {
+          options = { message: options };
+        }
+        const title = options.title || 'ยืนยันการดำเนินการ';
+        const message = options.message || options.text || 'คุณต้องการดำเนินการต่อใช่หรือไม่?';
+        const confirmText = options.confirmText || 'ยืนยัน';
+        const cancelText = options.cancelText || 'ยกเลิก';
+        const type = options.type || 'danger'; // 'danger', 'warning', 'primary', 'success', 'info'
+        const iconClass = options.icon || (type === 'warning' ? 'bi-exclamation-triangle-fill' : type === 'primary' ? 'bi-info-circle-fill' : type === 'success' ? 'bi-check-circle-fill' : 'bi-trash3-fill');
+        
+        let target = options.target;
+        if (!target && window.event) {
+          target = window.event.target || window.event.currentTarget;
+        }
+        if (!target) {
+          target = document.activeElement;
+        }
+        if (typeof target === 'string') {
+          target = document.querySelector(target);
+        }
+        if (target && !(target instanceof HTMLElement)) {
+          target = target.target || target.currentTarget || null;
+        }
+
+        const backdrop = document.getElementById('globalConfirmBackdrop');
+        const box = document.getElementById('globalConfirmBox');
+        const titleEl = document.getElementById('globalConfirmTitle');
+        const msgEl = document.getElementById('globalConfirmMessage');
+        const btnCancel = document.getElementById('globalConfirmBtnCancel');
+        const btnOk = document.getElementById('globalConfirmBtnOk');
+        const iconEl = document.getElementById('globalConfirmIcon');
+        const iconCont = document.getElementById('globalConfirmIconContainer');
+
+        if (!box || !backdrop) {
+          resolve(window.confirm ? window.confirm(message) : true);
+          return;
+        }
+
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.innerHTML = message.replace(/\n/g, '<br>');
+        if (btnCancel) btnCancel.textContent = cancelText;
+        if (btnOk) {
+          const span = btnOk.querySelector('span');
+          if (span) span.textContent = confirmText;
+          else btnOk.textContent = confirmText;
+        }
+
+        const btnColorClass = type === 'warning' ? 'btn-warning text-dark' : type === 'primary' ? 'btn-primary' : type === 'success' ? 'btn-success' : type === 'info' ? 'btn-info text-white' : 'btn-danger';
+        if (btnOk) btnOk.className = `btn ${btnColorClass} btn-sm rounded-pill px-3.5 py-1 fw-bold fs-8 shadow-sm d-flex align-items-center gap-1`;
+        
+        const iconColor = type === 'warning' ? 'text-warning bg-warning' : type === 'primary' ? 'text-primary bg-primary' : type === 'success' ? 'text-success bg-success' : type === 'info' ? 'text-info bg-info' : 'text-danger bg-danger';
+        if (iconCont) iconCont.className = `p-2 rounded-circle ${iconColor} bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0`;
+        if (iconEl) iconEl.className = `bi ${iconClass} fs-5`;
+
+        backdrop.classList.remove('d-none');
+        box.classList.remove('d-none');
+
+        const boxWidth = Math.min(330, window.innerWidth - 24);
+        box.style.width = `${boxWidth}px`;
+
+        if (target && target instanceof HTMLElement && typeof target.getBoundingClientRect === 'function' && target.tagName !== 'BODY') {
+          const rect = target.getBoundingClientRect();
+          const boxHeight = box.offsetHeight || 140;
+          
+          // Position right above the clicked button if possible
+          let top = rect.top - boxHeight - 8;
+          if (top < 12) {
+            top = rect.bottom + 8;
+          }
+          if (top + boxHeight > window.innerHeight - 12) {
+            top = Math.max(12, window.innerHeight - boxHeight - 12);
+          }
+
+          let left = rect.left + (rect.width / 2) - (boxWidth / 2);
+          if (left < 12) left = 12;
+          if (left + boxWidth > window.innerWidth - 12) {
+            left = window.innerWidth - boxWidth - 12;
+          }
+
+          box.style.top = `${Math.round(top)}px`;
+          box.style.left = `${Math.round(left)}px`;
+          box.style.transform = 'scale(1)';
+        } else {
+          box.style.top = '50%';
+          box.style.left = '50%';
+          box.style.transform = 'translate(-50%, -50%) scale(1)';
+        }
+
+        function cleanup(result) {
+          backdrop.classList.add('d-none');
+          box.classList.add('d-none');
+          document.removeEventListener('keydown', onKeyDown);
+          if (btnOk) btnOk.onclick = null;
+          if (btnCancel) btnCancel.onclick = null;
+          if (backdrop) backdrop.onclick = null;
+          resolve(result);
+        }
+
+        function onKeyDown(e) {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cleanup(false);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            cleanup(true);
+          }
+        }
+
+        if (btnOk) btnOk.onclick = () => cleanup(true);
+        if (btnCancel) btnCancel.onclick = () => cleanup(false);
+        if (backdrop) backdrop.onclick = () => cleanup(false);
+        document.addEventListener('keydown', onKeyDown);
+
+        setTimeout(() => {
+          if (btnOk) btnOk.focus();
+        }, 50);
+      });
+    };
+    window.customConfirm = window.showConfirmDialog;
+    window.showToast = showToast;
+    window.showSuccessFeedback = function(msg, options = {}) {
+      window.showFeedbackPopup({
+        title: "บันทึก เสร็จแล้ว",
+        message: msg || "บันทึก เสร็จแล้ว",
+        type: "success",
+        icon: "bi-check-circle-fill",
+        duration: 3000,
+        ...options
+      });
+    };
 
     function delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));

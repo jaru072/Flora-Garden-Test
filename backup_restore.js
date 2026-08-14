@@ -1282,7 +1282,15 @@ window.executeRestoreDatabase = async function() {
   const mode = modeElem ? modeElem.value : 'REPLACE';
 
   const modeText = mode === 'REPLACE' ? 'เขียนทับข้อมูลเดิมทั้งหมด' : 'รวมข้อมูลใหม่เข้ากับข้อมูลเดิม';
-  const confirmed = confirm(`ยืนยันการฟื้นฟูข้อมูลระบบ?\nรูปแบบ: ${modeText}\n\nระบบจะทำการกู้คืนข้อมูลและลิงก์รูปภาพจากไฟล์สำรอง\nเมื่อยืนยันแล้ว ข้อมูลในเครื่อง (และ Firestore) จะถูกปรับเปลี่ยนตามไฟล์สำรองทันที`);
+  const confirmed = typeof window.showConfirmDialog === 'function'
+    ? await window.showConfirmDialog({
+        title: "ฟื้นฟูข้อมูลระบบ",
+        message: `ยืนยันการฟื้นฟูข้อมูล (${modeText}) หรือไม่? ข้อมูลจะถูกปรับเปลี่ยนตามไฟล์สำรองทันที`,
+        type: mode === 'REPLACE' ? 'warning' : 'primary',
+        icon: 'bi-database-fill-up',
+        confirmText: 'เริ่มฟื้นฟูข้อมูล'
+      })
+    : confirm(`ยืนยันการฟื้นฟูข้อมูลระบบ?\nรูปแบบ: ${modeText}`);
 
   if (!confirmed) return;
 
@@ -1413,14 +1421,16 @@ window.executeRestoreDatabase = async function() {
     if (window.db && window.isFirebaseReady) {
       window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมดรวมถึงแผนกและสถานที่จัดเก็บ", true, "bg-warning");
       try {
-        const deptDocs = departmentsList.map((d, i) => ({
-          id: 'dept_' + (encodeURIComponent(d).replace(/%/g, '_') || i),
-          name: d
-        }));
-        const locDocs = locationsList.map((l, i) => ({
-          id: 'loc_' + (encodeURIComponent(l).replace(/%/g, '_') || i),
-          name: l
-        }));
+        const deptDocs = departmentsList.map((d, i) => {
+          const dName = typeof d === 'object' ? (d.name || d.id) : String(d).trim();
+          const safeId = typeof d === 'object' && d.id ? d.id : ('dept_' + (dName.replace(/[\/\\]/g, '_') || i));
+          return { id: safeId, name: dName };
+        });
+        const locDocs = locationsList.map((l, i) => {
+          const lName = typeof l === 'object' ? (l.name || l.id) : String(l).trim();
+          const safeId = typeof l === 'object' && l.id ? l.id : ('loc_' + (lName.replace(/[\/\\]/g, '_') || i));
+          return { id: safeId, name: lName };
+        });
 
         if (mode === 'REPLACE') {
           await replaceCollectionInFirestore("equipment", equipmentList);
@@ -1545,11 +1555,22 @@ window.uploadBase64OrUrlToFirebaseStorage = async function(imageUrl, folderName 
 
 window.syncAllImagesToFirebaseStorage = async function() {
   if (!window.isFirebaseReady || !window.storage) {
-    alert("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน กรุณาตรวจสอบว่าได้เปิดใช้บริการ Firebase Storage และตั้งค่า Rules ในคอนโซลเรียบร้อยแล้ว");
+    if (typeof getGlobalToast === 'function') getGlobalToast()("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน");
+    else alert("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน");
     return;
   }
 
-  if (!confirm("ต้องการซิงก์และอัปโหลดรูปภาพทั้งหมด (อุปกรณ์และรูปพนักงาน) เข้าสู่ Firebase Storage ของโปรเจกต์ใหม่หรือไม่?")) {
+  const ok = typeof window.showConfirmDialog === 'function'
+    ? await window.showConfirmDialog({
+        title: "ซิงก์รูปภาพสู่ Storage",
+        message: "ต้องการซิงก์และอัปโหลดรูปภาพทั้งหมด (อุปกรณ์และพนักงาน) สู่ Firebase Storage หรือไม่?",
+        type: "primary",
+        icon: "bi-cloud-arrow-up-fill",
+        confirmText: "เริ่มซิงก์รูปภาพ"
+      })
+    : confirm("ต้องการซิงก์รูปภาพทั้งหมดหรือไม่?");
+
+  if (!ok) {
     return;
   }
 
