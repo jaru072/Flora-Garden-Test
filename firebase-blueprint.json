@@ -70,16 +70,39 @@
     },
     "Category": {
       "title": "Category",
-      "description": "หมวดหมู่อุปกรณ์การเกษตร",
+      "description": "หมวดหมู่อุปกรณ์การเกษตร พร้อมรหัสมาตรฐาน (CAT-xxx)",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "code": { "type": "string" },
         "name": { "type": "string" },
         "prefix": { "type": "string" },
         "icon": { "type": "string" },
         "label": { "type": "string" }
       },
-      "required": ["id", "name"]
+      "required": ["id", "code", "name"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "แผนกและฝ่ายงาน พร้อมรหัสมาตรฐาน (DEP-xxx)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "สถานที่จัดเก็บอุปกรณ์ พร้อมรหัสมาตรฐาน (LOC-xxx)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
     },
     "AuditLog": {
       "title": "AuditLog",
@@ -123,6 +146,14 @@
     "/categories/{categoryId}": {
       "schema": { "$ref": "#/entities/Category" },
       "description": "คอลเลกชันหมวดหมู่อุปกรณ์"
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "คอลเลกชันแผนกและฝ่ายงาน (DEP-xxx)"
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "คอลเลกชันสถานที่จัดเก็บอุปกรณ์ (LOC-xxx)"
     },
     "/audit_logs/{auditLogId}": {
       "schema": { "$ref": "#/entities/AuditLog" },

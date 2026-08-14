@@ -1504,13 +1504,17 @@ window.executeRestoreDatabase = async function() {
       window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมดรวมถึงแผนกและสถานที่จัดเก็บ", true, "bg-warning");
       try {
         const deptDocs = departmentsList.map((dName, i) => {
-          const safeId = `dept_v3_${i + 1}`;
-          return { id: safeId, name: dName };
+          const code = `DEP-${String(i + 1).padStart(3, '0')}`;
+          return { id: code, code: code, name: dName };
         });
         const locDocs = locationsList.map((l, i) => {
           const lName = typeof l === 'object' ? (l.name || l.id) : String(l).trim();
-          const safeId = typeof l === 'object' && l.id ? l.id : ('loc_' + (lName.replace(/[\/\\]/g, '_') || i));
-          return { id: safeId, name: lName };
+          const code = `LOC-${String(i + 1).padStart(3, '0')}`;
+          return { id: code, code: code, name: lName };
+        });
+        const catDocs = (categoriesList || []).map((c, i) => {
+          const code = c.code || (c.id && c.id.startsWith('CAT-') ? c.id : `CAT-${String(i + 1).padStart(3, '0')}`);
+          return { ...c, id: code, code: code };
         });
 
         if (mode === 'REPLACE') {
@@ -1518,7 +1522,7 @@ window.executeRestoreDatabase = async function() {
           await replaceCollectionInFirestore("employees", employeeList);
           await replaceCollectionInFirestore("transactions", transactionHistory);
           await replaceCollectionInFirestore("attendance", attendanceLogs);
-          await replaceCollectionInFirestore("categories", categoriesList);
+          await replaceCollectionInFirestore("categories", catDocs);
           await replaceCollectionInFirestore("audit_logs", auditLogs);
           await replaceCollectionInFirestore("departments", deptDocs);
           await replaceCollectionInFirestore("locations", locDocs);
@@ -1535,17 +1539,17 @@ window.executeRestoreDatabase = async function() {
           for (const att of attendanceLogs) {
             if (att && att.id) await setDoc(doc(window.db, "attendance", att.id), att);
           }
-          for (const cat of (categoriesList || [])) {
+          for (const cat of catDocs) {
             if (cat && cat.id) await setDoc(doc(window.db, "categories", cat.id), cat);
+          }
+          for (const dept of deptDocs) {
+            if (dept && dept.id) await setDoc(doc(window.db, "departments", dept.id), dept);
+          }
+          for (const loc of locDocs) {
+            if (loc && loc.id) await setDoc(doc(window.db, "locations", loc.id), loc);
           }
           for (const aud of (auditLogs || [])) {
             if (aud && aud.id) await setDoc(doc(window.db, "audit_logs", aud.id), aud);
-          }
-          for (const deptObj of deptDocs) {
-            await setDoc(doc(window.db, "departments", deptObj.id), deptObj);
-          }
-          for (const locObj of locDocs) {
-            await setDoc(doc(window.db, "locations", locObj.id), locObj);
           }
         }
       } catch (fsErr) {

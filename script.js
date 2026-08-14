@@ -93,16 +93,16 @@
     Object.defineProperty(window, 'userLoginLogs', { get: () => userLoginLogs, set: (v) => { userLoginLogs = v; }, configurable: true });
 
     const defaultCategoriesList = [
-      { id: "cat-1785829092423", name: "น้ำมัน", prefix: "FG", label: "น้ำมันส่วนกลางทั้งหมด", icon: "🛢️" },
-      { id: "cat-1785831991090", name: "งานธุรการ", prefix: "EQ", label: "อุปกรณ์ธุรการ", icon: "📝" },
-      { id: "cat-1785832428510", name: "อุปกรณ์ทำความสะอาด", prefix: "SK", label: "อุปกรณ์ทำความสะอาดทั้งหมด", icon: "🧹" },
-      { id: "cat-1785832486525", name: "ฮาร์ดแวร์,เคมีภัณฑ์", prefix: "FT", label: "น้ำยาเคมี/สี/วัสดุอุดรอยต่อ", icon: "🧪" },
-      { id: "cat-1785832555031", name: "เครื่องมือช่าง", prefix: "AX", label: "อุปกรณ์สำหรับทำงานช่าง", icon: "🛠️" },
-      { id: "cat-1785832659836", name: "เมล็ดพันธ์", prefix: "OP", label: "เมล็ดพันธ์ต่างๆ", icon: "🌱" },
-      { id: "cat-1785913185572", name: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", prefix: "SF", label: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", icon: "🌾" },
-      { id: "cat-1785913283730", name: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", prefix: "SL", label: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", icon: "🚜" },
-      { id: "cat-1785928782619", name: "ระบบไฟ", prefix: "EQ", label: "ระบบไฟ", icon: "💡" },
-      { id: "cat-1785928789887", name: "ระบบน้ำ", prefix: "EQ", label: "ระบบน้ำ", icon: "💧" }
+      { id: "CAT-001", code: "CAT-001", name: "น้ำมัน", prefix: "FG", label: "น้ำมันส่วนกลางทั้งหมด", icon: "🛢️" },
+      { id: "CAT-002", code: "CAT-002", name: "งานธุรการ", prefix: "EQ", label: "อุปกรณ์ธุรการ", icon: "📝" },
+      { id: "CAT-003", code: "CAT-003", name: "อุปกรณ์ทำความสะอาด", prefix: "SK", label: "อุปกรณ์ทำความสะอาดทั้งหมด", icon: "🧹" },
+      { id: "CAT-004", code: "CAT-004", name: "ฮาร์ดแวร์,เคมีภัณฑ์", prefix: "FT", label: "น้ำยาเคมี/สี/วัสดุอุดรอยต่อ", icon: "🧪" },
+      { id: "CAT-005", code: "CAT-005", name: "เครื่องมือช่าง", prefix: "AX", label: "อุปกรณ์สำหรับทำงานช่าง", icon: "🛠️" },
+      { id: "CAT-006", code: "CAT-006", name: "เมล็ดพันธ์", prefix: "OP", label: "เมล็ดพันธ์ต่างๆ", icon: "🌱" },
+      { id: "CAT-007", code: "CAT-007", name: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", prefix: "SF", label: "วัสดุเกษตรทั่วไป(ใช้แล้วหมดไป)", icon: "🌾" },
+      { id: "CAT-008", code: "CAT-008", name: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", prefix: "SL", label: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", icon: "🚜" },
+      { id: "CAT-009", code: "CAT-009", name: "ระบบไฟ", prefix: "EQ", label: "ระบบไฟ", icon: "💡" },
+      { id: "CAT-010", code: "CAT-010", name: "ระบบน้ำ", prefix: "EQ", label: "ระบบน้ำ", icon: "💧" }
     ];
 
     const defaultDepartmentsList = [
@@ -114,11 +114,9 @@
       "แผนกทีมแปลง E/P11",
       "แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน",
       "แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)",
-      "พระประจำ",
+      "ทั่วไป",
       "ทีมตัดหญ้า",
-      "ทีมวิหารหลวงปู่",
-      "ไม้โต๊ะกลาง / หมักแกลบ",
-      "ทั่วไป"
+      "ทีมวิหารหลวงปู่"
     ];
 
     const defaultLocationsList = [
@@ -12157,11 +12155,12 @@
       let html = '';
       departmentsList.forEach((deptName, idx) => {
         const empCount = employeeList.filter(e => e.department === deptName).length;
+        const deptCode = `DEP-${String(idx + 1).padStart(3, '0')}`;
 
         html += `
           <div class="list-group-item d-flex align-items-center justify-content-between p-2.5 border-bottom gap-2">
             <div class="d-flex align-items-center gap-2 overflow-hidden">
-              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill fs-8">#${idx + 1}</span>
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 font-monospace fs-8 px-2 py-1">${deptCode}</span>
               <div>
                 <div class="fw-bold text-dark fs-7 text-truncate" title="${deptName}">${deptName}</div>
                 <div class="fs-8 text-muted"><i class="bi bi-people me-1"></i> มีพนักงานในแผนก: <span class="fw-semibold text-success">${empCount} คน</span></div>
@@ -12206,15 +12205,15 @@
           const qSnap = await getDocs(collection(db, "departments"));
           let maxNum = 0;
           qSnap.forEach(dSnap => {
-            const match = dSnap.id.match(/^dept_v3_(\d+)$/);
+            const match = dSnap.id.match(/^DEP-(\d+)$/i) || dSnap.id.match(/^dept_v3_(\d+)$/);
             if (match) {
               const n = parseInt(match[1], 10);
               if (n > maxNum) maxNum = n;
             }
           });
           const nextIndex = maxNum > 0 ? maxNum + 1 : (departmentsList.length || 1);
-          const deptId = `dept_v3_${nextIndex}`;
-          await setDoc(doc(db, "departments", deptId), { id: deptId, name: newName });
+          const deptId = `DEP-${String(nextIndex).padStart(3, '0')}`;
+          await setDoc(doc(db, "departments", deptId), { id: deptId, code: deptId, name: newName });
         } catch (err) {
           console.warn("Firestore add department notice:", err);
         }
@@ -12223,6 +12222,10 @@
       input.value = '';
       renderDepartmentsListModal();
       populateDepartmentDropdowns(newName);
+
+      if (typeof logAuditAction === 'function') {
+        logAuditAction('แผนก/สวน', 'เพิ่ม', `เพิ่มแผนก/สวน "${newName}" เข้าสู่ระบบ`, newName);
+      }
 
       showToast(`เพิ่มแผนก/สวน "${newName}" เข้าสู่ระบบเรียบร้อยแล้ว`);
     };
@@ -12276,21 +12279,21 @@
           qSnap.forEach(async (dSnap) => {
             if (dSnap.data().name === oldName) {
               updated = true;
-              await setDoc(doc(db, "departments", dSnap.id), { name: trimmed }, { merge: true });
+              await setDoc(doc(db, "departments", dSnap.id), { name: trimmed, code: dSnap.data().code || dSnap.id }, { merge: true });
             }
           });
           if (!updated) {
             let maxNum = 0;
             qSnap.forEach(dSnap => {
-              const match = dSnap.id.match(/^dept_v3_(\d+)$/);
+              const match = dSnap.id.match(/^DEP-(\d+)$/i) || dSnap.id.match(/^dept_v3_(\d+)$/);
               if (match) {
                 const n = parseInt(match[1], 10);
                 if (n > maxNum) maxNum = n;
               }
             });
             const nextIndex = maxNum > 0 ? maxNum + 1 : (departmentsList.length || 1);
-            const deptId = `dept_v3_${nextIndex}`;
-            await setDoc(doc(db, "departments", deptId), { id: deptId, name: trimmed });
+            const deptId = `DEP-${String(nextIndex).padStart(3, '0')}`;
+            await setDoc(doc(db, "departments", deptId), { id: deptId, code: deptId, name: trimmed });
           }
         } catch(err) {
           console.warn("Firestore edit department notice:", err);
@@ -12396,11 +12399,12 @@
       let html = '';
       locationsList.forEach((locName, idx) => {
         const equipCount = (equipmentList || []).filter(e => e.location === locName).length;
+        const locCode = `LOC-${String(idx + 1).padStart(3, '0')}`;
 
         html += `
           <div class="list-group-item d-flex align-items-center justify-content-between p-2.5 border-bottom gap-2">
             <div class="d-flex align-items-center gap-2 overflow-hidden">
-              <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill fs-8">#${idx + 1}</span>
+              <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 font-monospace fs-8 px-2 py-1">${locCode}</span>
               <div>
                 <div class="fw-bold text-dark fs-7 text-truncate" title="${locName}">${locName}</div>
                 <div class="fs-8 text-muted"><i class="bi bi-tools me-1"></i> มีอุปกรณ์จัดเก็บที่นี่: <span class="fw-semibold text-danger">${equipCount} รายการ</span></div>
@@ -12442,8 +12446,18 @@
 
       if (isFirebaseReady && db) {
         try {
-          const locId = 'loc_' + Date.now();
-          await setDoc(doc(db, "locations", locId), { id: locId, name: newName });
+          const qSnap = await getDocs(collection(db, "locations"));
+          let maxNum = 0;
+          qSnap.forEach(lSnap => {
+            const match = lSnap.id.match(/^LOC-(\d+)$/i);
+            if (match) {
+              const n = parseInt(match[1], 10);
+              if (n > maxNum) maxNum = n;
+            }
+          });
+          const nextIndex = maxNum > 0 ? maxNum + 1 : (locationsList.length || 1);
+          const locId = `LOC-${String(nextIndex).padStart(3, '0')}`;
+          await setDoc(doc(db, "locations", locId), { id: locId, code: locId, name: newName });
         } catch (err) {
           console.warn("Firestore add location notice:", err);
         }
@@ -12509,12 +12523,21 @@
           qSnap.forEach(async (lSnap) => {
             if (lSnap.data().name === oldName) {
               updated = true;
-              await setDoc(doc(db, "locations", lSnap.id), { name: trimmed }, { merge: true });
+              await setDoc(doc(db, "locations", lSnap.id), { name: trimmed, code: lSnap.data().code || lSnap.id }, { merge: true });
             }
           });
           if (!updated) {
-            const locId = 'loc_' + Date.now();
-            await setDoc(doc(db, "locations", locId), { id: locId, name: trimmed });
+            let maxNum = 0;
+            qSnap.forEach(lSnap => {
+              const match = lSnap.id.match(/^LOC-(\d+)$/i);
+              if (match) {
+                const n = parseInt(match[1], 10);
+                if (n > maxNum) maxNum = n;
+              }
+            });
+            const nextIndex = maxNum > 0 ? maxNum + 1 : (locationsList.length || 1);
+            const locId = `LOC-${String(nextIndex).padStart(3, '0')}`;
+            await setDoc(doc(db, "locations", locId), { id: locId, code: locId, name: trimmed });
           }
         } catch(err) {
           console.warn("Firestore edit location notice:", err);
@@ -13112,18 +13135,23 @@
       if (!tbody) return;
 
       if (!categoriesList || categoriesList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">ยังไม่มีหมวดหมู่อุปกรณ์</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">ยังไม่มีหมวดหมู่อุปกรณ์</td></tr>`;
         return;
       }
 
       let html = '';
-      categoriesList.forEach(cat => {
+      categoriesList.forEach((cat, idx) => {
         const itemCount = equipmentList.filter(eq => eq.category === cat.name).length;
+        const catCode = cat.code || (cat.id && cat.id.startsWith('CAT-') ? cat.id : `CAT-${String(idx + 1).padStart(3, '0')}`);
 
         html += `
           <tr>
+            <td class="text-center"><span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace fs-8 px-2 py-1">${catCode}</span></td>
             <td class="text-center fs-5">${cat.icon || '📦'}</td>
-            <td class="fw-bold text-dark">${cat.name}</td>
+            <td class="fw-bold text-dark">
+              ${cat.name}
+              ${cat.prefix ? `<span class="badge bg-secondary bg-opacity-10 text-secondary border ms-1 fs-8">${cat.prefix}</span>` : ''}
+            </td>
             <td class="text-secondary">${cat.label || '-'}</td>
             <td class="text-center"><span class="badge bg-light text-dark border">${itemCount} รายการ</span></td>
             <td class="text-end pe-3">
@@ -13161,13 +13189,16 @@
       }
 
       let oldName = null;
+      let targetCatId = editId;
       if (editId) {
         const catIdx = categoriesList.findIndex(c => c.id === editId);
         if (catIdx !== -1) {
           oldName = categoriesList[catIdx].name;
           const catPrefix = getCategoryPrefix(name);
+          const code = categoriesList[catIdx].code || (editId.startsWith('CAT-') ? editId : `CAT-${String(catIdx + 1).padStart(3, '0')}`);
           categoriesList[catIdx] = {
             ...categoriesList[catIdx],
+            code,
             name,
             prefix: catPrefix,
             icon: icon || '📦',
@@ -13184,9 +13215,21 @@
         }
         showToast("แก้ไขหมวดหมู่อุปกรณ์เรียบร้อยแล้ว");
       } else {
+        let maxNum = 0;
+        categoriesList.forEach(c => {
+          const match = (c.code || c.id || '').match(/^CAT-(\d+)$/i);
+          if (match) {
+            const n = parseInt(match[1], 10);
+            if (n > maxNum) maxNum = n;
+          }
+        });
+        const nextNum = maxNum > 0 ? maxNum + 1 : (categoriesList.length + 1);
+        const catCode = `CAT-${String(nextNum).padStart(3, '0')}`;
+        targetCatId = catCode;
         const catPrefix = getCategoryPrefix(name);
         const newCat = {
-          id: 'cat-' + Date.now(),
+          id: catCode,
+          code: catCode,
           name,
           prefix: catPrefix,
           icon: icon || '📦',
@@ -13202,9 +13245,17 @@
         try {
           const catPrefix = getCategoryPrefix(name);
           if (editId) {
-            await setDoc(doc(db, "categories", editId), { id: editId, name, prefix: catPrefix, icon: icon || '📦', label: label || name }, { merge: true });
+            const found = categoriesList.find(c => c.id === editId);
+            await setDoc(doc(db, "categories", editId), {
+              id: editId,
+              code: (found && found.code) ? found.code : editId,
+              name,
+              prefix: catPrefix,
+              icon: icon || '📦',
+              label: label || name
+            }, { merge: true });
           } else {
-            const newCat = categoriesList[categoriesList.length - 1];
+            const newCat = categoriesList.find(c => c.id === targetCatId) || categoriesList[categoriesList.length - 1];
             if (newCat && newCat.id) {
               await setDoc(doc(db, "categories", newCat.id), newCat);
             }
@@ -13989,7 +14040,14 @@
           if (snapshot.empty) {
             categoriesList = [];
           } else {
-            categoriesList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const fsCats = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            fsCats.sort((a, b) => {
+              const numA = parseInt(((a.code || a.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
+              const numB = parseInt(((b.code || b.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
+              if (numA !== numB) return numA - numB;
+              return (a.name || '').localeCompare(b.name || '', 'th');
+            });
+            categoriesList = fsCats;
           }
           saveToLocalStorage();
           renderCategoryDropdowns();
@@ -14066,14 +14124,14 @@
               if (legacyDepts.includes(name)) {
                 try { await deleteDoc(dSnap.ref); } catch(e){}
               } else if (name) {
-                validDocs.push({ id: dSnap.id, name });
+                validDocs.push({ id: dSnap.id, code: data.code || dSnap.id, name });
               }
             }
 
-            // Sort by numerical index in doc id if format is dept_v3_X
+            // Sort by numerical index in doc id / code if format is DEP-X or dept_v3_X
             validDocs.sort((a, b) => {
-              const numA = parseInt((a.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
-              const numB = parseInt((b.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
+              const numA = parseInt(((a.code || a.id).match(/^DEP-(\d+)$/i) || a.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
+              const numB = parseInt(((b.code || b.id).match(/^DEP-(\d+)$/i) || b.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
               if (numA !== numB) return numA - numB;
               return a.name.localeCompare(b.name, 'th');
             });
@@ -14105,9 +14163,14 @@
         onSnapshot(collection(db, "locations"), async (snapshot) => {
           let fsLocs = [];
           if (!snapshot.empty) {
-            fsLocs = snapshot.docs
-              .map(d => (d.data().name || d.id))
-              .filter(Boolean);
+            const locDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            locDocs.sort((a, b) => {
+              const numA = parseInt(((a.code || a.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
+              const numB = parseInt(((b.code || b.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
+              if (numA !== numB) return numA - numB;
+              return (a.name || a.id).localeCompare((b.name || b.id), 'th');
+            });
+            fsLocs = locDocs.map(d => (d.name || d.id)).filter(Boolean);
           }
 
           const eqLocs = (equipmentList || [])
@@ -14130,11 +14193,12 @@
 
           if (isFirebaseReady && db) {
             const missingInFs = locationsList.filter(l => !fsLocs.includes(l));
-            for (const l of missingInFs) {
+            for (let i = 0; i < missingInFs.length; i++) {
+              const l = missingInFs[i];
               try {
-                const safeLoc = l.replace(/[\/\\]/g, '_').trim();
-                const locId = 'loc_' + (safeLoc || Date.now());
-                await setDoc(doc(db, "locations", locId), { id: locId, name: l });
+                const nextNum = fsLocs.length + i + 1;
+                const locId = `LOC-${String(nextNum).padStart(3, '0')}`;
+                await setDoc(doc(db, "locations", locId), { id: locId, code: locId, name: l });
               } catch(e) {
                 console.warn("Auto sync missing loc to Firestore error:", e);
               }
