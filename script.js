@@ -1388,6 +1388,16 @@
       if (iconElem) {
         iconElem.className = `bi ${info.icon}`;
       }
+
+      const btnCatLowStock = document.getElementById('btnFilterLowStockCatalog');
+      if (btnCatLowStock) {
+        if (activeTabId === 'catalog-tab') {
+          if (typeof renderCatalogGrid === 'function') renderCatalogGrid();
+        } else {
+          btnCatLowStock.classList.add('d-none');
+          btnCatLowStock.classList.remove('d-inline-flex');
+        }
+      }
     }
 
     function setupEventListeners() {
@@ -1409,7 +1419,6 @@
       document.getElementById('catalogStatusSelect')?.addEventListener('change', renderCatalogGrid);
       document.getElementById('staffSearchInput')?.addEventListener('input', renderStaffTable);
       document.getElementById('staffCategorySelect')?.addEventListener('change', renderStaffTable);
-      document.getElementById('staffStockSelect')?.addEventListener('change', renderStaffTable);
       document.getElementById('userSearchInput')?.addEventListener('input', renderUsersTable);
       document.getElementById('userRoleFilterSelect')?.addEventListener('change', renderUsersTable);
       document.getElementById('empSearchInput')?.addEventListener('input', renderEmployeeDirectory);
@@ -3941,6 +3950,35 @@
       }
     };
 
+    window.toggleLowStockFilterCatalog = function() {
+      if (typeof switchNavTab === 'function') {
+        switchNavTab('catalog-tab');
+      }
+      const select = document.getElementById('catalogStatusSelect');
+      if (!select) return;
+      if (select.value === 'LOW_STOCK') {
+        select.value = 'ALL';
+        if (typeof showToast === 'function') showToast('📦 แสดงอุปกรณ์ทุกสถานะคงเหลือ');
+      } else {
+        select.value = 'LOW_STOCK';
+        if (typeof showToast === 'function') showToast('🚨 กรองแสดงเฉพาะรายการอุปกรณ์ที่มีสต๊อกต่ำกว่าขั้นต่ำ');
+      }
+      renderCatalogGrid();
+    };
+
+    window.toggleLowStockFilterStaff = function() {
+      const select = document.getElementById('staffStockSelect');
+      if (!select) return;
+      if (select.value === 'LOW_STOCK') {
+        select.value = 'ALL';
+        if (typeof showToast === 'function') showToast('📦 แสดงอุปกรณ์ทุกระดับสต๊อก');
+      } else {
+        select.value = 'LOW_STOCK';
+        if (typeof showToast === 'function') showToast('🚨 กรองแสดงเฉพาะรายการอุปกรณ์ที่มีสต๊อกต่ำกว่าขั้นต่ำ');
+      }
+      renderStaffTable();
+    };
+
     function highlightSearchText(text, rawQuery) {
       if (text === null || text === undefined) return '';
       const str = String(text);
@@ -3976,6 +4014,37 @@
       const selectedCat = document.getElementById('catalogCategorySelect')?.value || 'ALL';
       const selectedStatus = document.getElementById('catalogStatusSelect')?.value || 'ALL';
 
+      // Update Low Stock Count Badge & Active Button State for Catalog (only show when quantity < minQuantity)
+      const lowStockTotal = equipmentList.filter(item => {
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        return (Number(item.quantity) || 0) < minQty;
+      }).length;
+      const catBadgeElem = document.getElementById('catalogLowStockBadgeCount');
+      if (catBadgeElem) catBadgeElem.textContent = lowStockTotal;
+      const btnCatLowStock = document.getElementById('btnFilterLowStockCatalog');
+      const btnCatLowStockText = document.getElementById('btnCatalogLowStockText');
+      if (btnCatLowStock) {
+        if (lowStockTotal > 0) {
+          btnCatLowStock.classList.remove('d-none');
+          btnCatLowStock.classList.add('d-inline-flex');
+          if (selectedStatus === 'LOW_STOCK') {
+            btnCatLowStock.classList.add('btn-low-stock-active');
+            if (btnCatLowStockText) btnCatLowStockText.textContent = 'แสดงสต๊อกทั้งหมด';
+          } else {
+            btnCatLowStock.classList.remove('btn-low-stock-active');
+            if (btnCatLowStockText) btnCatLowStockText.textContent = 'แสดงสต๊อกต่ำ';
+          }
+        } else {
+          btnCatLowStock.classList.add('d-none');
+          btnCatLowStock.classList.remove('d-inline-flex', 'btn-low-stock-active');
+          if (btnCatLowStockText) btnCatLowStockText.textContent = 'แสดงสต๊อกต่ำ';
+          if (selectedStatus === 'LOW_STOCK') {
+            const catStatusSelect = document.getElementById('catalogStatusSelect');
+            if (catStatusSelect) catStatusSelect.value = 'ALL';
+          }
+        }
+      }
+
       let filtered = equipmentList.filter(item => {
         const nameStr = String(item.name || '').toLowerCase();
         const codeStr = String(item.code || '').toLowerCase();
@@ -4002,7 +4071,10 @@
           const overdueEquipIds = new Set(overdueList.map(o => o.equipmentId || o.equipmentCode || o.equipmentName));
           matchesStatus = overdueEquipIds.has(item.id) || overdueEquipIds.has(item.code) || overdueEquipIds.has(item.name);
         }
-        else if (selectedStatus === 'LOW_STOCK') matchesStatus = item.quantity <= (item.minQuantity !== undefined ? item.minQuantity : 3);
+        else if (selectedStatus === 'LOW_STOCK') {
+          const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+          matchesStatus = (Number(item.quantity) || 0) < minQty;
+        }
 
         return matchesQuery && matchesCategory && matchesStatus;
       });
@@ -4043,13 +4115,14 @@
       let html = '';
       itemsToRender.forEach(item => {
         let statusBadge = '';
-        const minQty = item.minQuantity !== undefined ? item.minQuantity : 3;
-        if (item.quantity <= minQty) {
-          statusBadge = `<span class="badge bg-danger badge-status text-white pulse-danger-badge"><i class="bi bi-bell-fill me-1"></i> เตือน! สต๊อกต่ำกว่าขั้นต่ำ (${item.quantity} / ขั้นต่ำ ${minQty} ${item.unit})</span>`;
-        } else if (item.quantity <= minQty + 2) {
-          statusBadge = `<span class="badge bg-warning bg-opacity-90 badge-status text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i> สต๊อกใกล้ขั้นต่ำ (${item.quantity} / ขั้นต่ำ ${minQty} ${item.unit})</span>`;
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        const curQty = Number(item.quantity) || 0;
+        if (curQty < minQty) {
+          statusBadge = `<span class="badge bg-danger badge-status text-white pulse-danger-badge"><i class="bi bi-bell-fill me-1"></i> เตือน! สต๊อกต่ำกว่าขั้นต่ำ (${curQty} / ขั้นต่ำ ${minQty} ${item.unit})</span>`;
+        } else if (curQty === minQty || curQty <= minQty + 2) {
+          statusBadge = `<span class="badge bg-warning bg-opacity-90 badge-status text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i> สต๊อกใกล้ขั้นต่ำ (${curQty} / ขั้นต่ำ ${minQty} ${item.unit})</span>`;
         } else {
-          statusBadge = `<span class="badge bg-success bg-opacity-90 badge-status text-white"><i class="bi bi-check-circle-fill me-1"></i> พร้อมใช้งาน (${item.quantity} ${item.unit})</span>`;
+          statusBadge = `<span class="badge bg-success bg-opacity-90 badge-status text-white"><i class="bi bi-check-circle-fill me-1"></i> พร้อมใช้งาน (${curQty} ${item.unit})</span>`;
         }
 
         const isWorker = currentRole === 'WORKER';
@@ -4061,14 +4134,19 @@
         html += `
           <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
             <div class="equipment-card">
-              <div class="equipment-img-container ${isStaff ? 'cursor-pointer' : ''} position-relative" ${isStaff ? `onclick="openEquipmentPopupMenu('${item.id}')" title="คลิกรูปภาพเพื่อเปิดเมนู (Popup Menu)"` : ''}>
+              <div class="equipment-img-container position-relative" onclick="openEquipmentTransactionHistoryModal('${item.id}')" title="คลิกรูปภาพเพื่อดูประวัติการทำรายการอุปกรณ์ (${escapeHtml(item.name)})">
                 <img src="${item.imageUrl}" loading="lazy" class="equipment-img" alt="${escapeHtml(item.name)}" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
                 <span class="badge-code">${highlightedCode}</span>
                 ${isStaff ? `
-                  <span class="badge bg-dark bg-opacity-75 text-white position-absolute top-0 end-0 m-2 rounded-pill fs-8 shadow-sm">
-                    <i class="bi bi-sliders me-1"></i>เมนู
-                  </span>
+                  <button type="button" class="btn btn-dark bg-opacity-80 text-white position-absolute top-0 end-0 m-2 rounded-pill fs-8 shadow-sm border-0 py-1 px-2.5 d-inline-flex align-items-center gap-1" style="z-index: 5;" onclick="event.stopPropagation(); openEquipmentPopupMenu('${item.id}')" title="คลิกเพื่อเปิดเมนูจัดการ (Popup Menu)">
+                    <i class="bi bi-sliders text-success"></i> เมนู
+                  </button>
                 ` : ''}
+                <div class="equipment-img-overlay-hint">
+                  <span class="badge bg-dark bg-opacity-90 text-white rounded-pill px-3 py-1.5 fs-8 shadow">
+                    <i class="bi bi-clock-history me-1 text-info"></i> ดูประวัติ
+                  </span>
+                </div>
                 ${statusBadge}
               </div>
 
@@ -4762,6 +4840,7 @@
 
     let staffSortField = 'code';
     let staffSortAsc = true;
+    let staffStockFilterMode = 'ALL';
 
     window.toggleStaffSort = function(field) {
       if (staffSortField === field) {
@@ -4780,21 +4859,33 @@
         const staffTabBtn = document.getElementById('manage-tab');
         if (staffTabBtn) staffTabBtn.click();
       }
-      const stockSelect = document.getElementById('staffStockSelect');
-      if (stockSelect) {
-        stockSelect.value = 'LOW_STOCK';
+      if (staffStockFilterMode === 'LOW_STOCK') {
+        staffStockFilterMode = 'ALL';
+        if (typeof showToast === 'function') {
+          showToast('📦 แสดงรายการอุปกรณ์ทุกระดับสต๊อกเรียบร้อยแล้ว');
+        }
+      } else {
+        staffStockFilterMode = 'LOW_STOCK';
+        if (typeof showToast === 'function') {
+          showToast('🚨 กรองแสดงเฉพาะรายการอุปกรณ์ที่มีสต๊อกต่ำกว่าขั้นต่ำเรียบร้อยแล้ว');
+        }
       }
       renderStaffTable();
-      if (typeof showToast === 'function') {
-        showToast('🚨 กรองแสดงเฉพาะรายการอุปกรณ์ที่มีสต๊อกต่ำกว่าขั้นต่ำเรียบร้อยแล้ว');
+    };
+
+    window.toggleLowStockFilterStaff = function() {
+      if (staffStockFilterMode === 'LOW_STOCK') {
+        staffStockFilterMode = 'ALL';
+        if (typeof showToast === 'function') showToast('📦 แสดงอุปกรณ์ทุกระดับสต๊อก');
+      } else {
+        staffStockFilterMode = 'LOW_STOCK';
+        if (typeof showToast === 'function') showToast('🚨 กรองแสดงเฉพาะรายการอุปกรณ์ที่มีสต๊อกต่ำกว่าขั้นต่ำ');
       }
+      renderStaffTable();
     };
 
     window.resetStaffStockFilter = function() {
-      const stockSelect = document.getElementById('staffStockSelect');
-      if (stockSelect) {
-        stockSelect.value = 'ALL';
-      }
+      staffStockFilterMode = 'ALL';
       renderStaffTable();
       if (typeof showToast === 'function') {
         showToast('📦 แสดงรายการอุปกรณ์ทุกระดับสต๊อกเรียบร้อยแล้ว');
@@ -4806,8 +4897,7 @@
       if (input) input.value = '';
       const catSelect = document.getElementById('staffCategorySelect');
       if (catSelect) catSelect.value = 'ALL';
-      const stockSelect = document.getElementById('staffStockSelect');
-      if (stockSelect) stockSelect.value = 'ALL';
+      staffStockFilterMode = 'ALL';
       renderStaffTable();
     };
 
@@ -4839,52 +4929,40 @@
       const navBadge = document.getElementById('manageLowStockBadge');
       if (!tbody) return;
 
-      const lowStockItems = equipmentList.filter(item => item.quantity <= (item.minQuantity !== undefined ? item.minQuantity : 3));
-      const currentStockFilter = document.getElementById('staffStockSelect')?.value || 'ALL';
+      const lowStockItems = equipmentList.filter(item => {
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        return (Number(item.quantity) || 0) < minQty;
+      });
+      const currentStockFilter = staffStockFilterMode;
 
-      // Render Flashing Red Alert Banner above Staff Inventory Table
-      if (bannerContainer) {
+      // Update Low Stock Count Badge & Active Button State for Staff Table
+      const staffLowStockBadge = document.getElementById('staffLowStockBadgeCount');
+      if (staffLowStockBadge) staffLowStockBadge.textContent = lowStockItems.length;
+      const btnStaffLowStock = document.getElementById('btnFilterLowStockStaff');
+      const btnStaffLowStockText = document.getElementById('btnStaffLowStockText');
+      if (btnStaffLowStock) {
         if (lowStockItems.length > 0) {
-          const isFilteringLowStock = (currentStockFilter === 'LOW_STOCK');
-          bannerContainer.innerHTML = `
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-danger bg-opacity-10 border-start border-4 border-danger low-stock-alert-banner">
-              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                <div class="d-flex align-items-center gap-3">
-                  <div class="bg-danger text-white p-3 rounded-circle fs-3 animate-pulse-fast d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; flex-shrink: 0;">
-                    <i class="bi bi-bell-fill"></i>
-                  </div>
-                  <div>
-                    <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 py-2 fw-bold shadow-sm pulse-danger-badge" onclick="filterStaffLowStockOnly()">
-                      <i class="bi bi-funnel-fill me-1"></i> กรองแสดงเฉพาะสต๊อกต่ำ (${lowStockItems.length})
-                    </button>
-                  </div>
-                </div>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                  ${isFilteringLowStock ? `
-                    <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 py-2 fw-bold shadow-sm" onclick="resetStaffStockFilter()">
-                      <i class="bi bi-eye-fill me-1"></i> แสดงอุปกรณ์ทุกรายการ (${equipmentList.length})
-                    </button>
-                  ` : `
-                  `}
-                </div>
-              </div>
-            </div>
-          `;
+          btnStaffLowStock.classList.remove('d-none');
+          btnStaffLowStock.classList.add('d-inline-flex');
+          if (currentStockFilter === 'LOW_STOCK') {
+            btnStaffLowStock.classList.add('btn-low-stock-active');
+            if (btnStaffLowStockText) btnStaffLowStockText.textContent = 'แสดงสต๊อกทั้งหมด';
+          } else {
+            btnStaffLowStock.classList.remove('btn-low-stock-active');
+            if (btnStaffLowStockText) btnStaffLowStockText.textContent = 'แสดงสต๊อกต่ำ';
+          }
         } else {
-          bannerContainer.innerHTML = `
-            <div class="alert alert-success border-0 shadow-sm rounded-4 mb-0 d-flex align-items-center justify-content-between gap-2 py-2.5">
-              <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-check-circle-fill fs-5 text-success"></i>
-                <span class="fs-7 fw-semibold text-success">สถานะคลังอุปกรณ์ปกติ: ไม่มีรายการใดมีสต๊อกต่ำกว่าขั้นต่ำที่กำหนด</span>
-              </div>
-              ${currentStockFilter === 'LOW_STOCK' ? `
-                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1 fw-bold" onclick="resetStaffStockFilter()">
-                  <i class="bi bi-arrow-counterclockwise me-1"></i> แสดงอุปกรณ์ทุกรายการ
-                </button>
-              ` : ''}
-            </div>
-          `;
+          btnStaffLowStock.classList.add('d-none');
+          btnStaffLowStock.classList.remove('d-inline-flex', 'btn-low-stock-active');
+          if (btnStaffLowStockText) btnStaffLowStockText.textContent = 'แสดงสต๊อกต่ำ';
+          if (currentStockFilter === 'LOW_STOCK') {
+            staffStockFilterMode = 'ALL';
+          }
         }
+      }
+
+      if (bannerContainer) {
+        bannerContainer.innerHTML = '';
       }
 
       // Render Badge on Navigation Tab
@@ -4907,7 +4985,7 @@
       // Filter Logic
       const searchQuery = (document.getElementById('staffSearchInput')?.value || '').toLowerCase().trim();
       const selectedCat = document.getElementById('staffCategorySelect')?.value || 'ALL';
-      const selectedStockStatus = document.getElementById('staffStockSelect')?.value || 'ALL';
+      const selectedStockStatus = staffStockFilterMode;
 
       let filtered = equipmentList.filter(item => {
         const nameStr = String(item.name || '').toLowerCase();
@@ -4929,8 +5007,8 @@
 
         const matchesCategory = selectedCat === 'ALL' || item.category === selectedCat;
 
-        const minQty = item.minQuantity !== undefined ? item.minQuantity : 3;
-        const isLowStock = item.quantity <= minQty;
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        const isLowStock = (Number(item.quantity) || 0) < minQty;
 
         let matchesStock = true;
         if (selectedStockStatus === 'LOW_STOCK') {
@@ -5026,18 +5104,19 @@
       const isStaff = currentRole === 'STAFF' || currentRole === 'ADMIN' || currentRole === 'MANAGER';
 
       filtered.forEach(item => {
-        const minQty = item.minQuantity !== undefined ? item.minQuantity : 3;
-        const isLowStock = item.quantity <= minQty;
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        const curQty = Number(item.quantity) || 0;
+        const isLowStock = curQty < minQty;
         const rowClass = isLowStock ? 'low-stock-row' : '';
         const isChecked = window.selectedStaffItemIds && window.selectedStaffItemIds.has(item.id);
 
         let stockBadge = '';
         if (isLowStock) {
-          stockBadge = `<span class="badge bg-danger text-white pulse-danger-badge fs-7 px-3 py-1.5"><i class="bi bi-exclamation-triangle-fill me-1"></i> ${item.quantity} ${item.unit} (วิกฤต ≤ ${minQty})</span>`;
-        } else if (item.quantity <= minQty + 2) {
-          stockBadge = `<span class="badge bg-warning text-dark fs-7 px-2.5 py-1.5"><i class="bi bi-exclamation-circle-fill me-1"></i> ${item.quantity} ${item.unit} (ใกล้ขั้นต่ำ ${minQty})</span>`;
+          stockBadge = `<span class="badge bg-danger text-white pulse-danger-badge fs-7 px-3 py-1.5"><i class="bi bi-exclamation-triangle-fill me-1"></i> ${curQty} ${item.unit} (ต่ำกว่าขั้นต่ำ < ${minQty})</span>`;
+        } else if (curQty === minQty || curQty <= minQty + 2) {
+          stockBadge = `<span class="badge bg-warning text-dark fs-7 px-2.5 py-1.5"><i class="bi bi-exclamation-circle-fill me-1"></i> ${curQty} ${item.unit} (ใกล้ขั้นต่ำ ${minQty})</span>`;
         } else {
-          stockBadge = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fs-7 px-2.5 py-1.5">${item.quantity} ${item.unit} (ขั้นต่ำ ${minQty})</span>`;
+          stockBadge = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fs-7 px-2.5 py-1.5">${curQty} ${item.unit} (ขั้นต่ำ ${minQty})</span>`;
         }
 
         html += `
@@ -9451,7 +9530,9 @@
       if (!equipId) return;
 
       setTimeout(() => {
-        if (actionType === 'BORROWERS') {
+        if (actionType === 'HISTORY') {
+          if (typeof openEquipmentTransactionHistoryModal === 'function') openEquipmentTransactionHistoryModal(equipId);
+        } else if (actionType === 'BORROWERS') {
           if (typeof showEquipmentBorrowersModal === 'function') showEquipmentBorrowersModal(equipId);
         } else if (actionType === 'RESTOCK') {
           if (typeof openRestockInboundModal === 'function') openRestockInboundModal(equipId);
@@ -9465,6 +9546,302 @@
           if (typeof deleteEquipment === 'function') deleteEquipment(equipId);
         }
       }, 250);
+    };
+
+    // ==========================================
+    // EQUIPMENT TRANSACTION HISTORY MODAL LOGIC
+    // ==========================================
+    let currentEquipHistoryId = null;
+
+    window.openEquipmentTransactionHistoryModal = function(equipId) {
+      if (!equipId) return;
+      const item = (equipmentList || []).find(x => x.id === equipId || x.code === equipId);
+      if (!item) {
+        if (typeof showToast === 'function') showToast("❌ ไม่พบข้อมูลอุปกรณ์ที่เลือก");
+        return;
+      }
+
+      currentEquipHistoryId = item.id;
+
+      const defaultImg = typeof DEFAULT_EQUIPMENT_IMAGE !== 'undefined' ? DEFAULT_EQUIPMENT_IMAGE : 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=200&auto=format&fit=crop&q=80';
+
+      // Header Preview Elements
+      const imgElem = document.getElementById('eqHistModalImg');
+      if (imgElem) {
+        imgElem.src = item.imageUrl || defaultImg;
+        imgElem.onerror = function() { this.src = defaultImg; };
+      }
+
+      const nameElem = document.getElementById('eqHistModalName');
+      if (nameElem) nameElem.textContent = item.name || 'ไม่มีชื่ออุปกรณ์';
+
+      const codeElem = document.getElementById('eqHistModalCode');
+      if (codeElem) codeElem.textContent = item.code || item.id;
+
+      const catElem = document.getElementById('eqHistModalCat');
+      if (catElem) catElem.textContent = item.category || 'ทั่วไป';
+
+      const locElem = document.getElementById('eqHistModalLoc');
+      if (locElem) locElem.textContent = item.location || 'คลังกลาง';
+
+      const statusBadgeElem = document.getElementById('eqHistModalStatusBadge');
+      if (statusBadgeElem) {
+        const curQty = Number(item.quantity) || 0;
+        const minQty = item.minQuantity !== undefined ? Number(item.minQuantity) : 3;
+        if (curQty < minQty) {
+          statusBadgeElem.innerHTML = `<span class="badge bg-danger text-white"><i class="bi bi-bell-fill me-1"></i>เตือน! สต๊อกต่ำกว่าขั้นต่ำ (${curQty}/${minQty})</span>`;
+        } else if (curQty <= minQty + 2) {
+          statusBadgeElem.innerHTML = `<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i>สต๊อกใกล้ขั้นต่ำ</span>`;
+        } else {
+          statusBadgeElem.innerHTML = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="bi bi-check-circle-fill me-1"></i>พร้อมใช้งาน</span>`;
+        }
+      }
+
+      const stockElem = document.getElementById('eqHistModalStock');
+      if (stockElem) stockElem.textContent = `${item.quantity || 0} ${item.unit || 'ชิ้น'}`;
+
+      const borrowedElem = document.getElementById('eqHistModalBorrowed');
+      if (borrowedElem) borrowedElem.textContent = `${item.borrowedCount || 0} ${item.unit || 'ชิ้น'}`;
+
+      // Borrowers shortcut button in footer
+      const btnBorrowers = document.getElementById('btnEqHistOpenBorrowers');
+      const badgeBorrowersCount = document.getElementById('btnEqHistBorrowersCount');
+      if (btnBorrowers) {
+        if ((item.borrowedCount || 0) > 0) {
+          btnBorrowers.classList.remove('d-none');
+          if (badgeBorrowersCount) badgeBorrowersCount.textContent = `${item.borrowedCount} ${item.unit || 'ชิ้น'}`;
+        } else {
+          btnBorrowers.classList.add('d-none');
+        }
+      }
+
+      // Reset Search & Type Filter
+      const searchInput = document.getElementById('eqHistSearchInput');
+      if (searchInput) searchInput.value = '';
+
+      const typeFilter = document.getElementById('eqHistTypeFilter');
+      if (typeFilter) typeFilter.value = 'ALL';
+
+      // Render Table
+      renderEquipmentHistoryModalTable();
+
+      // Show Modal
+      const modalElem = document.getElementById('equipmentTransactionHistoryModal');
+      if (modalElem) {
+        const modalInst = bootstrap.Modal.getOrCreateInstance(modalElem);
+        modalInst.show();
+      }
+    };
+
+    window.openBorrowersFromHistModal = function() {
+      const modalElem = document.getElementById('equipmentTransactionHistoryModal');
+      if (modalElem) {
+        const modal = bootstrap.Modal.getInstance(modalElem);
+        if (modal) modal.hide();
+      }
+      setTimeout(() => {
+        if (currentEquipHistoryId && typeof showEquipmentBorrowersModal === 'function') {
+          showEquipmentBorrowersModal(currentEquipHistoryId);
+        }
+      }, 250);
+    };
+
+    window.renderEquipmentHistoryModalTable = function() {
+      if (!currentEquipHistoryId) return;
+      const item = (equipmentList || []).find(x => x.id === currentEquipHistoryId);
+      if (!item) return;
+
+      const targetId = (item.id || '').toString().toLowerCase();
+      const targetCode = (item.code || '').toString().toLowerCase();
+      const targetName = (item.name || '').toString().toLowerCase();
+
+      function isMatchingEquip(eqId, eqCode, eqName) {
+        const idStr = (eqId || '').toString().toLowerCase();
+        const codeStr = (eqCode || '').toString().toLowerCase();
+        const nameStr = (eqName || '').toString().toLowerCase();
+        
+        return (targetId && idStr === targetId) ||
+               (targetCode && codeStr === targetCode) ||
+               (targetCode && idStr === targetCode) ||
+               (targetName && nameStr.length > 0 && nameStr.includes(targetName));
+      }
+
+      // 1. Extract all transactions relating to this equipment
+      const relatedTxs = [];
+      let totalDisbursedQty = 0;
+      let totalRestockedQty = 0;
+
+      (transactionHistory || []).forEach(tx => {
+        if (!tx) return;
+        let matchedQty = 0;
+        let matchedUnit = item.unit || 'ชิ้น';
+
+        if (Array.isArray(tx.items) && tx.items.length > 0) {
+          tx.items.forEach(it => {
+            if (isMatchingEquip(it.equipmentId, it.equipmentCode, it.equipmentName)) {
+              matchedQty += Number(it.quantity || 0);
+              if (it.unit) matchedUnit = it.unit;
+            }
+          });
+        } else {
+          if (isMatchingEquip(tx.equipmentId, tx.equipmentCode, tx.equipmentName)) {
+            matchedQty = Number(tx.quantity || 0);
+            if (tx.unit) matchedUnit = tx.unit;
+          }
+        }
+
+        if (matchedQty > 0 || isMatchingEquip(tx.equipmentId, tx.equipmentCode, tx.equipmentName)) {
+          const effectiveQty = matchedQty > 0 ? matchedQty : (Number(tx.quantity) || 1);
+          relatedTxs.push({
+            ...tx,
+            itemSpecificQty: effectiveQty,
+            itemSpecificUnit: matchedUnit
+          });
+
+          const txType = tx.type || '';
+          if (txType === 'เบิกจ่าย') {
+            totalDisbursedQty += effectiveQty;
+          } else if (txType === 'รับเข้าสต๊อก' || txType === 'เติมสต๊อก') {
+            totalRestockedQty += effectiveQty;
+          }
+        }
+      });
+
+      // Update Header Stats
+      const totalTxElem = document.getElementById('eqHistModalTotalTx');
+      if (totalTxElem) totalTxElem.textContent = `${relatedTxs.length} รายการ`;
+
+      const disbursedElem = document.getElementById('eqHistModalDisbursed');
+      if (disbursedElem) disbursedElem.textContent = `${totalDisbursedQty} ${item.unit || 'ชิ้น'}`;
+
+      const restockedElem = document.getElementById('eqHistModalRestocked');
+      if (restockedElem) restockedElem.textContent = `${totalRestockedQty} ${item.unit || 'ชิ้น'}`;
+
+      // 2. Sort strictly by latest date/time first (เรียงตามวันที่ล่าสุด)
+      relatedTxs.sort((a, b) => {
+        const tA = (a.rawTimestamp || (a.timestamp ? new Date(a.timestamp).getTime() : 0)) || 0;
+        const tB = (b.rawTimestamp || (b.timestamp ? new Date(b.timestamp).getTime() : 0)) || 0;
+        return tB - tA; // LATEST FIRST
+      });
+
+      // 3. Filter by search query & type filter
+      const searchQuery = (document.getElementById('eqHistSearchInput')?.value || '').toLowerCase().trim();
+      const selectedType = document.getElementById('eqHistTypeFilter')?.value || 'ALL';
+
+      const filtered = relatedTxs.filter(tx => {
+        const matchesType = selectedType === 'ALL' || (tx.type && tx.type.includes(selectedType));
+        if (!matchesType) return false;
+
+        if (!searchQuery) return true;
+
+        const empName = String(tx.employeeName || '').toLowerCase();
+        const empCode = String(tx.employeeCode || tx.employeeId || '').toLowerCase();
+        const locStr = String(tx.location || '').toLowerCase();
+        const noteStr = String(tx.note || '').toLowerCase();
+        const timeStr = String(tx.timestamp || '').toLowerCase();
+        const typeStr = String(tx.type || '').toLowerCase();
+        const docNo = String(tx.docNo || tx.id || '').toLowerCase();
+
+        return empName.includes(searchQuery) ||
+               empCode.includes(searchQuery) ||
+               locStr.includes(searchQuery) ||
+               noteStr.includes(searchQuery) ||
+               timeStr.includes(searchQuery) ||
+               typeStr.includes(searchQuery) ||
+               docNo.includes(searchQuery);
+      });
+
+      // 4. Render Table
+      const tbody = document.getElementById('eqHistTableBody');
+      const emptyState = document.getElementById('eqHistEmptyState');
+      const countBadge = document.getElementById('eqHistCountBadge');
+
+      if (countBadge) countBadge.textContent = `พบ ${filtered.length} รายการ`;
+
+      if (!tbody) return;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('d-none');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('d-none');
+
+      let html = '';
+      filtered.forEach(tx => {
+        // Type Badge
+        let typeBadge = '';
+        const t = tx.type || '';
+        if (t === 'เบิกจ่าย') {
+          typeBadge = `<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1"><i class="bi bi-box-arrow-up-right me-1"></i>เบิกจ่าย</span>`;
+        } else if (t === 'ยืมอุปกรณ์') {
+          typeBadge = `<span class="badge bg-warning bg-opacity-25 text-dark border border-warning border-opacity-50 px-2 py-1"><i class="bi bi-arrow-repeat me-1 text-warning"></i>ยืมอุปกรณ์</span>`;
+        } else if (t === 'คืนอุปกรณ์') {
+          typeBadge = `<span class="badge bg-info bg-opacity-15 text-info-emphasis border border-info border-opacity-25 px-2 py-1"><i class="bi bi-box-arrow-in-down-left me-1"></i>คืนอุปกรณ์</span>`;
+        } else if (t === 'รับเข้าสต๊อก' || t === 'เติมสต๊อก') {
+          typeBadge = `<span class="badge bg-success bg-opacity-15 text-success border border-success border-opacity-25 px-2 py-1"><i class="bi bi-plus-circle-fill me-1"></i>รับเข้าสต๊อก</span>`;
+        } else {
+          typeBadge = `<span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1">${escapeHtml(t || '-')}</span>`;
+        }
+
+        // Employee Info
+        const empObj = (employeeList || []).find(e => e.id === tx.employeeId || (e.name && tx.employeeName && tx.employeeName.includes(e.name)));
+        const empAvatar = empObj?.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+        const empName = empObj ? empObj.name : (tx.employeeName || 'พนักงาน');
+        const empDept = empObj ? empObj.department : (tx.employeeDepartment || 'ทั่วไป');
+
+        // Due Date / Status
+        let dueOrStatus = '-';
+        if (t === 'ยืมอุปกรณ์') {
+          const dueText = tx.dueDateStr || (tx.dueDate ? (typeof formatDueDateForReceipt === 'function' ? formatDueDateForReceipt(tx) : tx.dueDate) : '3 วัน');
+          dueOrStatus = `<span class="text-danger fw-semibold"><i class="bi bi-calendar-event me-1"></i>${dueText}</span>`;
+        } else if (t === 'คืนอุปกรณ์') {
+          dueOrStatus = `<span class="badge bg-success-subtle text-success"><i class="bi bi-check2-all me-1"></i>คืนแล้ว</span>`;
+        } else if (t === 'รับเข้าสต๊อก' || t === 'เติมสต๊อก') {
+          dueOrStatus = `<span class="badge bg-light text-muted border">เติมคลัง</span>`;
+        } else if (t === 'เบิกจ่าย') {
+          dueOrStatus = `<span class="badge bg-light text-muted border">ตัดสต๊อก</span>`;
+        }
+
+        const qtyDisplay = `<strong class="text-dark fs-7">${tx.itemSpecificQty || tx.quantity || 1}</strong> <span class="text-muted fs-9">${tx.itemSpecificUnit || tx.unit || 'ชิ้น'}</span>`;
+
+        html += `
+          <tr>
+            <td class="ps-3 text-nowrap">
+              <div class="fw-bold text-dark fs-8">${tx.timestamp || '-'}</div>
+              <small class="text-muted font-monospace fs-9">#${tx.docNo || (tx.id ? tx.id.substring(0, 8) : '-')}</small>
+            </td>
+            <td>${typeBadge}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <img src="${empAvatar}" class="rounded-circle border shadow-2xs" style="width: 28px; height: 28px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                <div>
+                  <div class="fw-semibold text-dark fs-8 text-truncate" style="max-width: 170px;">${escapeHtml(empName)}</div>
+                  <span class="badge bg-light text-secondary border fs-9 py-0.5">${escapeHtml(empDept)}</span>
+                </div>
+              </div>
+            </td>
+            <td class="text-center text-nowrap">${qtyDisplay}</td>
+            <td class="fs-8">${dueOrStatus}</td>
+            <td class="fs-8 text-secondary text-truncate" style="max-width: 140px;" title="${escapeHtml(tx.location || item.location || 'คลังกลาง')}">
+              <i class="bi bi-geo-alt-fill me-1 text-danger"></i>${escapeHtml(tx.location || item.location || 'คลังกลาง')}
+            </td>
+            <td class="fs-8 text-secondary" style="max-width: 180px;">
+              ${tx.note ? escapeHtml(tx.note) : '<span class="text-muted">-</span>'}
+            </td>
+            <td class="text-center pe-3">
+              ${tx.id ? `
+                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-0.5 shadow-2xs" onclick="openPrintTransactionVoucherModal('${tx.id}')" title="ดู/พิมพ์เอกสารรายการ">
+                  <i class="bi bi-file-earmark-text"></i>
+                </button>
+              ` : '<span class="text-muted">-</span>'}
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
     };
 
     // ==========================================
