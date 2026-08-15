@@ -2873,24 +2873,33 @@
           const item = group[i].item;
           const newCode = `${prefix}-${String(i + 1).padStart(3, '0')}`;
           const oldCode = item.code;
+          const oldId = item.id;
 
-          if (oldCode !== newCode) {
+          if (oldCode !== newCode || oldId !== newCode) {
             item.code = newCode;
+            item.id = newCode;
             item.updatedAt = new Date().toISOString();
             updateCount++;
 
             // Update transaction history if it references the old code or item id
             if (Array.isArray(transactionHistory) && oldCode) {
               transactionHistory.forEach(tx => {
-                if (tx && (tx.equipmentCode === oldCode || tx.equipmentId === item.id)) {
+                if (tx && (tx.equipmentCode === oldCode || tx.equipmentId === oldId)) {
                   tx.equipmentCode = newCode;
+                  tx.equipmentId = newCode;
                 }
               });
             }
 
-            if (isFirebaseReady && db && item.id) {
+            if (isFirebaseReady && db) {
               try {
-                await setDoc(doc(db, "equipment", item.id), item, { merge: true });
+                if (oldId && oldId !== newCode) {
+                  await deleteDoc(doc(db, "equipment", oldId));
+                }
+                if (oldCode && oldCode !== newCode && oldCode !== oldId) {
+                  await deleteDoc(doc(db, "equipment", oldCode));
+                }
+                await setDoc(doc(db, "equipment", newCode), item, { merge: true });
               } catch (dbErr) {
                 console.warn("Firestore equipment code fix notice:", dbErr);
               }
@@ -3027,12 +3036,16 @@
         }
 
         let borrowed = 0;
+        let createdTime = new Date().toISOString();
         if (editId) {
-          const existing = equipmentList.find(x => x.id === editId);
-          if (existing && existing.borrowedCount !== undefined) borrowed = existing.borrowedCount;
+          const existing = equipmentList.find(x => x.id === editId || x.code === editId);
+          if (existing) {
+            if (existing.borrowedCount !== undefined) borrowed = existing.borrowedCount;
+            if (existing.createdAt) createdTime = existing.createdAt;
+          }
         }
 
-        const docId = editId || ('eq-' + String(Date.now()).slice(-5));
+        const docId = code || editId || ('eq-' + String(Date.now()).slice(-5));
 
         const equipmentItem = {
           id: docId,
@@ -3046,9 +3059,18 @@
           location: location,
           imageUrl: finalImageUrl,
           description: desc,
-          createdAt: new Date().toISOString(),
+          createdAt: createdTime,
           updatedAt: new Date().toISOString()
         };
+
+        // If updating and editId was different from the new docId (e.g. old ID was eq-12345 or code changed), delete old doc from Firestore
+        if (isFirebaseReady && db && editId && editId !== docId) {
+          try {
+            await deleteDoc(doc(db, "equipment", editId));
+          } catch(delErr) {
+            console.warn("Delete old equipment doc notice:", delErr);
+          }
+        }
 
         // Always save locally first to ensure memory and localStorage contain full inventory
         saveLocalEquipment(equipmentItem, editId);
@@ -3092,12 +3114,16 @@
     }
 
     function saveLocalEquipment(item, editId) {
+      if (item.code) {
+        item.id = item.code;
+      }
       if (editId) {
-        const idx = equipmentList.findIndex(x => x.id === editId);
-        if (idx !== -1) equipmentList[idx] = { ...equipmentList[idx], ...item };
+        const idx = equipmentList.findIndex(x => x.id === editId || x.code === editId || (item.code && x.code === item.code));
+        if (idx !== -1) equipmentList[idx] = { ...equipmentList[idx], ...item, id: item.code || item.id };
+        else equipmentList.unshift(item);
       } else {
-        if (!item.id) item.id = 'eq-' + String(Date.now()).slice(-5);
-        const existingIdx = equipmentList.findIndex(x => x.id === item.id);
+        if (!item.id) item.id = item.code || ('eq-' + String(Date.now()).slice(-5));
+        const existingIdx = equipmentList.findIndex(x => x.id === item.id || (item.code && x.code === item.code));
         if (existingIdx !== -1) equipmentList[existingIdx] = item;
         else equipmentList.unshift(item);
       }
@@ -12893,7 +12919,7 @@
 
         // 1. Delete all documents in Firestore collections if Firestore ready
         if (isFirebaseReady && db) {
-          const collectionsToPurge = ["equipment", "employees", "transactions", "attendance", "categories", "departments", "locations", "system_metadata"];
+          const collectionsToPurge = ["equipment", "employees", "transactions", "attendance", "categories", "departments", "locations", "system_metadata", "audit_logs"];
           for (const colName of collectionsToPurge) {
             try {
               const colRef = collection(db, colName);
@@ -12913,6 +12939,7 @@
         employeeList = [];
         transactionHistory = [];
         attendanceLogs = [];
+        auditLogs = [];
         categoriesList = [];
         departmentsList = [];
         locationsList = [];
@@ -12924,6 +12951,7 @@
         localStorage.removeItem('flora_equipment');
         localStorage.removeItem('flora_transactions');
         localStorage.removeItem('flora_attendance');
+        localStorage.removeItem('flora_audit_logs');
         localStorage.removeItem('flora_categories');
         localStorage.removeItem('flora_departments');
         localStorage.removeItem('flora_locations');
@@ -12945,6 +12973,12 @@
         populateEmployeeDropdowns();
         populateEquipmentDropdown();
         populateQuickScanDropdown();
+        populateLocationDropdowns();
+        populateDepartmentDropdowns();
+        if (typeof renderLocationsListModal === 'function') renderLocationsListModal();
+        if (typeof renderDepartmentsListModal === 'function') renderDepartmentsListModal();
+        if (typeof renderCategoryManagementList === 'function') renderCategoryManagementList();
+        if (typeof renderAuditLogsTable === 'function') renderAuditLogsTable();
         updateStats();
 
         if (typeof renderDbEditorTable === 'function') renderDbEditorTable();
@@ -12956,7 +12990,7 @@
           if (modalInstance) modalInstance.hide();
         }
 
-        showToast(`🗑️ ลบฐานข้อมูลสำเร็จแล้ว (${deletedDocsCount} รายการ) — รูปภาพใน Firebase Storage ยังคงปลอดภัย 100%`);
+        showToast(`🗑️ ลบฐานข้อมูลสำเร็จแล้ว (${deletedDocsCount} รายการ) รวมถึง locations ใน Firestore เรียบร้อยแล้ว`);
       } catch (err) {
         console.error("Purge error:", err);
         if (typeof showToast === 'function') {
@@ -13965,6 +13999,26 @@
         if (typeof logAuditAction === 'function') {
           logAuditAction('หมวดหมู่', 'ลบ', `ลบหมวดหมู่อุปกรณ์ "${catName}" [${recordId}] จากหน้าจัดการฐานข้อมูล`, recordId);
         }
+      } else if (coll === 'departments') {
+        const dObj = (departmentsList || []).find((d) => (typeof d === 'string' ? d === recordId : d.id === recordId));
+        const dName = typeof dObj === 'string' ? dObj : (dObj ? dObj.name : recordId);
+        departmentsList = (departmentsList || []).filter(d => (typeof d === 'string' ? d !== dName && d !== recordId : d.id !== recordId && d.name !== dName));
+        if (isFirebaseReady && db) { try { await deleteDoc(doc(db, "departments", recordId)); } catch(e){} }
+        populateDepartmentDropdowns();
+        if (typeof renderDepartmentsListModal === 'function') renderDepartmentsListModal();
+        if (typeof logAuditAction === 'function') {
+          logAuditAction('แผนก', 'ลบ', `ลบแผนก "${dName}" [${recordId}] จากหน้าจัดการฐานข้อมูล`, recordId);
+        }
+      } else if (coll === 'locations') {
+        const lObj = (locationsList || []).find((l) => (typeof l === 'string' ? l === recordId : l.id === recordId));
+        const lName = typeof lObj === 'string' ? lObj : (lObj ? lObj.name : recordId);
+        locationsList = (locationsList || []).filter(l => (typeof l === 'string' ? l !== lName && l !== recordId : l.id !== recordId && l.name !== lName));
+        if (isFirebaseReady && db) { try { await deleteDoc(doc(db, "locations", recordId)); } catch(e){} }
+        populateLocationDropdowns();
+        if (typeof renderLocationsListModal === 'function') renderLocationsListModal();
+        if (typeof logAuditAction === 'function') {
+          logAuditAction('สถานที่จัดเก็บ', 'ลบ', `ลบสถานที่จัดเก็บ "${lName}" [${recordId}] จากหน้าจัดการฐานข้อมูล`, recordId);
+        }
       }
 
       saveToLocalStorage();
@@ -14061,12 +14115,33 @@
           if (snapshot.empty) {
             equipmentList = [];
           } else {
-            const fsEquip = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            fsEquip.forEach(item => {
+            const fsEquipMap = new Map();
+            for (const d of snapshot.docs) {
+              const data = d.data() || {};
+              const expectedCode = (data.code || d.id || '').trim();
+              const item = { ...data, id: expectedCode || d.id, code: expectedCode || d.id };
               if (item.minQuantity === undefined || item.minQuantity === null) {
                 item.minQuantity = 3;
               }
-            });
+
+              // Auto-migrate legacy Firestore documents where document ID !== equipment code
+              if (isFirebaseReady && db && expectedCode && d.id !== expectedCode) {
+                try {
+                  const newDocData = { ...item, id: expectedCode, code: expectedCode };
+                  await setDoc(doc(db, "equipment", expectedCode), newDocData, { merge: true });
+                  await deleteDoc(d.ref);
+                } catch(migErr) {
+                  console.warn("Auto migrate equipment docId to code notice:", migErr);
+                }
+              }
+
+              const mapKey = (item.code || item.id).toLowerCase();
+              if (!fsEquipMap.has(mapKey)) {
+                fsEquipMap.set(mapKey, item);
+              }
+            }
+
+            const fsEquip = Array.from(fsEquipMap.values());
             fsEquip.sort((a, b) => {
               const codeA = (a.code || a.id || '').toString();
               const codeB = (b.code || b.id || '').toString();
@@ -14145,10 +14220,7 @@
             });
             departmentsList = fsDepts;
           } else {
-            // Only if collection is completely empty, keep current local departmentsList or defaults
-            if (!departmentsList || departmentsList.length === 0) {
-              departmentsList = [...defaultDepartmentsList];
-            }
+            departmentsList = [];
           }
 
           saveToLocalStorage();
@@ -14171,38 +14243,9 @@
               return (a.name || a.id).localeCompare((b.name || b.id), 'th');
             });
             fsLocs = locDocs.map(d => (d.name || d.id)).filter(Boolean);
-          }
-
-          const eqLocs = (equipmentList || [])
-            .map(eq => eq ? eq.location : '')
-            .filter(l => l && typeof l === 'string' && l.trim() !== '');
-
-          const mergedSet = new Set([...fsLocs, ...eqLocs]);
-
-          if (mergedSet.size === 0 && (locationsList || []).length > 0) {
-            (locationsList || []).forEach(l => {
-              if (l) mergedSet.add(l);
-            });
-          }
-
-          if (mergedSet.size === 0) {
-            defaultLocationsList.forEach(l => mergedSet.add(l));
-          }
-
-          locationsList = Array.from(mergedSet);
-
-          if (isFirebaseReady && db) {
-            const missingInFs = locationsList.filter(l => !fsLocs.includes(l));
-            for (let i = 0; i < missingInFs.length; i++) {
-              const l = missingInFs[i];
-              try {
-                const nextNum = fsLocs.length + i + 1;
-                const locId = `LOC-${String(nextNum).padStart(3, '0')}`;
-                await setDoc(doc(db, "locations", locId), { id: locId, code: locId, name: l });
-              } catch(e) {
-                console.warn("Auto sync missing loc to Firestore error:", e);
-              }
-            }
+            locationsList = fsLocs;
+          } else {
+            locationsList = [];
           }
 
           saveToLocalStorage();

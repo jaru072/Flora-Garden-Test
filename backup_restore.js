@@ -1503,6 +1503,10 @@ window.executeRestoreDatabase = async function() {
     if (window.db && window.isFirebaseReady) {
       window.updateBackupProgress(90, "กำลังซิงค์ข้อมูลไปยัง Firebase Firestore...", "อัปเดต collections ทั้งหมดรวมถึงแผนกและสถานที่จัดเก็บ", true, "bg-warning");
       try {
+        const eqDocs = (equipmentList || []).map((eq, i) => {
+          const code = (eq.code || (eq.id && !eq.id.startsWith('eq-') ? eq.id : `EQ-${String(i + 1).padStart(3, '0')}`)).trim();
+          return { ...eq, id: code, code: code };
+        });
         const deptDocs = departmentsList.map((dName, i) => {
           const code = `DEP-${String(i + 1).padStart(3, '0')}`;
           return { id: code, code: code, name: dName };
@@ -1518,7 +1522,7 @@ window.executeRestoreDatabase = async function() {
         });
 
         if (mode === 'REPLACE') {
-          await replaceCollectionInFirestore("equipment", equipmentList);
+          await replaceCollectionInFirestore("equipment", eqDocs);
           await replaceCollectionInFirestore("employees", employeeList);
           await replaceCollectionInFirestore("transactions", transactionHistory);
           await replaceCollectionInFirestore("attendance", attendanceLogs);
@@ -1527,7 +1531,7 @@ window.executeRestoreDatabase = async function() {
           await replaceCollectionInFirestore("departments", deptDocs);
           await replaceCollectionInFirestore("locations", locDocs);
         } else {
-          for (const eq of equipmentList) {
+          for (const eq of eqDocs) {
             if (eq && eq.id) await setDoc(doc(window.db, "equipment", eq.id), eq);
           }
           for (const emp of employeeList) {
