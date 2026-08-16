@@ -146,6 +146,7 @@
       
       try {
         const fsSettings = {
+          experimentalForceLongPolling: true,
           experimentalAutoDetectLongPolling: true
         };
         const customDbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)")
@@ -539,9 +540,20 @@
     window.formatEmpName = function(emp) {
       if (!emp) return '';
       if (typeof emp === 'string') return emp;
-      const name = emp.name || '';
-      const nick = emp.nickname ? ` (${emp.nickname.trim()})` : '';
-      return `${name}${nick}`.trim();
+      const name = (emp.name || '').trim();
+      const rawNick = (emp.nickname || '').trim();
+      if (!rawNick) return name;
+
+      // Clean rawNick if it already has parentheses
+      const cleanNick = rawNick.replace(/^\(|\)$/g, '').trim();
+      if (!cleanNick) return name;
+
+      // If name already contains the nickname or already has parentheses with it
+      if (name.includes(`(${cleanNick})`) || name.includes(`（${cleanNick}）`) || name.toLowerCase().includes(`(${cleanNick.toLowerCase()})`)) {
+        return name;
+      }
+
+      return `${name} (${cleanNick})`.trim();
     };
 
     window.handleGoogleSignInAndClose = async function() {
@@ -4530,7 +4542,6 @@
                 </td>
                 <td>
                   <div class="fw-bold text-dark">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>
-                  ${emp.nickname ? `<small class="text-muted fs-8">(${typeof escapeHtml === 'function' ? escapeHtml(emp.nickname) : emp.nickname})</small>` : ''}
                 </td>
                 <td>
                   <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle fw-semibold px-2 py-1 fs-8"><i class="bi bi-building me-1"></i>${typeof escapeHtml === 'function' ? escapeHtml(deptName) : deptName}</span>
@@ -14094,7 +14105,30 @@
           if (snapshot.empty) {
             categoriesList = [];
           } else {
-            const fsCats = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const fsCatsMap = new Map();
+            for (const d of snapshot.docs) {
+              const data = d.data() || {};
+              const officialCode = (data.code || data.id || d.id || '').trim();
+              const catName = (data.name || '').trim();
+              const item = { ...data, id: officialCode || d.id, code: officialCode || d.id, name: catName || officialCode };
+
+              // Auto-migrate legacy Firestore documents where document ID !== category code
+              if (isFirebaseReady && db && officialCode && d.id !== officialCode) {
+                try {
+                  await setDoc(doc(db, "categories", officialCode), item, { merge: true });
+                  await deleteDoc(d.ref);
+                } catch(migErr) {
+                  console.warn("Auto migrate category docId to code notice:", migErr);
+                }
+              }
+
+              const mapKey = (item.code || item.id || item.name).toLowerCase();
+              if (!fsCatsMap.has(mapKey)) {
+                fsCatsMap.set(mapKey, item);
+              }
+            }
+
+            const fsCats = Array.from(fsCatsMap.values());
             fsCats.sort((a, b) => {
               const numA = parseInt(((a.code || a.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
               const numB = parseInt(((b.code || b.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
@@ -14192,18 +14226,39 @@
 
           let fsDepts = [];
           if (!snapshot.empty) {
-            const validDocs = [];
+            const deptMap = new Map();
             for (const dSnap of snapshot.docs) {
-              const data = dSnap.data();
+              const data = dSnap.data() || {};
               const name = (data.name || dSnap.id || '').trim();
+              const officialCode = (data.code || data.id || dSnap.id || '').trim();
+
               if (legacyDepts.includes(name)) {
                 try { await deleteDoc(dSnap.ref); } catch(e){}
-              } else if (name) {
-                validDocs.push({ id: dSnap.id, code: data.code || dSnap.id, name });
+                continue;
+              }
+
+              if (name) {
+                // Auto-migrate if document ID !== department code
+                if (isFirebaseReady && db && officialCode && dSnap.id !== officialCode) {
+                  try {
+                    await setDoc(doc(db, "departments", officialCode), { id: officialCode, code: officialCode, name }, { merge: true });
+                    await deleteDoc(dSnap.ref);
+                  } catch(migErr) {
+                    console.warn("Auto migrate department docId notice:", migErr);
+                  }
+                }
+
+                const key = name.toLowerCase();
+                if (!deptMap.has(key)) {
+                  deptMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name });
+                } else if (dSnap.id !== officialCode) {
+                  // Duplicate document with non-standard ID, delete it
+                  try { await deleteDoc(dSnap.ref); } catch(e){}
+                }
               }
             }
 
-            // Sort by numerical index in doc id / code if format is DEP-X or dept_v3_X
+            const validDocs = Array.from(deptMap.values());
             validDocs.sort((a, b) => {
               const numA = parseInt(((a.code || a.id).match(/^DEP-(\d+)$/i) || a.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
               const numB = parseInt(((b.code || b.id).match(/^DEP-(\d+)$/i) || b.id.match(/^dept_v3_(\d+)$/) || [0, 999999])[1], 10);
@@ -14211,13 +14266,7 @@
               return a.name.localeCompare(b.name, 'th');
             });
 
-            const seen = new Set();
-            validDocs.forEach(d => {
-              if (!seen.has(d.name.toLowerCase())) {
-                seen.add(d.name.toLowerCase());
-                fsDepts.push(d.name);
-              }
-            });
+            fsDepts = validDocs.map(d => d.name);
             departmentsList = fsDepts;
           } else {
             departmentsList = [];
@@ -14235,7 +14284,34 @@
         onSnapshot(collection(db, "locations"), async (snapshot) => {
           let fsLocs = [];
           if (!snapshot.empty) {
-            const locDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const locMap = new Map();
+            for (const dSnap of snapshot.docs) {
+              const data = dSnap.data() || {};
+              const name = (data.name || dSnap.id || '').trim();
+              const officialCode = (data.code || data.id || dSnap.id || '').trim();
+
+              if (name) {
+                // Auto-migrate if document ID !== location code
+                if (isFirebaseReady && db && officialCode && dSnap.id !== officialCode) {
+                  try {
+                    await setDoc(doc(db, "locations", officialCode), { id: officialCode, code: officialCode, name }, { merge: true });
+                    await deleteDoc(dSnap.ref);
+                  } catch(migErr) {
+                    console.warn("Auto migrate location docId notice:", migErr);
+                  }
+                }
+
+                const key = name.toLowerCase();
+                if (!locMap.has(key)) {
+                  locMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name });
+                } else if (dSnap.id !== officialCode) {
+                  // Duplicate document with non-standard ID, delete it
+                  try { await deleteDoc(dSnap.ref); } catch(e){}
+                }
+              }
+            }
+
+            const locDocs = Array.from(locMap.values());
             locDocs.sort((a, b) => {
               const numA = parseInt(((a.code || a.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
               const numB = parseInt(((b.code || b.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
@@ -14728,7 +14804,28 @@
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    window.copyDataFromOldDatabases = async function(showFeedback = true) {
+    window.isThammaSrithongAdminStrict = function() {
+      const email = ((typeof currentAuthUser !== 'undefined' && currentAuthUser?.email) || (typeof currentUserProfile !== 'undefined' && currentUserProfile?.email) || '').trim().toLowerCase();
+      const displayName = ((typeof currentAuthUser !== 'undefined' && currentAuthUser?.displayName) || (typeof currentUserProfile !== 'undefined' && currentUserProfile?.displayName) || '').trim().toLowerCase();
+      
+      const isEmailMatch = email === 'jaru072@gmail.com';
+      const isNameMatch = displayName.includes('thamma') || displayName.includes('srithong') || displayName.includes('ธรรมะ') || displayName.includes('ศรีทอง');
+
+      return isEmailMatch || (isNameMatch && (typeof currentRole !== 'undefined' && currentRole === 'ADMIN'));
+    };
+
+    window.copyDataFromOldDatabases = async function(showFeedback = true, customSourceDbId = null) {
+      // STRICT PERMISSION CHECK: Only Thamma Srithong (jaru072@gmail.com) can execute
+      if (!window.isThammaSrithongAdminStrict()) {
+        const errorMsg = "⛔ สงวนสิทธิ์เฉพาะผู้ดูแลระบบหลัก คุณ Thamma Srithong (jaru072@gmail.com) เท่านั้น";
+        if (showFeedback) showToast(errorMsg);
+        alert(errorMsg);
+        return 0;
+      }
+
+      const targetDbId = "ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1";
+      const primarySourceDbId = customSourceDbId ? customSourceDbId.trim() : "ai-studio-floragardenv2-c509b5a5-f4a3-4546-bbae-c5f21564ba7d";
+
       try {
         const app = getApp();
         if (!db) {
@@ -14753,56 +14850,436 @@
           "activity_logs"
         ];
 
-        if (showFeedback) showToast("⏳ กำลังตรวจค้นและคัดลอกข้อมูลจากฐานข้อมูลเดิม...");
-        let totalDocsCopied = 0;
+        if (showFeedback) showToast(`⏳ กำลังตรวจสอบและเชื่อมต่อฐานข้อมูล...`);
 
-        // List of candidate source databases to pull data from
-        const sourcesToTry = [
-          { name: "default", getDb: () => getFirestore(app) },
-          { name: "ai-studio-floragardennew-077d9b3a-d839-404a-986e-0ab7c5c9be6e", getDb: () => getFirestore(app, "ai-studio-floragardennew-077d9b3a-d839-404a-986e-0ab7c5c9be6e") },
-          { name: "ai-studio-1c1eba69-e70f-482c-b553-e77fc7efbd4f", getDb: () => getFirestore(app, "ai-studio-1c1eba69-e70f-482c-b553-e77fc7efbd4f") }
-        ];
-
-        for (const source of sourcesToTry) {
-          let srcDb = null;
-          try {
-            srcDb = source.getDb();
-          } catch (e) {
-            console.warn(`[Migration] Cannot instantiate source db '${source.name}':`, e);
-            continue;
+        // Helper to convert Firestore REST Document to JS Object
+        const parseFirestoreRestDoc = (fields) => {
+          if (!fields) return {};
+          const result = {};
+          for (const [key, valueObj] of Object.entries(fields)) {
+            if (valueObj.stringValue !== undefined) result[key] = valueObj.stringValue;
+            else if (valueObj.integerValue !== undefined) result[key] = parseInt(valueObj.integerValue, 10);
+            else if (valueObj.doubleValue !== undefined) result[key] = parseFloat(valueObj.doubleValue);
+            else if (valueObj.booleanValue !== undefined) result[key] = valueObj.booleanValue;
+            else if (valueObj.timestampValue !== undefined) result[key] = valueObj.timestampValue;
+            else if (valueObj.nullValue !== undefined) result[key] = null;
+            else if (valueObj.arrayValue !== undefined) {
+              result[key] = (valueObj.arrayValue.values || []).map(v => {
+                if (v.stringValue !== undefined) return v.stringValue;
+                if (v.integerValue !== undefined) return parseInt(v.integerValue, 10);
+                if (v.doubleValue !== undefined) return parseFloat(v.doubleValue);
+                if (v.booleanValue !== undefined) return v.booleanValue;
+                if (v.mapValue !== undefined) return parseFirestoreRestDoc(v.mapValue.fields);
+                return Object.values(v)[0];
+              });
+            } else if (valueObj.mapValue !== undefined) {
+              result[key] = parseFirestoreRestDoc(valueObj.mapValue.fields);
+            } else {
+              result[key] = Object.values(valueObj)[0];
+            }
           }
+          return result;
+        };
 
-          if (!srcDb) continue;
+        // Fallback: Read collection via Firebase REST API
+        const fetchCollectionViaRest = async (dbId, colName) => {
+          try {
+            let idToken = "";
+            try {
+              let currentUser = auth.currentUser;
+              if (!currentUser && window.auth && window.auth.currentUser) {
+                currentUser = window.auth.currentUser;
+              }
+              if (currentUser) {
+                idToken = await currentUser.getIdToken(true); // Force refresh token
+              }
+            } catch (tokErr) {
+              console.warn("Could not retrieve auth idToken:", tokErr);
+            }
+
+            const cleanDbId = (dbId === "(default)") ? "(default)" : dbId;
+            const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${cleanDbId}/documents/${colName}?pageSize=300&key=${firebaseConfig.apiKey}`;
+            const headers = {};
+            if (idToken) {
+              headers['Authorization'] = `Bearer ${idToken}`;
+            }
+            
+            const res = await fetch(url, { headers });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({}));
+              const errTxt = errBody.error?.message || res.statusText || `HTTP ${res.status}`;
+              console.warn(`REST fetch error for ${dbId}/${colName}:`, res.status, errBody);
+              return { error: `[${res.status}] ${errTxt}`, docs: [] };
+            }
+            const data = await res.json();
+            if (!data.documents || data.documents.length === 0) {
+              return { docs: [] };
+            }
+            const docs = data.documents.map(docItem => {
+              const parts = docItem.name.split('/');
+              const docId = parts[parts.length - 1];
+              return {
+                id: docId,
+                data: parseFirestoreRestDoc(docItem.fields)
+              };
+            });
+            return { docs };
+          } catch (e) {
+            return { error: e.message, docs: [] };
+          }
+        };
+
+        // Helper to get or create a Firestore instance for a given database ID
+        let migrationAppIndex = 1;
+        const getDbInstance = (dbId) => {
+          try {
+            const fsSettings = {
+              experimentalForceLongPolling: true,
+              experimentalAutoDetectLongPolling: true
+            };
+            if (!dbId || dbId === "(default)") {
+              try {
+                return getFirestore(app);
+              } catch (e) {
+                const subApp = initializeApp(firebaseConfig, `migrationApp_${migrationAppIndex++}`);
+                return initializeFirestore(subApp, fsSettings);
+              }
+            }
+            
+            try {
+              const subApp = initializeApp({ ...firebaseConfig, firestoreDatabaseId: dbId }, `migrationApp_${migrationAppIndex++}`);
+              return initializeFirestore(subApp, fsSettings, dbId);
+            } catch (initErr) {
+              try {
+                return getFirestore(app, dbId);
+              } catch (e2) {
+                console.warn(`[Migration] Failed to get db instance for ${dbId}:`, initErr, e2);
+                return null;
+              }
+            }
+          } catch (e) {
+            console.warn(`[Migration] Failed to get db instance for ${dbId}:`, e);
+            return null;
+          }
+        };
+
+        // 1. Try Primary Source: floragardentest
+        let totalDocsCopied = 0;
+        const detailedCounts = {};
+        const recordedErrors = [];
+
+        const testAndCopyFromDb = async (sourceDbId, label) => {
+          let copied = 0;
+          const errors = [];
+          const src = getDbInstance(sourceDbId);
 
           for (const colName of collectionsToMigrate) {
-            try {
-              const snap = await getDocs(collection(srcDb, colName));
-              if (snap.docs.length > 0) {
-                console.log(`[Migration] Copying ${snap.docs.length} docs from '${colName}' in database '${source.name}'...`);
-                for (const docSnap of snap.docs) {
-                  await setDoc(doc(db, colName, docSnap.id), docSnap.data(), { merge: true });
-                  totalDocsCopied++;
+            let foundDocs = false;
+
+            // Strategy A: Direct REST API (Reliable in multi-db contexts)
+            const restResult = await fetchCollectionViaRest(sourceDbId, colName);
+            if (restResult.docs && restResult.docs.length > 0) {
+              foundDocs = true;
+              console.log(`[Migration-REST] Found ${restResult.docs.length} docs in '${colName}' (${label})`);
+              detailedCounts[colName] = (detailedCounts[colName] || 0) + restResult.docs.length;
+              for (const docObj of restResult.docs) {
+                const rawData = docObj.data || {};
+                const officialCode = (rawData.code || (colName === 'equipment' ? rawData.equipmentCode : '') || rawData.id || docObj.id || '').trim();
+                const cleanData = { ...rawData, id: officialCode || docObj.id, code: officialCode || docObj.id };
+                const targetId = officialCode || docObj.id;
+
+                await setDoc(doc(db, colName, targetId), cleanData, { merge: true });
+                if (docObj.id !== targetId) {
+                  try { await deleteDoc(doc(db, colName, docObj.id)); } catch(e){}
+                }
+                copied++;
+              }
+            } else if (restResult.error && !restResult.error.includes("404")) {
+              errors.push(`REST [${colName}]: ${restResult.error}`);
+            }
+
+            // Strategy B: SDK getDocs if REST returned 0 docs or failed
+            if (!foundDocs && src) {
+              try {
+                const snap = await getDocs(collection(src, colName));
+                if (snap && snap.docs && snap.docs.length > 0) {
+                  foundDocs = true;
+                  console.log(`[Migration-SDK] Found ${snap.docs.length} docs in '${colName}' (${label})`);
+                  detailedCounts[colName] = (detailedCounts[colName] || 0) + snap.docs.length;
+                  for (const docSnap of snap.docs) {
+                    const rawData = docSnap.data() || {};
+                    const officialCode = (rawData.code || (colName === 'equipment' ? rawData.equipmentCode : '') || rawData.id || docSnap.id || '').trim();
+                    const cleanData = { ...rawData, id: officialCode || docSnap.id, code: officialCode || docSnap.id };
+                    const targetId = officialCode || docSnap.id;
+
+                    await setDoc(doc(db, colName, targetId), cleanData, { merge: true });
+                    if (docSnap.id !== targetId) {
+                      try { await deleteDoc(doc(db, colName, docSnap.id)); } catch(e){}
+                    }
+                    copied++;
+                  }
+                }
+              } catch (colErr) {
+                console.warn(`[Migration-SDK] Error reading '${colName}' from ${label}:`, colErr.message || colErr);
+                if (!errors.some(e => e.includes(colName))) {
+                  errors.push(`SDK [${colName}]: ${colErr.message || colErr}`);
                 }
               }
-            } catch (colErr) {
-              console.warn(`[Migration] Error reading/writing collection '${colName}' from '${source.name}':`, colErr);
+            }
+          }
+          return { count: copied, errors };
+        };
+
+        console.log(`[Migration] Scanning primary source: ${primarySourceDbId}`);
+        const primaryResult = await testAndCopyFromDb(primarySourceDbId, `Flora Garden V.2 (${primarySourceDbId})`);
+        totalDocsCopied += primaryResult.count;
+        if (primaryResult.errors.length > 0) {
+          recordedErrors.push(...primaryResult.errors);
+        }
+
+        // 2. If primary returned 0 docs, ASK USER FIRST via confirm dialog
+        if (totalDocsCopied === 0) {
+          console.log("[Migration] Primary source returned 0 docs.");
+          
+          let userChoice = null;
+          if (showFeedback) {
+            const errSummary = recordedErrors.length > 0 ? `\n\n(รายละเอียดข้อความแจ้งเตือน: ${recordedErrors[0]})` : "";
+            userChoice = confirm(
+              `ℹ️ ตรวจสอบฐานข้อมูล "${primarySourceDbId}" แล้ว ไม่พบข้อมูล${errSummary}\n\n` +
+              "คุณต้องการให้ระบบลองตรวจสอบฐานข้อมูลสำรองอื่นๆ ในโปรเจกต์ 'flora-gaden' หรือไม่?\n\n" +
+              "• กด 'ตกลง (OK)' = ค้นหาจากฐานข้อมูลเดิมตัวอื่น (Flora Garden New / Default)\n" +
+              "• กด 'ยกเลิก (Cancel)' = ป้อน Database ID เอง หรือหยุดการทำงาน"
+            );
+          }
+
+          if (userChoice) {
+            showToast("⏳ กำลังตรวจสอบฐานข้อมูลสำรองอื่นๆ ในโปรเจกต์...");
+            const otherCandidates = [
+              { id: "ai-studio-floragardennew-077d9b3a-d839-404a-986e-0ab7c5c9be6e", name: "Flora Garden New (077d9b3a)" },
+              { id: "ai-studio-1c1eba69-e70f-482c-b553-e77fc7efbd4f", name: "Flora Garden 1c1eba69" },
+              { id: "(default)", name: "Default Database" }
+            ];
+
+            for (const cand of otherCandidates) {
+              const candResult = await testAndCopyFromDb(cand.id, cand.name);
+              if (candResult.count > 0) {
+                console.log(`[Migration] Successfully recovered ${candResult.count} docs from candidate '${cand.name}' (${cand.id})!`);
+                totalDocsCopied += candResult.count;
+                break; // Found and copied data
+              }
             }
           }
         }
 
-        console.log(`[Migration] Complete! Total documents copied: ${totalDocsCopied}`);
+        console.log(`[Migration] Migration execution finished. Total docs copied: ${totalDocsCopied}`);
+
         if (showFeedback) {
           if (totalDocsCopied > 0) {
-            showToast(`🎉 คัดลอกข้อมูลจากฐานข้อมูลเดิมสำเร็จแล้ว (${totalDocsCopied} รายการ)`);
+            const summaryTxt = Object.entries(detailedCounts).map(([k, v]) => `• ${k}: ${v} รายการ`).join('\n');
+            alert(`🎉 ซิงค์และคัดลอกข้อมูลเรียบร้อยแล้ว!\n\nจำนวนข้อมูลที่นำเข้าทั้งหมด: ${totalDocsCopied} รายการ\n\n${summaryTxt}\n\nข้อมูลทั้งหมดถูกจัดเก็บลงสู่ฐานข้อมูล Test (ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1) เรียบร้อยครับ`);
+            showToast(`🎉 ซิงค์ข้อมูลสำเร็จแล้ว ${totalDocsCopied} รายการ`);
           } else {
-            showToast(`ℹ️ ตรวจสอบแล้ว ไม่พบข้อมูลตกค้างในฐานข้อมูลเดิม หรือข้อมูลถูกคัดลอกสมบูรณ์แล้ว`);
+            let diagnosticMsg = `ℹ️ ระบบได้ทำการตรวจค้นฐานข้อมูลแล้ว ไม่พบข้อมูล (0 รายการ)`;
+            if (recordedErrors.length > 0) {
+              diagnosticMsg += `\n\nข้อความแจ้งเตือนจากระบบ:\n${recordedErrors.slice(0, 3).join('\n')}`;
+            }
+            alert(diagnosticMsg);
+            showToast(`ℹ️ ไม่พบข้อมูลในฐานข้อมูลต้นทาง`);
           }
         }
+
+        if (typeof renderCatalogGrid === 'function') renderCatalogGrid();
+        if (typeof renderStaffTable === 'function') renderStaffTable();
+        if (typeof renderEmployeesList === 'function') renderEmployeesList();
+        if (typeof updateStatsCards === 'function') updateStatsCards();
+
         return totalDocsCopied;
       } catch (err) {
         console.error("[Migration] Fatal error:", err);
         if (showFeedback) showToast("❌ เกิดข้อผิดพลาดขณะคัดลอกข้อมูล: " + err.message);
+        alert("❌ เกิดข้อผิดพลาดขณะคัดลอกข้อมูล: " + err.message);
         return 0;
+      }
+    };
+
+    window.confirmAndSyncFromFloraGardenTest = async function() {
+      if (!window.isThammaSrithongAdminStrict()) {
+        const errorMsg = "⛔ สงวนสิทธิ์เฉพาะผู้ดูแลระบบหลัก คุณ Thamma Srithong (jaru072@gmail.com) เท่านั้น";
+        showToast(errorMsg);
+        alert(errorMsg);
+        return;
+      }
+
+      const defaultDb = "ai-studio-floragardenv2-c509b5a5-f4a3-4546-bbae-c5f21564ba7d";
+      const customDbInput = prompt(
+        "⚡ ซิงค์ข้อมูลจากฐานข้อมูล V.2 มายัง Test\n\n" +
+        "กรุณาตรวจสอบหรือระบุ Database ID ต้นทางที่ต้องการดึงข้อมูล:\n(ค่าเริ่มต้นคือ V.2 floragardenv2)",
+        defaultDb
+      );
+
+      if (customDbInput !== null) {
+        const chosenDb = customDbInput.trim() || defaultDb;
+        const total = await window.copyDataFromOldDatabases(true, chosenDb);
+        if (total > 0) {
+          // Automatically run deduplication and normalization after sync
+          await window.cleanAndDeduplicateAllCollections(false);
+        }
+      }
+    };
+
+    // Clean up duplicate documents across collections and normalize doc.id === code
+    window.cleanAndDeduplicateAllCollections = async function(showFeedback = true) {
+      if (!isFirebaseReady || !db) {
+        if (showFeedback) showToast("⚠️ Firebase Firestore ยังไม่พร้อมใช้งาน");
+        return;
+      }
+      if (!window.isThammaSrithongAdminStrict()) {
+        const errorMsg = "⛔ สงวนสิทธิ์เฉพาะผู้ดูแลระบบหลัก คุณ Thamma Srithong (jaru072@gmail.com) เท่านั้น";
+        if (showFeedback) { showToast(errorMsg); alert(errorMsg); }
+        return;
+      }
+
+      if (showFeedback) {
+        const ok = await window.showConfirmDialog({
+          title: "ล้างข้อมูลซ้ำซ้อนและจัดระเบียบ Document ID",
+          message: "ระบบจะทำการสแกน collections (categories, departments, locations, equipment, employees) เพื่อรวมเอกสารที่ซ้ำกัน และจัดระเบียบให้ชื่อ Document ID ตรงกับ code: ประจำตัวอย่างถูกต้อง และลบเอกสารที่รหัสซ้ำ/random ออก ยืนยันดำเนินการหรือไม่?",
+          type: "primary",
+          icon: "bi-stars",
+          confirmText: "เริ่มจัดระเบียบและล้างตัวซ้ำ"
+        });
+        if (!ok) return;
+      }
+
+      showToast("⏳ กำลังเริ่มจัดระเบียบ Document ID และล้างข้อมูลซ้ำซ้อน...");
+
+      const report = {};
+      let totalFixed = 0;
+      let totalDeletedDuplicates = 0;
+
+      const collectionsToCheck = [
+        { name: "categories", codePrefix: "CAT", nameField: "name" },
+        { name: "departments", codePrefix: "DEP", nameField: "name" },
+        { name: "locations", codePrefix: "LOC", nameField: "name" },
+        { name: "equipment", codePrefix: "EQ", nameField: "name" },
+        { name: "employees", codePrefix: "EMP", nameField: "name" }
+      ];
+
+      for (const colInfo of collectionsToCheck) {
+        const colName = colInfo.name;
+        try {
+          const qSnap = await getDocs(collection(db, colName));
+          if (qSnap.empty) continue;
+
+          const seenByCode = new Map();
+          const seenByName = new Map();
+          const docsToDelete = [];
+
+          for (const dSnap of qSnap.docs) {
+            const data = dSnap.data() || {};
+            const codeVal = (data.code || (colName === 'equipment' ? data.equipmentCode : '') || data.id || dSnap.id || '').trim();
+            const nameVal = (data.name || (colName === 'employees' ? data.fullName : '') || '').trim();
+            const isStandardId = (dSnap.id === codeVal);
+
+            const record = {
+              dSnap,
+              data,
+              docId: dSnap.id,
+              codeVal,
+              nameVal,
+              isStandardId
+            };
+
+            const codeKey = codeVal.toLowerCase();
+            const nameKey = nameVal.toLowerCase();
+
+            // Check duplicates by Code
+            if (codeKey) {
+              if (!seenByCode.has(codeKey)) {
+                seenByCode.set(codeKey, record);
+              } else {
+                const existing = seenByCode.get(codeKey);
+                if (isStandardId && !existing.isStandardId) {
+                  docsToDelete.push(existing.dSnap);
+                  seenByCode.set(codeKey, record);
+                } else {
+                  docsToDelete.push(dSnap);
+                }
+              }
+            }
+
+            // Check duplicates by Name (for categories, departments, locations)
+            if (nameKey && (colName === 'categories' || colName === 'departments' || colName === 'locations')) {
+              if (!seenByName.has(nameKey)) {
+                seenByName.set(nameKey, record);
+              } else {
+                const existing = seenByName.get(nameKey);
+                if (isStandardId && !existing.isStandardId) {
+                  if (!docsToDelete.includes(existing.dSnap)) docsToDelete.push(existing.dSnap);
+                  seenByName.set(nameKey, record);
+                } else {
+                  if (!docsToDelete.includes(dSnap)) docsToDelete.push(dSnap);
+                }
+              }
+            }
+          }
+
+          // 1. Ensure all authoritative documents are written with doc.id === codeVal
+          for (const [codeKey, record] of seenByCode.entries()) {
+            const targetId = record.codeVal || record.docId;
+            const cleanData = { ...record.data, id: targetId, code: targetId };
+            if (colName === 'departments' || colName === 'locations') {
+              cleanData.name = record.nameVal || cleanData.name || targetId;
+            }
+
+            await setDoc(doc(db, colName, targetId), cleanData, { merge: true });
+            totalFixed++;
+
+            // If the original document had a different random ID, delete it
+            if (record.docId !== targetId) {
+              docsToDelete.push(record.dSnap);
+            }
+          }
+
+          // 2. Delete all duplicate or stray documents
+          const uniqueDocsToDelete = Array.from(new Set(docsToDelete));
+          for (const strayDoc of uniqueDocsToDelete) {
+            try {
+              await deleteDoc(strayDoc.ref);
+              totalDeletedDuplicates++;
+            } catch (delErr) {
+              console.warn(`Error deleting duplicate doc in ${colName}:`, delErr);
+            }
+          }
+
+          report[colName] = {
+            total: qSnap.size,
+            unique: seenByCode.size,
+            duplicatesRemoved: uniqueDocsToDelete.length
+          };
+
+        } catch (err) {
+          console.warn(`Error deduplicating ${colName}:`, err);
+        }
+      }
+
+      saveToLocalStorage();
+
+      if (typeof renderCategoryDropdowns === 'function') renderCategoryDropdowns();
+      if (typeof renderCategoryManagementList === 'function') renderCategoryManagementList();
+      if (typeof populateDepartmentDropdowns === 'function') populateDepartmentDropdowns();
+      if (typeof populateLocationDropdowns === 'function') populateLocationDropdowns();
+      if (typeof renderDepartmentsListModal === 'function') renderDepartmentsListModal();
+      if (typeof renderLocationsListModal === 'function') renderLocationsListModal();
+      if (typeof renderCatalogGrid === 'function') renderCatalogGrid();
+      if (typeof renderStaffTable === 'function') renderStaffTable();
+      if (typeof renderEmployeeDirectory === 'function') renderEmployeeDirectory();
+
+      const reportLines = Object.entries(report).map(([k, v]) => `• ${k}: ลบตัวซ้ำ ${v.duplicatesRemoved} รายการ (คงเหลือเอกสารหลัก ${v.unique} รายการ)`).join('\n');
+      const msg = `🎉 จัดระเบียบและล้างข้อมูลซ้ำซ้อนสำเร็จแล้ว!\n\n• รวมเอกสารที่ลบซ้ำซ้อนออก: ${totalDeletedDuplicates} รายการ\n• จัดโครงสร้าง Document ID ตรงตาม code: สำเร็จ\n\nรายละเอียดแยกแต่ละตาราง:\n${reportLines}`;
+      
+      if (showFeedback) {
+        alert(msg);
+        showToast(`🎉 ล้างข้อมูลซ้ำซ้อนสำเร็จ (${totalDeletedDuplicates} รายการ)`);
       }
     };
 

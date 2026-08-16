@@ -82,7 +82,7 @@
         <div class="d-inline-flex align-items-center justify-content-center p-3 bg-white bg-opacity-10 rounded-circle mb-2 shadow">
           <i class="bi bi-flower1 display-4 text-warning"></i>
         </div>
-        <h2 class="fw-bold text-white mb-1 blink-text">ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย</h2>
+        <h2 class="fw-bold text-white mb-1 blink-text">โครงการทุ่งสวรรค์ ตะวันฉาย V.2</h2>
         <p class="text-white-50 fs-6 mb-1">ระบบพนักงาน และ สต๊อกอุปกรณ์</p>
         <span class="badge bg-warning text-dark px-3 py-1.5 rounded-pill fs-8 fw-bold">
           <i class="bi bi-shield-lock-fill me-1"></i> บังคับเข้าสู่ระบบก่อนเข้าใช้งาน
@@ -132,8 +132,8 @@
     <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#">
       <i class="bi bi-flower1 fs-3 text-warning"></i>
       <div>
-        <div class="lh-1 fs-5 blink-text">ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย</div>
-        <small class="text-blue-50 fw-normal fs-8">ระบบพนักงาน สต๊อกอุปกรณ์ Flora Garden Test</small>
+        <div class="lh-1 fs-5 blink-text">โครงการทุ่งสวรรค์ ตะวันฉาย V.2</div>
+        <small class="text-blue-50 fw-normal fs-8">ระบบพนักงาน และ สต๊อกอุปกรณ์</small>
       </div>
     </a>
 
@@ -4365,6 +4365,38 @@
 
           <!-- 4 Main Action Buttons Grid -->
           <div class="row g-3">
+            <!-- Button 1: Sync from Flora Garden V.2 (Admin Thamma Srithong Only) -->
+            <div class="col-12">
+              <div class="card border-2 border-success rounded-4 p-3 bg-white shadow-sm">
+                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="bg-success text-white rounded-circle p-3 d-flex align-items-center justify-content-center shadow-sm flex-shrink-0" style="width: 50px; height: 50px;">
+                      <i class="bi bi-cloud-download-fill fs-4"></i>
+                    </div>
+                    <div>
+                      <div class="d-flex align-items-center gap-2">
+                        <h6 class="fw-bold text-dark mb-0 fs-6">ดึงข้อมูลจาก V.2</h6>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-2 py-0.5 fs-8 fw-semibold">
+                          <i class="bi bi-shield-lock-fill me-1"></i>Thamma Srithong (jaru072@gmail.com)
+                        </span>
+                      </div>
+                      <p class="text-muted fs-8 mb-0 mt-0.5">คัดลอกข้อมูล อุปกรณ์, บุคลากร, ประวัติรายการ จากฐานข้อมูล <span class="font-monospace text-dark">floragardenv2</span> มายังโปรเจกต์นี้</p>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 align-self-stretch align-self-md-center">
+                    <button type="button" class="btn btn-success rounded-pill px-3.5 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-1.5 shadow-sm text-nowrap" onclick="confirmAndSyncFromFloraGardenTest()">
+                      <i class="bi bi-arrow-repeat fs-6"></i>
+                      <span>กดซิงค์ข้อมูล</span>
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-3.5 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-1.5 shadow-sm text-nowrap" title="ตรวจสอบและลบเอกสารซ้ำซ้อน จัดระเบียบ Document ID ให้ตรงกับรหัส code: ของแต่ละตาราง" onclick="cleanAndDeduplicateAllCollections()">
+                      <i class="bi bi-stars fs-6"></i>
+                      <span>ล้างข้อมูลซ้ำและจัดระเบียบ ID</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Button 2: Backup JSON -->
             <div class="col-12 col-md-6">
               <button type="button" class="btn btn-outline-primary border-2 w-100 h-100 rounded-4 p-3.5 text-start shadow-sm bg-white hover-shadow transition-all d-flex align-items-center gap-3" onclick="downloadDatabaseBackup()">
