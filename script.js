@@ -171,7 +171,12 @@
       try {
         auth = getAuth(app);
         googleProvider = new GoogleAuthProvider();
+        googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
         googleProvider.setCustomParameters({ prompt: 'select_account' });
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.signInWithPopup = signInWithPopup;
+        window.getAuth = getAuth;
+        window.googleProvider = googleProvider;
       } catch (eAuth) {
         console.warn("Auth init warning:", eAuth);
       }
@@ -354,12 +359,14 @@
         try {
           auth = getAuth();
           googleProvider = new GoogleAuthProvider();
+          googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
         } catch(e) {
           console.warn("Auth re-init failed:", e);
         }
       }
 
       if (googleProvider) {
+        googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
         googleProvider.setCustomParameters({ prompt: 'select_account' });
       }
 
@@ -374,6 +381,15 @@
       try {
         showToast("⏳ กำลังเปิดหน้าต่าง Google Sign-In...");
         const result = await signInWithPopup(auth, googleProvider);
+        try {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            window.googleDriveAccessToken = credential.accessToken;
+            sessionStorage.setItem('google_drive_access_token', credential.accessToken);
+          }
+        } catch (credErr) {
+          console.warn("Credential extraction notice:", credErr);
+        }
         showToast(`🟢 เข้าสู่ระบบด้วย Google Account สำเร็จ: ${result.user.displayName || result.user.email}`);
         if (typeof window.hideMandatoryLoginScreen === 'function') {
           window.hideMandatoryLoginScreen();
@@ -395,6 +411,35 @@
         }
         showToast(`🔴 ${errorTitle} (${err.code || err.message})`);
       }
+    };
+
+    // Helper to get Google Drive Access Token (prompts popup if not available)
+    window.getGoogleDriveAccessToken = async function(promptIfMissing = true) {
+      if (window.googleDriveAccessToken) {
+        return window.googleDriveAccessToken;
+      }
+      const stored = sessionStorage.getItem('google_drive_access_token');
+      if (stored) {
+        window.googleDriveAccessToken = stored;
+        return stored;
+      }
+      if (!promptIfMissing) return null;
+
+      if (!auth) auth = getAuth();
+      if (!googleProvider) {
+        googleProvider = new GoogleAuthProvider();
+      }
+      googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        window.googleDriveAccessToken = credential.accessToken;
+        sessionStorage.setItem('google_drive_access_token', credential.accessToken);
+        return credential.accessToken;
+      }
+      throw new Error("ไม่ได้รับสิทธิ์หรือ Access Token จาก Google Drive");
     };
 
     // Email Login
@@ -13403,12 +13448,14 @@
     let currentDbCollection = 'equipment';
 
     window.canAccessDatabaseEditor = function() {
-      const isRoleAdmin = (typeof currentRole !== 'undefined' && currentRole === 'ADMIN');
+      if (typeof window.isThammaSrithongAdminStrict === 'function') {
+        return window.isThammaSrithongAdminStrict();
+      }
       const email = ((typeof currentAuthUser !== 'undefined' && currentAuthUser?.email) || (typeof currentUserProfile !== 'undefined' && currentUserProfile?.email) || '').trim().toLowerCase();
-      
-      if (isRoleAdmin) return true;
-      if (email === 'jaru072@gmail.com') return true;
-      return false;
+      const displayName = ((typeof currentAuthUser !== 'undefined' && currentAuthUser?.displayName) || (typeof currentUserProfile !== 'undefined' && currentUserProfile?.displayName) || '').trim().toLowerCase();
+      const isEmailMatch = email === 'jaru072@gmail.com';
+      const isNameMatch = displayName.includes('thamma') || displayName.includes('srithong') || displayName.includes('ธรรมะ') || displayName.includes('ศรีทอง');
+      return isEmailMatch || (isNameMatch && (typeof currentRole !== 'undefined' && currentRole === 'ADMIN'));
     };
 
     window.updateDbEditorMenuVisibility = function() {
@@ -14850,7 +14897,14 @@
           "activity_logs"
         ];
 
-        if (showFeedback) showToast(`⏳ กำลังตรวจสอบและเชื่อมต่อฐานข้อมูล...`);
+        if (showFeedback) {
+          showToast(`⏳ กำลังตรวจสอบและเชื่อมต่อฐานข้อมูล...`);
+          if (typeof window.updateBackupProgress === 'function') {
+            window.updateBackupProgress(5, "กำลังเริ่มซิงก์ข้อมูล (5%)", `กำลังเชื่อมต่อกับฐานข้อมูล V.2 (${primarySourceDbId})...`, true, 'bg-success');
+            const progressEl = document.getElementById('backupProgressContainer');
+            if (progressEl) progressEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }
 
         // Helper to convert Firestore REST Document to JS Object
         const parseFirestoreRestDoc = (fields) => {
@@ -14973,7 +15027,20 @@
           const errors = [];
           const src = getDbInstance(sourceDbId);
 
-          for (const colName of collectionsToMigrate) {
+          for (let colIdx = 0; colIdx < collectionsToMigrate.length; colIdx++) {
+            const colName = collectionsToMigrate[colIdx];
+            const currentPct = Math.round(5 + (colIdx / collectionsToMigrate.length) * 80);
+            
+            if (showFeedback && typeof window.updateBackupProgress === 'function') {
+              window.updateBackupProgress(
+                currentPct,
+                `กำลังซิงก์ข้อมูลจาก V.2 (${currentPct}%)`,
+                `กำลังอ่านตาราง "${colName}" (${colIdx + 1}/${collectionsToMigrate.length})...`,
+                true,
+                'bg-success'
+              );
+            }
+
             let foundDocs = false;
 
             // Strategy A: Direct REST API (Reliable in multi-db contexts)
@@ -14993,6 +15060,15 @@
                   try { await deleteDoc(doc(db, colName, docObj.id)); } catch(e){}
                 }
                 copied++;
+              }
+              if (showFeedback && typeof window.updateBackupProgress === 'function') {
+                window.updateBackupProgress(
+                  currentPct,
+                  `กำลังซิงก์ข้อมูลจาก V.2 (${currentPct}%)`,
+                  `ตาราง "${colName}" คัดลอกสำเร็จ ${restResult.docs.length} รายการ (${colIdx + 1}/${collectionsToMigrate.length})`,
+                  true,
+                  'bg-success'
+                );
               }
             } else if (restResult.error && !restResult.error.includes("404")) {
               errors.push(`REST [${colName}]: ${restResult.error}`);
@@ -15017,6 +15093,15 @@
                       try { await deleteDoc(doc(db, colName, docSnap.id)); } catch(e){}
                     }
                     copied++;
+                  }
+                  if (showFeedback && typeof window.updateBackupProgress === 'function') {
+                    window.updateBackupProgress(
+                      currentPct,
+                      `กำลังซิงก์ข้อมูลจาก V.2 (${currentPct}%)`,
+                      `ตาราง "${colName}" คัดลอกสำเร็จ ${snap.docs.length} รายการ (${colIdx + 1}/${collectionsToMigrate.length})`,
+                      true,
+                      'bg-success'
+                    );
                   }
                 }
               } catch (colErr) {
@@ -15054,6 +15139,9 @@
 
           if (userChoice) {
             showToast("⏳ กำลังตรวจสอบฐานข้อมูลสำรองอื่นๆ ในโปรเจกต์...");
+            if (typeof window.updateBackupProgress === 'function') {
+              window.updateBackupProgress(50, "กำลังค้นหาฐานข้อมูลสำรอง...", "กำลังตรวจค้นฐานข้อมูลตัวอื่นในโปรเจกต์...", true, 'bg-warning');
+            }
             const otherCandidates = [
               { id: "ai-studio-floragardennew-077d9b3a-d839-404a-986e-0ab7c5c9be6e", name: "Flora Garden New (077d9b3a)" },
               { id: "ai-studio-1c1eba69-e70f-482c-b553-e77fc7efbd4f", name: "Flora Garden 1c1eba69" },
@@ -15072,6 +15160,27 @@
         }
 
         console.log(`[Migration] Migration execution finished. Total docs copied: ${totalDocsCopied}`);
+
+        if (totalDocsCopied > 0) {
+          if (showFeedback && typeof window.updateBackupProgress === 'function') {
+            window.updateBackupProgress(88, "กำลังจัดระเบียบข้อมูล (88%)", "กำลังจัดระเบียบ Document ID และลบข้อมูลซ้ำซ้อน...", true, 'bg-primary');
+          }
+          await window.cleanAndDeduplicateAllCollections(false);
+
+          if (showFeedback && typeof window.updateBackupProgress === 'function') {
+            window.updateBackupProgress(
+              100,
+              "🎉 ซิงก์ข้อมูลจาก V.2 เสร็จสมบูรณ์ 100%!",
+              `คัดลอกข้อมูลทั้งหมด ${totalDocsCopied} รายการ ลงฐานข้อมูล Test เรียบร้อยแล้ว`,
+              true,
+              'bg-success'
+            );
+          }
+        } else {
+          if (showFeedback && typeof window.updateBackupProgress === 'function') {
+            window.updateBackupProgress(100, "ℹ️ ตรวจสอบเสร็จสิ้น ไม่พบข้อมูลใหม่", "ไม่พบรายการข้อมูลในฐานข้อมูลต้นทาง (0 รายการ)", true, 'bg-secondary');
+          }
+        }
 
         if (showFeedback) {
           if (totalDocsCopied > 0) {
@@ -15150,7 +15259,14 @@
         if (!ok) return;
       }
 
-      showToast("⏳ กำลังเริ่มจัดระเบียบ Document ID และล้างข้อมูลซ้ำซ้อน...");
+      if (showFeedback) {
+        showToast("⏳ กำลังเริ่มจัดระเบียบ Document ID และล้างข้อมูลซ้ำซ้อน...");
+        if (typeof window.updateBackupProgress === 'function') {
+          window.updateBackupProgress(10, "กำลังเริ่มจัดระเบียบข้อมูล (10%)", "กำลังเชื่อมต่อฐานข้อมูลและสแกนหาข้อมูลซ้ำซ้อน...", true, 'bg-primary');
+          const progressEl = document.getElementById('backupProgressContainer');
+          if (progressEl) progressEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
 
       const report = {};
       let totalFixed = 0;
@@ -15164,8 +15280,13 @@
         { name: "employees", codePrefix: "EMP", nameField: "name" }
       ];
 
-      for (const colInfo of collectionsToCheck) {
+      for (let cIdx = 0; cIdx < collectionsToCheck.length; cIdx++) {
+        const colInfo = collectionsToCheck[cIdx];
         const colName = colInfo.name;
+        if (showFeedback && typeof window.updateBackupProgress === 'function') {
+          const cPct = Math.round(15 + (cIdx / collectionsToCheck.length) * 75);
+          window.updateBackupProgress(cPct, `กำลังจัดระเบียบตาราง ${colName} (${cPct}%)`, `สแกนหาข้อมูลซ้ำซ้อนและจัดระเบียบ Document ID (${cIdx + 1}/${collectionsToCheck.length})...`, true, 'bg-primary');
+        }
         try {
           const qSnap = await getDocs(collection(db, colName));
           if (qSnap.empty) continue;
@@ -15278,6 +15399,9 @@
       const msg = `🎉 จัดระเบียบและล้างข้อมูลซ้ำซ้อนสำเร็จแล้ว!\n\n• รวมเอกสารที่ลบซ้ำซ้อนออก: ${totalDeletedDuplicates} รายการ\n• จัดโครงสร้าง Document ID ตรงตาม code: สำเร็จ\n\nรายละเอียดแยกแต่ละตาราง:\n${reportLines}`;
       
       if (showFeedback) {
+        if (typeof window.updateBackupProgress === 'function') {
+          window.updateBackupProgress(100, "🎉 จัดระเบียบข้อมูลสำเร็จ 100%!", `ลบตัวซ้ำ ${totalDeletedDuplicates} รายการ และจัดระเบียบ Document ID เรียบร้อย`, true, 'bg-success');
+        }
         alert(msg);
         showToast(`🎉 ล้างข้อมูลซ้ำซ้อนสำเร็จ (${totalDeletedDuplicates} รายการ)`);
       }

@@ -89,9 +89,10 @@ function getComprehensiveLocationsList() {
 
 // 1. Open Backup/Restore Modal
 window.openBackupRestoreModal = function() {
-  const role = window.currentRole || (typeof currentRole !== 'undefined' ? currentRole : null);
-  if (role && role !== 'ADMIN') {
-    getGlobalToast()("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่มีสิทธิ์เข้าถึงส่วนนี้ (โปรดสลับสิทธิ์เป็น 'ผู้ดูแลระบบ' ในเมนูด้านบนก่อนครับ)");
+  const isAuthorized = (typeof window.isThammaSrithongAdminStrict === 'function' && window.isThammaSrithongAdminStrict()) ||
+                       (typeof window.canAccessDatabaseEditor === 'function' && window.canAccessDatabaseEditor());
+  if (!isAuthorized) {
+    getGlobalToast()("⚠️ เฉพาะผู้ดูแลระบบหลัก คุณ Thamma Srithong (jaru072@gmail.com) เท่านั้นที่มีสิทธิ์เข้าถึงส่วนสำรอง/กู้คืนข้อมูล");
     return;
   }
   try {
@@ -148,42 +149,45 @@ window.openBackupRestoreModal = function() {
 
 // 2. Progress Bar Updater
 window.updateBackupProgress = function(percent, statusText, detailsText = '', isVisible = true, colorClass = 'bg-primary') {
-  const container = document.getElementById('backupProgressContainer');
-  const bar = document.getElementById('backupProgressBar');
-  const percentElem = document.getElementById('backupProgressPercent');
-  const titleElem = document.getElementById('backupProgressTitle');
-  const textElem = document.getElementById('backupProgressText');
-  const spinnerElem = document.getElementById('backupProgressSpinner');
+  const containers = document.querySelectorAll('#backupProgressContainer');
+  if (!containers || containers.length === 0) return;
 
-  if (!container) return;
-
-  if (!isVisible) {
-    container.classList.add('d-none');
-    return;
-  }
-
-  container.classList.remove('d-none');
   const cleanPercent = Math.min(100, Math.max(0, Math.round(percent)));
-  
-  if (bar) {
-    bar.style.width = `${cleanPercent}%`;
-    bar.textContent = `${cleanPercent}%`;
-    bar.className = `progress-bar progress-bar-striped progress-bar-animated ${colorClass} fw-bold fs-8`;
-  }
-  if (percentElem) {
-    percentElem.textContent = `${cleanPercent}%`;
-    percentElem.className = `badge rounded-pill px-3 py-1 fs-7 fw-bold ${colorClass}`;
-  }
-  if (titleElem && statusText) titleElem.textContent = statusText;
-  if (textElem) textElem.textContent = detailsText || statusText;
 
-  if (spinnerElem) {
-    if (cleanPercent >= 100) {
-      spinnerElem.classList.add('d-none');
-    } else {
-      spinnerElem.classList.remove('d-none');
+  containers.forEach(container => {
+    if (!isVisible) {
+      container.classList.add('d-none');
+      return;
     }
-  }
+
+    container.classList.remove('d-none');
+
+    const bar = container.querySelector('#backupProgressBar') || document.getElementById('backupProgressBar');
+    const percentElem = container.querySelector('#backupProgressPercent') || document.getElementById('backupProgressPercent');
+    const titleElem = container.querySelector('#backupProgressTitle') || document.getElementById('backupProgressTitle');
+    const textElem = container.querySelector('#backupProgressText') || document.getElementById('backupProgressText');
+    const spinnerElem = container.querySelector('#backupProgressSpinner') || document.getElementById('backupProgressSpinner');
+
+    if (bar) {
+      bar.style.width = `${cleanPercent}%`;
+      bar.textContent = `${cleanPercent}%`;
+      bar.className = `progress-bar progress-bar-striped progress-bar-animated ${colorClass} fw-bold fs-8`;
+    }
+    if (percentElem) {
+      percentElem.textContent = `${cleanPercent}%`;
+      percentElem.className = `badge rounded-pill px-3 py-1 fs-7 fw-bold ${colorClass}`;
+    }
+    if (titleElem && statusText) titleElem.textContent = statusText;
+    if (textElem) textElem.textContent = detailsText || statusText;
+
+    if (spinnerElem) {
+      if (cleanPercent >= 100) {
+        spinnerElem.classList.add('d-none');
+      } else {
+        spinnerElem.classList.remove('d-none');
+      }
+    }
+  });
 };
 
 // 3. Delete Image from Firebase Storage Helper
@@ -1712,6 +1716,526 @@ window.syncAllImagesToFirebaseStorage = async function() {
   } catch (err) {
     console.error("Sync images to Storage error:", err);
     alert("เกิดข้อผิดพลาดขณะอัปโหลดรูปภาพ: " + err.message);
+  }
+};
+
+// ==================== 20. GOOGLE DRIVE BACKUP & RESTORE INTEGRATION ====================
+
+// Find or create a folder in Google Drive
+async function findOrCreateDriveFolder(accessToken, folderName, parentFolderId = null) {
+  let query = `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  if (parentFolderId) {
+    query += ` and '${parentFolderId}' in parents`;
+  }
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive`;
+  const searchRes = await fetch(searchUrl, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  if (searchRes.ok) {
+    const data = await searchRes.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+  }
+
+  // Create folder if not found
+  const metadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    ...(parentFolderId ? { parents: [parentFolderId] } : {})
+  };
+
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(metadata)
+  });
+
+  if (!createRes.ok) {
+    const errJson = await createRes.json().catch(() => ({}));
+    throw new Error(errJson.error?.message || `สร้างโฟลเดอร์ "${folderName}" ใน Google Drive ไม่สำเร็จ (${createRes.status})`);
+  }
+
+  const created = await createRes.json();
+  return created.id;
+}
+
+// List all files in a Google Drive folder
+async function listFilesInDriveFolder(accessToken, folderId) {
+  const filesMap = new Map();
+  let pageToken = '';
+  do {
+    const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,size,mimeType,createdTime,modifiedTime,webViewLink)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (!res.ok) break;
+    const data = await res.json();
+    if (data.files) {
+      data.files.forEach(f => {
+        filesMap.set(f.name, f);
+      });
+    }
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return filesMap;
+}
+
+// Upload a single file (image or json) directly to Google Drive without zip
+async function uploadFileToDrive(accessToken, { name, mimeType, blob, parentFolderId, existingFileId = null }) {
+  const metadata = {
+    name: name,
+    mimeType: mimeType || blob.type || 'application/octet-stream',
+    ...(!existingFileId && parentFolderId ? { parents: [parentFolderId] } : {})
+  };
+
+  const boundary = '-------FloraDriveUploadBoundary314159265';
+  const delimiter = "\r\n--" + boundary + "\r\n";
+  const closeDelimiter = "\r\n--" + boundary + "--";
+
+  const metaBlob = new Blob([delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + '\r\n' + delimiter + `Content-Type: ${mimeType || blob.type || 'application/octet-stream'}\r\n\r\n`], { type: 'text/plain' });
+  const endBlob = new Blob([closeDelimiter], { type: 'text/plain' });
+  const multipartBlob = new Blob([metaBlob, blob, endBlob], { type: `multipart/related; boundary=${boundary}` });
+
+  const url = existingFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&fields=id,name,size,webViewLink`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink`;
+
+  const res = await fetch(url, {
+    method: existingFileId ? 'PATCH' : 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    },
+    body: multipartBlob
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    let errMsg = `อัปโหลดไฟล์ "${name}" ขึ้น Google Drive ไม่สำเร็จ (${res.status})`;
+    try {
+      const errObj = JSON.parse(errText);
+      if (errObj.error && errObj.error.message) errMsg = errObj.error.message;
+    } catch(e) {}
+    throw new Error(errMsg);
+  }
+
+  return await res.json();
+}
+
+// Download file contents from Google Drive
+async function downloadFileFromDrive(accessToken, fileId) {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    throw new Error(`ดาวน์โหลดไฟล์จาก Google Drive ไม่สำเร็จ (${res.status})`);
+  }
+  return await res.text();
+}
+
+// Helper to fetch actual image binary as Blob (using local backup endpoint or server proxy)
+async function fetchDriveImageBlob(item) {
+  // Try 1: Local server backup file (fastest & high reliability)
+  try {
+    const localUrl = `/api/backup-image-file?path=${encodeURIComponent(item.name)}`;
+    const resp = await fetch(localUrl);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      if (blob && blob.size > 0) return blob;
+    }
+  } catch (e) {}
+
+  // Try 2: Proxy via Server endpoint (bypasses CORS and auto-attaches download tokens)
+  if (item.downloadUrl) {
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(item.downloadUrl)}`;
+      const resp = await fetch(proxyUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        if (blob && blob.size > 0) return blob;
+      }
+    } catch (e) {}
+
+    // Try 3: Direct fetch download URL
+    try {
+      const resp = await fetch(item.downloadUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        if (blob && blob.size > 0) return blob;
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
+// Execute Google Drive Backup (Uncompressed original images in matching folders + JSON)
+window.startGoogleDriveBackup = async function() {
+  const confirmed = typeof window.showConfirmDialog === 'function'
+    ? await window.showConfirmDialog({
+        title: "สำรองข้อมูลสู่ Google Drive (5TB)",
+        message: "ระบบจะสำรองข้อมูลทั้งหมดและรูปภาพจริงต้นฉบับจาก Firebase Storage ลงโฟลเดอร์ Google AI Studio/FloraGarden_Backups บน Google Drive ของคุณโดยตรง (ไม่บีบอัด .zip) พร้อมระบบ Smart Diff ข้ามไฟล์เดิมอัตโนมัติ ต้องการดำเนินการหรือไม่?",
+        type: "primary",
+        icon: "bi-google",
+        confirmText: "เริ่มสำรองข้อมูล Google Drive"
+      })
+    : confirm("ต้องการสำรองข้อมูลและรูปภาพทั้งหมดไปยัง Google AI Studio/FloraGarden_Backups บน Google Drive หรือไม่?");
+
+  if (!confirmed) return;
+
+  try {
+    window.updateBackupProgress(5, "กำลังเชื่อมต่อกับ Google Drive...", "ขอสิทธิ์และตรวจสอบบัญชี Google...", true, "bg-success");
+    getGlobalToast()("⏳ กำลังเชื่อมต่อกับ Google Drive...");
+
+    let accessToken = null;
+    try {
+      accessToken = typeof window.getGoogleDriveAccessToken === 'function'
+        ? await window.getGoogleDriveAccessToken(true)
+        : window.googleDriveAccessToken;
+    } catch (authErr) {
+      console.warn("Auth token request error:", authErr);
+      throw new Error(authErr.message || "ไม่สามารถเชื่อมต่อ Google Drive ได้ กรุณาเข้าสู่ระบบ Google Account ก่อน");
+    }
+
+    if (!accessToken) {
+      throw new Error("ไม่พบ Token สำหรับการเข้าถึง Google Drive");
+    }
+
+    // Step 1: Ensure Server Cache is up-to-date & triggers auto backup on server
+    window.updateBackupProgress(10, "กำลังดึงรายการรูปภาพจริงจากระบบ...", "สแกนไฟล์ภาพจริงจาก Storage & Database...", true, "bg-success");
+    
+    // Trigger server image backup in background to populate disk cache
+    fetch('/api/auto-backup-images', { method: 'POST' }).catch(() => {});
+
+    // Step 2: Get complete list of actual files from Firebase Storage
+    let storageFiles = [];
+    try {
+      const listResp = await fetch('/api/list-storage-files');
+      if (listResp.ok) {
+        const listData = await listResp.json();
+        if (listData.items && Array.isArray(listData.items)) {
+          storageFiles = listData.items;
+        }
+      }
+    } catch (listErr) {
+      console.warn("List storage files notice:", listErr);
+    }
+
+    // Fallback: If storage list is empty, build from memory list
+    if (storageFiles.length === 0) {
+      const eqList = window.equipmentList || [];
+      eqList.forEach((eq, idx) => {
+        const url = eq.imageUrl || eq.photoUrl || eq.imageBase64 || eq.photoBase64;
+        if (url) {
+          const safeCode = (eq.code || eq.id || `eq_${idx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+          storageFiles.push({
+            name: `equipment/${safeCode}.jpg`,
+            downloadUrl: url,
+            size: 0,
+            contentType: 'image/jpeg'
+          });
+        }
+      });
+      const empList = window.employeeList || [];
+      empList.forEach((emp, idx) => {
+        const url = emp.photoUrl || emp.photoBase64 || emp.imageUrl || emp.imageBase64;
+        if (url) {
+          const safeCode = (emp.code || emp.id || `emp_${idx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+          storageFiles.push({
+            name: `employees/${safeCode}.jpg`,
+            downloadUrl: url,
+            size: 0,
+            contentType: 'image/jpeg'
+          });
+        }
+      });
+    }
+
+    window.updateBackupProgress(18, "กำลังเตรียมโครงสร้างโฟลเดอร์บน Google Drive...", "สร้าง/ค้นหาโฟลเดอร์ Google AI Studio > FloraGarden_Backups...", true, "bg-success");
+
+    // 1. Find or create "Google AI Studio" parent folder
+    const aiStudioFolderId = await findOrCreateDriveFolder(accessToken, 'Google AI Studio');
+
+    // 2. Find or create "FloraGarden_Backups" root inside "Google AI Studio"
+    const rootFolderId = await findOrCreateDriveFolder(accessToken, 'FloraGarden_Backups', aiStudioFolderId);
+
+    // 3. Find or create subfolders
+    const equipFolderId = await findOrCreateDriveFolder(accessToken, 'equipment', rootFolderId);
+    const empFolderId = await findOrCreateDriveFolder(accessToken, 'employees', rootFolderId);
+    const dbFolderId = await findOrCreateDriveFolder(accessToken, 'database', rootFolderId);
+
+    window.updateBackupProgress(25, "กำลังสแกนไฟล์เดิมบน Google Drive (Smart Diff)...", "ตรวจสอบขนาดไฟล์เดิมเพื่อป้องกันการอัปโหลดซ้ำซ้อน...", true, "bg-success");
+
+    // 4. Scan existing files in Drive subfolders
+    const existingEquipFiles = await listFilesInDriveFolder(accessToken, equipFolderId);
+    const existingEmpFiles = await listFilesInDriveFolder(accessToken, empFolderId);
+
+    let driveSummary = {
+      totalImages: storageFiles.length,
+      imagesAdded: 0,
+      imagesUpdated: 0,
+      imagesSkipped: 0,
+      imagesFailed: 0,
+      dbBackupName: ''
+    };
+
+    // 5. Upload All Genuine Image Files to Google Drive
+    const totalFiles = storageFiles.length;
+    for (let i = 0; i < totalFiles; i++) {
+      const item = storageFiles[i];
+      const parts = item.name.split('/');
+      const isEmployee = parts[0] === 'employees' || parts[0] === 'employee_photos';
+      const targetFolderId = isEmployee ? empFolderId : equipFolderId;
+      const existingMap = isEmployee ? existingEmpFiles : existingEquipFiles;
+
+      const fileName = parts.slice(1).join('_') || parts[0];
+      const safeFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const existingFile = existingMap.get(safeFileName);
+
+      // Smart Diff Check: If size exists on Drive and matches remoteSize > 0
+      if (existingFile && item.size > 0 && parseInt(existingFile.size, 10) === item.size) {
+        driveSummary.imagesSkipped++;
+      } else {
+        try {
+          const blob = await fetchDriveImageBlob(item);
+          if (blob && blob.size > 0) {
+            if (existingFile && parseInt(existingFile.size, 10) === blob.size) {
+              driveSummary.imagesSkipped++;
+            } else {
+              await uploadFileToDrive(accessToken, {
+                name: safeFileName,
+                mimeType: blob.type || item.contentType || 'image/jpeg',
+                blob: blob,
+                parentFolderId: targetFolderId,
+                existingFileId: existingFile ? existingFile.id : null
+              });
+              if (existingFile) driveSummary.imagesUpdated++;
+              else driveSummary.imagesAdded++;
+            }
+          } else {
+            console.warn(`Could not get image blob for ${item.name}`);
+            driveSummary.imagesFailed++;
+          }
+        } catch (uploadErr) {
+          console.warn(`Error uploading ${item.name} to Google Drive:`, uploadErr);
+          driveSummary.imagesFailed++;
+        }
+      }
+
+      // Progress 25% -> 80%
+      const currentPercent = 25 + Math.round(((i + 1) / (totalFiles || 1)) * 55);
+      window.updateBackupProgress(
+        currentPercent,
+        `กำลังสำรองรูปภาพจริงสู่ Google Drive (${i + 1}/${totalFiles})...`,
+        `ไฟล์: ${item.name} (${safeFileName})`,
+        true,
+        "bg-success"
+      );
+    }
+
+    // 6. Upload Full Database JSON
+    window.updateBackupProgress(85, "กำลังสร้างและอัปโหลดไฟล์ฐานข้อมูล (.json) สู่ Google Drive...", "รวบรวมข้อมูลทุก Collection ของระบบ...", true, "bg-success");
+
+    const now = new Date();
+    const timestampStr = typeof window.getThaiDateTimeFilenameString === 'function'
+      ? window.getThaiDateTimeFilenameString(now)
+      : now.toISOString().replace(/[:.]/g, '-');
+    const thaiDateStr = now.toLocaleString('th-TH');
+
+    const clonedEquipment = safeJsonClone(window.equipmentList);
+    const clonedEmployees = safeJsonClone(window.employeeList);
+
+    clonedEquipment.forEach(eq => {
+      delete eq.imageBase64;
+      delete eq.photoBase64;
+    });
+    clonedEmployees.forEach(emp => {
+      delete emp.imageBase64;
+      delete emp.photoBase64;
+    });
+
+    const backupData = {
+      version: "2.0",
+      appName: "Flora Garden Stock & Employee System",
+      backupTimestamp: now.toISOString(),
+      backupDateThai: thaiDateStr,
+      storageType: "GOOGLE_DRIVE_UNCOMPRESSED",
+      equipmentList: clonedEquipment,
+      employeeList: clonedEmployees,
+      transactionHistory: window.transactionHistory || [],
+      attendanceLogs: window.attendanceLogs || [],
+      auditLogs: window.auditLogs || [],
+      categoriesList: window.categoriesList || [],
+      departmentsList: getComprehensiveDepartmentsList(),
+      locationsList: getComprehensiveLocationsList(),
+      imagesBase64Map: {}
+    };
+
+    const jsonString = JSON.stringify(backupData, null, 2);
+    const jsonBlob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const jsonFileName = `flora_garden_backup_${timestampStr}.json`;
+    driveSummary.dbBackupName = jsonFileName;
+
+    // Upload timestamped JSON
+    await uploadFileToDrive(accessToken, {
+      name: jsonFileName,
+      mimeType: 'application/json',
+      blob: jsonBlob,
+      parentFolderId: dbFolderId
+    });
+
+    // Check if flora_garden_backup_latest.json exists, update or create
+    const existingDbFiles = await listFilesInDriveFolder(accessToken, dbFolderId);
+    const latestFile = existingDbFiles.get('flora_garden_backup_latest.json');
+    await uploadFileToDrive(accessToken, {
+      name: 'flora_garden_backup_latest.json',
+      mimeType: 'application/json',
+      blob: jsonBlob,
+      parentFolderId: dbFolderId,
+      existingFileId: latestFile ? latestFile.id : null
+    });
+
+    window.updateBackupProgress(100, "สำรองข้อมูลสู่ Google Drive สำเร็จ 100%", `บันทึกไฟล์ภาพจริงและฐานข้อมูลใน Google Drive โฟลเดอร์ Google AI Studio > FloraGarden_Backups เรียบร้อยแล้ว`, true, "bg-success");
+    getGlobalToast()("🎉 สำรองข้อมูลและรูปภาพจริงสู่ Google Drive สำเร็จ 100%!");
+
+    // Render Log Card
+    const logCard = document.getElementById('googleDriveSyncLogCard');
+    const driveFolderUrl = `https://drive.google.com/drive/folders/${rootFolderId}`;
+    if (logCard) {
+      logCard.classList.remove('d-none');
+      logCard.innerHTML = `
+        <div class="alert alert-success border-0 shadow-2xs rounded-3 mb-0 p-3 bg-success bg-opacity-10 text-dark">
+          <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 mb-2 pb-2 border-bottom border-success border-opacity-25">
+            <span class="fw-bold text-success fs-7"><i class="bi bi-google me-1.5"></i> ผลการสำรองข้อมูลสู่ Google Drive (Google AI Studio)</span>
+            <a href="${driveFolderUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success rounded-pill px-3 py-1 fs-8 fw-bold text-nowrap align-self-start align-self-sm-auto">
+              <i class="bi bi-box-arrow-up-right me-1"></i> เปิดโฟลเดอร์ Google Drive
+            </a>
+          </div>
+          <div class="row g-2 text-center my-2">
+            <div class="col-3">
+              <div class="bg-white p-2 rounded-3 border">
+                <div class="text-muted fs-9 mb-0.5">รวมรูปภาพจริง</div>
+                <div class="fw-bold text-dark fs-6">${driveSummary.totalImages} รูป</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="bg-white p-2 rounded-3 border">
+                <div class="text-muted fs-9 mb-0.5">เพิ่มไฟล์ใหม่</div>
+                <div class="fw-bold text-success fs-6">+${driveSummary.imagesAdded}</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="bg-white p-2 rounded-3 border">
+                <div class="text-muted fs-9 mb-0.5">เขียนทับ/อัปเดต</div>
+                <div class="fw-bold text-warning fs-6">✏️ ${driveSummary.imagesUpdated}</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="bg-white p-2 rounded-3 border">
+                <div class="text-muted fs-9 mb-0.5">ข้าม (ไฟล์เดิม)</div>
+                <div class="fw-bold text-secondary fs-6">⚡ ${driveSummary.imagesSkipped}</div>
+              </div>
+            </div>
+          </div>
+          <div class="fs-8 text-muted d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-1 mt-2 pt-1 border-top">
+            <span><i class="bi bi-file-earmark-check text-success me-1"></i> ฐานข้อมูล: <b>${jsonFileName}</b> (และ flora_garden_backup_latest.json)</span>
+            <span class="fw-semibold text-dark"><i class="bi bi-clock-history me-1"></i> ${new Date().toLocaleTimeString('th-TH')}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    if (typeof window.showFeedbackPopup === 'function') {
+      window.showFeedbackPopup("สำรอง Google Drive สำเร็จ", "บันทึกไฟล์ภาพจริงและฐานข้อมูลครบถ้วนแล้ว");
+    }
+
+    alert(`🎉 สำเร็จ! ระบบได้ทำการสำรองข้อมูลและรูปภาพจริงทั้งหมดสู่ Google Drive เรียบร้อยแล้ว\n\n📁 ตำแหน่ง: Google Drive > Google AI Studio > FloraGarden_Backups/\n  ├── equipment/ (รูปภาพอุปกรณ์ต้นฉบับ)\n  ├── employees/ (รูปถ่ายบุคลากรต้นฉบับ)\n  └── database/ (${jsonFileName})\n\n• รวมรูปภาพทั้งหมด: ${driveSummary.totalImages} รูป\n• เพิ่มไฟล์ใหม่: +${driveSummary.imagesAdded} รูป\n• เขียนทับ/แก้ไข: ${driveSummary.imagesUpdated} รูป\n• ข้าม (มีไฟล์เดิมและขนาดตรงกัน): ${driveSummary.imagesSkipped} รูป`);
+  } catch (err) {
+    console.error("Google Drive backup error:", err);
+    window.updateBackupProgress(0, "เกิดข้อผิดพลาดในการสำรองข้อมูล Google Drive", err.message, true, "bg-danger");
+    getGlobalToast()("❌ Google Drive Backup ล้มเหลว: " + err.message);
+    alert("เกิดข้อผิดพลาดในการสำรองข้อมูลขึ้น Google Drive:\n" + err.message);
+  }
+};
+
+// Execute Google Drive Restore
+window.startGoogleDriveRestore = async function() {
+  try {
+    window.updateBackupProgress(10, "กำลังเชื่อมต่อกับ Google Drive...", "ค้นหาไฟล์สำรองข้อมูลในโฟลเดอร์ Google AI Studio > FloraGarden_Backups > database...", true, "bg-warning");
+    getGlobalToast()("⏳ กำลังค้นหาไฟล์สำรองข้อมูลบน Google Drive...");
+
+    let accessToken = null;
+    try {
+      accessToken = typeof window.getGoogleDriveAccessToken === 'function'
+        ? await window.getGoogleDriveAccessToken(true)
+        : window.googleDriveAccessToken;
+    } catch (authErr) {
+      throw new Error(authErr.message || "ไม่สามารถเชื่อมต่อ Google Drive ได้ กรุณาเข้าสู่ระบบ Google Account ก่อน");
+    }
+
+    if (!accessToken) {
+      throw new Error("ไม่พบ Token สำหรับการเข้าถึง Google Drive");
+    }
+
+    // Find "Google AI Studio" -> "FloraGarden_Backups" root
+    const aiStudioFolderId = await findOrCreateDriveFolder(accessToken, 'Google AI Studio');
+    const rootFolderId = await findOrCreateDriveFolder(accessToken, 'FloraGarden_Backups', aiStudioFolderId);
+    const dbFolderId = await findOrCreateDriveFolder(accessToken, 'database', rootFolderId);
+
+    window.updateBackupProgress(30, "กำลังอ่านรายชื่อไฟล์สำรองจาก Google Drive...", "สแกนไฟล์ .json ในโฟลเดอร์ database...", true, "bg-warning");
+
+    const filesMap = await listFilesInDriveFolder(accessToken, dbFolderId);
+    const jsonFiles = Array.from(filesMap.values()).filter(f => f.name.endsWith('.json'));
+
+    if (jsonFiles.length === 0) {
+      window.updateBackupProgress(0, "ไม่พบไฟล์สำรองใน Google Drive", "โฟลเดอร์ Google AI Studio/FloraGarden_Backups/database ยังไม่มีไฟล์ .json", true, "bg-danger");
+      alert("⚠️ ไม่พบไฟล์สำรองข้อมูล (.json) ในโฟลเดอร์ Google AI Studio/FloraGarden_Backups/database บน Google Drive ของคุณ\n\nกรุณากดปุ่ม 'สำรองข้อมูลสู่ Google Drive' ก่อนเพื่อสร้างไฟล์สำรองครับ");
+      return;
+    }
+
+    // Sort files: latest first
+    jsonFiles.sort((a, b) => new Date(b.createdTime || b.modifiedTime || 0) - new Date(a.createdTime || a.modifiedTime || 0));
+
+    // Choose file: if latest exists or user picks
+    let selectedFile = jsonFiles[0];
+    if (jsonFiles.length > 1) {
+      const fileOptions = jsonFiles.slice(0, 10).map((f, idx) => `${idx + 1}. ${f.name} (${f.createdTime ? new Date(f.createdTime).toLocaleString('th-TH') : ''})`).join('\n');
+      const pick = prompt(`📁 พบไฟล์สำรองบน Google Drive ${jsonFiles.length} รายการ\nระบุหมายเลขไฟล์ที่ต้องการกู้คืน (1-${Math.min(jsonFiles.length, 10)}) หรือกด OK เพื่อเลือกไฟล์ล่าสุด:\n\n${fileOptions}`, "1");
+      if (pick === null) return;
+      const num = parseInt(pick.trim(), 10);
+      if (!isNaN(num) && num >= 1 && num <= jsonFiles.length) {
+        selectedFile = jsonFiles[num - 1];
+      }
+    }
+
+    window.updateBackupProgress(60, `กำลังดาวน์โหลดไฟล์ ${selectedFile.name}...`, "อ่านเนื้อหาไฟล์สำรองข้อมูลจาก Google Drive...", true, "bg-warning");
+
+    const jsonText = await downloadFileFromDrive(accessToken, selectedFile.id);
+    const parsed = JSON.parse(jsonText);
+
+    if (!parsed || typeof parsed !== 'object' || (!parsed.equipmentList && !parsed.employeeList && !parsed.transactionHistory)) {
+      throw new Error("โครงสร้างไฟล์สำรองจาก Google Drive ไม่ถูกต้อง");
+    }
+
+    tempParsedRestoreData = parsed;
+    window.displayRestoreSummary(parsed, `Google Drive: ${selectedFile.name}`);
+
+    window.updateBackupProgress(100, "อ่านไฟล์สำรองจาก Google Drive สำเร็จ", `พร้อมตรวจสอบและกู้คืนข้อมูล (${selectedFile.name})`, true, "bg-success");
+    getGlobalToast()(`🟢 โหลดไฟล์สำรอง "${selectedFile.name}" จาก Google Drive เรียบร้อยแล้ว!`);
+
+    const previewCard = document.getElementById('restorePreviewCard');
+    if (previewCard) {
+      previewCard.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (err) {
+    console.error("Google Drive restore fetch error:", err);
+    window.updateBackupProgress(0, "เกิดข้อผิดพลาดในการอ่านไฟล์จาก Google Drive", err.message, true, "bg-danger");
+    alert("เกิดข้อผิดพลาดขณะอ่านข้อมูลจาก Google Drive: " + err.message);
   }
 };
 
