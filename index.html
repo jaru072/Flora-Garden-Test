@@ -4342,20 +4342,29 @@
 
           <!-- Process Progress Bar Card -->
           <div id="backupProgressContainer" class="card border border-2 border-primary border-opacity-25 shadow-sm rounded-4 p-3.5 bg-white mb-4 d-none">
-            <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
               <span class="fw-bold text-dark fs-7 d-flex align-items-center gap-2">
                 <span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true" id="backupProgressSpinner"></span>
                 <i class="bi bi-cpu-fill text-primary me-1" id="backupProgressIcon"></i>
                 <span id="backupProgressTitle">กำลังประมวลผล...</span>
               </span>
-              <span class="badge bg-primary rounded-pill px-3 py-1 fs-7 fw-bold" id="backupProgressPercent">0%</span>
+              <div class="d-flex align-items-center gap-2">
+                <!-- Elapsed Timer Badge (Red Font) -->
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs" id="backupProgressTimerBadge" title="เวลาที่ใช้ในการประมวลผล">
+                  <i class="bi bi-stopwatch text-danger" id="backupProgressTimerIcon"></i>
+                  <span id="backupProgressTimerLabel">เวลา:</span>
+                  <span class="font-monospace text-danger fw-bolder" id="backupProgressTimer">00:00</span>
+                </span>
+                <!-- Percentage Badge -->
+                <span class="badge bg-primary rounded-pill px-3 py-1 fs-7 fw-bold" id="backupProgressPercent">0%</span>
+              </div>
             </div>
             <div class="progress rounded-pill overflow-hidden shadow-inner" style="height: 16px;">
               <div id="backupProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary fw-bold fs-8" role="progressbar" style="width: 0%">0%</div>
             </div>
-            <div class="d-flex align-items-center justify-content-between mt-2 fs-8 text-muted">
+            <div class="d-flex align-items-center justify-content-between mt-2 fs-8 text-muted flex-wrap gap-1">
               <span id="backupProgressText">ระบบกำลังดำเนินการ กรุณารอสักครู่...</span>
-              <span class="fw-semibold text-success"><i class="bi bi-check-all me-1"></i>จะเสร็จครบ 100% เมื่อประมวลผลสมบูรณ์</span>
+              <span class="fw-semibold text-success" id="backupProgressSubStatus"><i class="bi bi-check-all me-1"></i>จะเสร็จครบ 100% เมื่อประมวลผลสมบูรณ์</span>
             </div>
           </div>
 
@@ -4459,7 +4468,7 @@
             <!-- Card 6: Google Drive Cloud Backup & Restore Integration (Uncompressed, Folder Structure, Progress Bar) -->
             <div class="col-12 mt-2">
               <div class="card border-2 shadow-sm rounded-4 p-3.5 bg-white border-primary">
-                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3 pb-2 border-bottom">
+                <!-- <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3 pb-2 border-bottom">
                   <div class="d-flex align-items-center gap-3">
                     <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style="width: 48px; height: 48px;">
                       <i class="bi bi-google fs-4"></i>
@@ -4474,7 +4483,7 @@
                       <p class="text-muted fs-8 mb-0 mt-0.5">สำรองฐานข้อมูล Firestore และรูปภาพต้นฉบับแยกโฟลเดอร์ลง Google Drive โดยตรง ไม่บีบอัด .zip พร้อมระบบ Smart Diff และแถบ Progress Bar</p>
                     </div>
                   </div>
-                </div>
+                </div> -->
 
                 <!-- Google Drive Action Buttons -->
                 <div class="row g-2.5">
@@ -4600,6 +4609,33 @@
             <div>
               <h6 class="fw-bold text-success mb-1 fs-6">🛡️ จะไม่ลบไฟล์รูปภาพใน Firebase Storage</h6>
               <p class="text-muted fs-8 mb-0">รูปภาพทั้งหมด (รูปอุปกรณ์, รูปพนักงาน) จะยังคงอยู่ใน Firebase Storage ปลอดภัย 100% ไม่ถูกลบ</p>
+            </div>
+          </div>
+
+          <!-- Target Database Identification Card -->
+          <div class="p-3 bg-white border border-danger border-opacity-50 rounded-3 mb-3 shadow-2xs">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="badge bg-danger text-white px-2.5 py-1 fs-8 fw-bold">
+                <i class="bi bi-database-exclamation me-1"></i> เป้าหมายฐานข้อมูลที่จะถูกลบ
+              </span>
+              <span class="badge bg-secondary-subtle text-dark border px-2 py-1 fs-8" id="purgeTargetProjectIdBadge">
+                Project: flora-gaden
+              </span>
+            </div>
+            <div class="mb-2">
+              <div class="fs-8 text-secondary mb-0.5">โปรเจ็กต์ / ระบบ (Project Name):</div>
+              <div class="fw-bold text-danger fs-6 d-flex align-items-center gap-1.5" id="purgeTargetProjectName">
+                <i class="bi bi-folder2-open text-danger"></i> <span>Flora Garden Test</span>
+              </div>
+            </div>
+            <div class="p-2 bg-light rounded-2 border border-secondary-subtle">
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="fs-8 text-muted fw-bold">Database ID:</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle fs-8">Firestore</span>
+              </div>
+              <div class="font-monospace text-dark fw-bold fs-8 text-break select-all user-select-all" id="purgeTargetDbId">
+                ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1
+              </div>
             </div>
           </div>
 

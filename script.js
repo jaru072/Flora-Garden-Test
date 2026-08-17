@@ -147,7 +147,7 @@
       try {
         const fsSettings = {
           experimentalForceLongPolling: true,
-          experimentalAutoDetectLongPolling: true
+          experimentalAutoDetectLongPolling: false
         };
         const customDbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)")
           ? firebaseConfig.firestoreDatabaseId
@@ -413,33 +413,74 @@
       }
     };
 
-    // Helper to get Google Drive Access Token (prompts popup if not available)
-    window.getGoogleDriveAccessToken = async function(promptIfMissing = true) {
-      if (window.googleDriveAccessToken) {
-        return window.googleDriveAccessToken;
+    // Helper to get Google Drive Access Token (cached with mutex to prevent duplicate popups)
+    let driveAuthPromise = null;
+    let lastAuthAttemptTime = 0;
+
+    window.getGoogleDriveAccessToken = async function(promptIfMissing = true, forceRefresh = false) {
+      if (driveAuthPromise) {
+        return await driveAuthPromise;
       }
-      const stored = sessionStorage.getItem('google_drive_access_token');
-      if (stored) {
-        window.googleDriveAccessToken = stored;
-        return stored;
+
+      const now = Date.now();
+      if (!forceRefresh) {
+        if (window.googleDriveAccessToken) {
+          return window.googleDriveAccessToken;
+        }
+        const stored = localStorage.getItem('google_drive_access_token') || sessionStorage.getItem('google_drive_access_token');
+        const expiresAt = parseInt(localStorage.getItem('google_drive_token_expires') || '0', 10);
+        if (stored && (expiresAt === 0 || expiresAt > now + 60000)) {
+          window.googleDriveAccessToken = stored;
+          return stored;
+        }
+      } else {
+        window.googleDriveAccessToken = null;
+        localStorage.removeItem('google_drive_access_token');
+        localStorage.removeItem('google_drive_token_expires');
+        sessionStorage.removeItem('google_drive_access_token');
       }
+
       if (!promptIfMissing) return null;
 
-      if (!auth) auth = getAuth();
-      if (!googleProvider) {
-        googleProvider = new GoogleAuthProvider();
+      // Prevent spamming popup within 2 seconds
+      if (now - lastAuthAttemptTime < 2000 && !forceRefresh) {
+        if (window.googleDriveAccessToken) return window.googleDriveAccessToken;
       }
-      googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-      googleProvider.setCustomParameters({ prompt: 'select_account' });
+      lastAuthAttemptTime = now;
 
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        window.googleDriveAccessToken = credential.accessToken;
-        sessionStorage.setItem('google_drive_access_token', credential.accessToken);
-        return credential.accessToken;
-      }
-      throw new Error("ไม่ได้รับสิทธิ์หรือ Access Token จาก Google Drive");
+      driveAuthPromise = (async () => {
+        try {
+          if (!auth) auth = getAuth();
+          if (!googleProvider) {
+            googleProvider = new GoogleAuthProvider();
+          }
+          googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+          googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+          const result = await signInWithPopup(auth, googleProvider);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            window.googleDriveAccessToken = credential.accessToken;
+            localStorage.setItem('google_drive_access_token', credential.accessToken);
+            localStorage.setItem('google_drive_token_expires', String(Date.now() + 3500 * 1000));
+            sessionStorage.setItem('google_drive_access_token', credential.accessToken);
+            return credential.accessToken;
+          }
+          throw new Error("ไม่ได้รับสิทธิ์หรือ Access Token จาก Google Drive กรุณาลองใหม่อีกครั้ง");
+        } catch (popupErr) {
+          console.error("Google Drive Token Popup Error:", popupErr);
+          if (popupErr.code === 'auth/popup-closed-by-user') {
+            throw new Error("ยกเลิกการเข้าสู่ระบบ Google Drive (หน้าต่าง Popup ถูกปิด)");
+          } else if (popupErr.code === 'auth/unauthorized-domain') {
+            throw new Error(`โดเมนนี้ยังไม่ได้รับอนุญาตใน Firebase Authentication (${window.location.hostname})`);
+          }
+          throw popupErr;
+        } finally {
+          driveAuthPromise = null;
+        }
+      })();
+
+      return await driveAuthPromise;
     };
 
     // Email Login
@@ -12930,6 +12971,32 @@
       }
     };
 
+    // Helper to get friendly Project and Database info for safety displays
+    window.getFriendlyProjectAndDbInfo = function() {
+      const cfg = (typeof firebaseConfig !== 'undefined' ? firebaseConfig : (window.firebaseConfig || {}));
+      const projId = cfg.projectId || 'flora-gaden';
+      const dbId = cfg.firestoreDatabaseId || '(default)';
+      
+      let friendlyName = 'Flora Garden System';
+      const dbLower = (dbId || '').toLowerCase();
+      if (dbLower.includes('floragardentest')) {
+        friendlyName = 'Flora Garden Test';
+      } else if (dbLower.includes('floragardenv2')) {
+        friendlyName = 'Flora Garden V.2';
+      } else if (dbLower.includes('floragardennew')) {
+        friendlyName = 'Flora Garden New';
+      } else if (dbId === '(default)' || !dbId) {
+        friendlyName = 'Flora Garden (Default)';
+      } else {
+        friendlyName = `Flora Garden (${projId})`;
+      }
+      return {
+        projectName: friendlyName,
+        projectId: projId,
+        databaseId: dbId
+      };
+    };
+
     // Function to show the custom confirmation modal for database purge (PRESERVING Firebase Storage images)
     window.purgeEntireDatabaseAndStorage = function() {
       const modalEl = document.getElementById('confirmPurgeDbModal');
@@ -12942,12 +13009,28 @@
         btn.innerHTML = '<i class="bi bi-trash3-fill me-1.5"></i> ยืนยันลบฐานข้อมูลทันที';
       }
 
+      // Populate dynamic Database ID and Project Name in the confirmation modal
+      const info = window.getFriendlyProjectAndDbInfo();
+      const projNameEl = document.getElementById('purgeTargetProjectName');
+      const dbIdEl = document.getElementById('purgeTargetDbId');
+      const projBadgeEl = document.getElementById('purgeTargetProjectIdBadge');
+
+      if (projNameEl) {
+        projNameEl.innerHTML = `<i class="bi bi-folder2-open text-danger me-1"></i> <span>${info.projectName}</span>`;
+      }
+      if (dbIdEl) {
+        dbIdEl.textContent = info.databaseId;
+      }
+      if (projBadgeEl) {
+        projBadgeEl.textContent = `Project: ${info.projectId}`;
+      }
+
       if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
         const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         modal.show();
       } else {
-        // Fallback confirmation
-        const c1 = confirm("⚠️ คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการ 'ลบฐานข้อมูลทั้งหมด' ?\n\n*หมายเหตุ: จะไม่ลบไฟล์รูปภาพใน Firebase Storage (รูปภาพจะยังคงอยู่ใน Storage ปลอดภัย)*");
+        // Fallback confirmation with project and database ID details
+        const c1 = confirm(`⚠️ คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการ 'ลบฐานข้อมูลทั้งหมด' ?\n\n📌 โปรเจ็กต์: ${info.projectName}\n📌 Database ID: ${info.databaseId}\n📌 Firebase Project: ${info.projectId}\n\n*หมายเหตุ: จะไม่ลบไฟล์รูปภาพใน Firebase Storage (รูปภาพจะยังคงอยู่ใน Storage ปลอดภัย)*`);
         if (c1) {
           window.executeConfirmedPurgeDatabase();
         }

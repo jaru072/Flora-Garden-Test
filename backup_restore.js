@@ -87,6 +87,34 @@ function getComprehensiveLocationsList() {
   return Array.from(set).filter(Boolean);
 }
 
+// Helper to refresh live database stats inside Backup/Restore modal
+window.refreshBackupModalLiveStats = function() {
+  const equipCount = (window.equipmentList || []).length;
+  const empCount = (window.employeeList || []).length;
+  const txCount = (window.transactionHistory || []).length;
+  const attCount = (window.attendanceLogs || []).length;
+  const metaCount = (window.categoriesList || []).length + (window.departmentsList || []).length;
+
+  let imageCount = 0;
+  (window.equipmentList || []).forEach(item => { if (item && item.imageUrl) imageCount++; });
+  (window.employeeList || []).forEach(emp => { if (emp && emp.photoUrl) imageCount++; });
+
+  const elEquip = document.getElementById('backupCountEquip');
+  const elEmp = document.getElementById('backupCountEmp');
+  const elTx = document.getElementById('backupCountTx');
+  const elAtt = document.getElementById('backupCountAtt');
+  const elMeta = document.getElementById('backupCountMeta');
+  const elImg = document.getElementById('backupCountImg');
+
+  const audCount = (window.auditLogs || []).length;
+  if (elEquip) elEquip.textContent = `${equipCount} รายการ`;
+  if (elEmp) elEmp.textContent = `${empCount} คน`;
+  if (elTx) elTx.textContent = `${txCount} รายการ (+ audit ${audCount})`;
+  if (elAtt) elAtt.textContent = `${attCount} รายการ`;
+  if (elMeta) elMeta.textContent = `${metaCount} หมวด/แผนก`;
+  if (elImg) elImg.textContent = `${imageCount} รูปภาพ`;
+};
+
 // 1. Open Backup/Restore Modal
 window.openBackupRestoreModal = function() {
   const isAuthorized = (typeof window.isThammaSrithongAdminStrict === 'function' && window.isThammaSrithongAdminStrict()) ||
@@ -96,30 +124,7 @@ window.openBackupRestoreModal = function() {
     return;
   }
   try {
-    const equipCount = (window.equipmentList || []).length;
-    const empCount = (window.employeeList || []).length;
-    const txCount = (window.transactionHistory || []).length;
-    const attCount = (window.attendanceLogs || []).length;
-    const metaCount = (window.categoriesList || []).length + (window.departmentsList || []).length;
-
-    let imageCount = 0;
-    (window.equipmentList || []).forEach(item => { if (item && item.imageUrl) imageCount++; });
-    (window.employeeList || []).forEach(emp => { if (emp && emp.photoUrl) imageCount++; });
-
-    const elEquip = document.getElementById('backupCountEquip');
-    const elEmp = document.getElementById('backupCountEmp');
-    const elTx = document.getElementById('backupCountTx');
-    const elAtt = document.getElementById('backupCountAtt');
-    const elMeta = document.getElementById('backupCountMeta');
-    const elImg = document.getElementById('backupCountImg');
-
-    const audCount = (window.auditLogs || []).length;
-    if (elEquip) elEquip.textContent = `${equipCount} รายการ`;
-    if (elEmp) elEmp.textContent = `${empCount} คน`;
-    if (elTx) elTx.textContent = `${txCount} รายการ (+ audit ${audCount})`;
-    if (elAtt) elAtt.textContent = `${attCount} รายการ`;
-    if (elMeta) elMeta.textContent = `${metaCount} หมวด/แผนก`;
-    if (elImg) elImg.textContent = `${imageCount} รูปภาพ`;
+    window.refreshBackupModalLiveStats();
 
     tempParsedRestoreData = null;
     if (typeof window.updateBackupProgress === 'function') {
@@ -147,12 +152,147 @@ window.openBackupRestoreModal = function() {
   }
 };
 
+// ==================== 2. PROGRESS BAR & TIMER CONTROLLER ====================
+let backupTimerInterval = null;
+let backupTimerStartTime = null;
+let backupTimerElapsedMs = 0;
+let isBackupTimerLocked = false;
+
+window.formatBackupTimerDisplay = function(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
+window.startBackupTimer = function() {
+  if (backupTimerInterval) {
+    clearInterval(backupTimerInterval);
+    backupTimerInterval = null;
+  }
+  isBackupTimerLocked = false;
+  backupTimerStartTime = Date.now();
+  backupTimerElapsedMs = 0;
+
+  const timerElems = document.querySelectorAll('#backupProgressTimer');
+  const timerBadges = document.querySelectorAll('#backupProgressTimerBadge');
+  const timerIcons = document.querySelectorAll('#backupProgressTimerIcon');
+  const timerLabels = document.querySelectorAll('#backupProgressTimerLabel');
+
+  timerElems.forEach(el => {
+    el.textContent = '00:00';
+    el.className = 'font-monospace text-danger fw-bolder';
+  });
+  timerBadges.forEach(b => {
+    b.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
+  });
+  timerIcons.forEach(i => {
+    i.className = 'bi bi-stopwatch text-danger';
+  });
+  timerLabels.forEach(l => {
+    l.textContent = 'เวลา:';
+  });
+
+  backupTimerInterval = setInterval(() => {
+    if (!backupTimerStartTime || isBackupTimerLocked) return;
+    backupTimerElapsedMs = Date.now() - backupTimerStartTime;
+    const formatted = window.formatBackupTimerDisplay(backupTimerElapsedMs);
+    document.querySelectorAll('#backupProgressTimer').forEach(el => {
+      el.textContent = formatted;
+    });
+  }, 200);
+};
+
+window.stopBackupTimer = function(markComplete = false) {
+  if (backupTimerInterval) {
+    clearInterval(backupTimerInterval);
+    backupTimerInterval = null;
+  }
+  if (backupTimerStartTime && !isBackupTimerLocked) {
+    backupTimerElapsedMs = Date.now() - backupTimerStartTime;
+  }
+  isBackupTimerLocked = true;
+
+  const formatted = window.formatBackupTimerDisplay(backupTimerElapsedMs || 0);
+  const totalSec = Math.max(0, Math.floor((backupTimerElapsedMs || 0) / 1000));
+  
+  document.querySelectorAll('#backupProgressTimer').forEach(el => {
+    el.textContent = formatted;
+    el.className = 'font-monospace text-danger fw-bolder fs-6';
+  });
+
+  if (markComplete) {
+    const timerBadges = document.querySelectorAll('#backupProgressTimerBadge');
+    const timerIcons = document.querySelectorAll('#backupProgressTimerIcon');
+    const timerLabels = document.querySelectorAll('#backupProgressTimerLabel');
+    timerBadges.forEach(b => {
+      b.className = 'badge bg-danger bg-opacity-15 text-danger border border-danger border-opacity-35 rounded-pill px-3.5 py-1.5 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-sm';
+    });
+    timerIcons.forEach(i => {
+      i.className = 'bi bi-check-circle-fill text-danger fs-6';
+    });
+    timerLabels.forEach(l => {
+      l.textContent = '⏱️ ใช้เวลา:';
+    });
+
+    const subStatus = document.querySelectorAll('#backupProgressSubStatus');
+    subStatus.forEach(s => {
+      s.innerHTML = `<span class="badge bg-danger text-white px-2.5 py-1 rounded-pill fw-bold shadow-2xs me-1"><i class="bi bi-stopwatch-fill me-1"></i>ใช้เวลาประมวลผล: ${formatted} (${totalSec} วินาที)</span> <i class="bi bi-check-circle-fill text-success ms-1"></i> ดำเนินการเสร็จสมบูรณ์ 100%`;
+    });
+  }
+};
+
+window.resetBackupTimer = function() {
+  if (backupTimerInterval) {
+    clearInterval(backupTimerInterval);
+    backupTimerInterval = null;
+  }
+  isBackupTimerLocked = false;
+  backupTimerStartTime = null;
+  backupTimerElapsedMs = 0;
+
+  document.querySelectorAll('#backupProgressTimer').forEach(el => {
+    el.textContent = '00:00';
+    el.className = 'font-monospace text-danger fw-bolder';
+  });
+  const timerBadges = document.querySelectorAll('#backupProgressTimerBadge');
+  const timerIcons = document.querySelectorAll('#backupProgressTimerIcon');
+  const timerLabels = document.querySelectorAll('#backupProgressTimerLabel');
+  timerBadges.forEach(b => {
+    b.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
+  });
+  timerIcons.forEach(i => {
+    i.className = 'bi bi-stopwatch text-danger';
+  });
+  timerLabels.forEach(l => {
+    l.textContent = 'เวลา:';
+  });
+};
+
 // 2. Progress Bar Updater
 window.updateBackupProgress = function(percent, statusText, detailsText = '', isVisible = true, colorClass = 'bg-primary') {
   const containers = document.querySelectorAll('#backupProgressContainer');
   if (!containers || containers.length === 0) return;
 
   const cleanPercent = Math.min(100, Math.max(0, Math.round(percent)));
+
+  // Auto control timer state based on visibility and percentage
+  if (!isVisible) {
+    window.resetBackupTimer();
+  } else if (colorClass && colorClass.includes('danger')) {
+    // Error state: freeze timer without completing
+    window.stopBackupTimer(false);
+  } else if (cleanPercent >= 100) {
+    // Process complete: immediately freeze timer with red text & summary
+    window.stopBackupTimer(true);
+  } else if (cleanPercent > 0 && (cleanPercent <= 15 || isBackupTimerLocked)) {
+    // When a new process starts (low percentage > 0) or if it was locked from previous run, restart fresh
+    window.startBackupTimer();
+  } else if (cleanPercent > 0 && cleanPercent < 100) {
+    if (!backupTimerInterval && !backupTimerStartTime) {
+      window.startBackupTimer();
+    }
+  }
 
   containers.forEach(container => {
     if (!isVisible) {
@@ -186,6 +326,13 @@ window.updateBackupProgress = function(percent, statusText, detailsText = '', is
       } else {
         spinnerElem.classList.remove('d-none');
       }
+    }
+
+    // Auto-scroll to progress bar when it is shown or active
+    if (isVisible && (cleanPercent <= 15 || cleanPercent === 70 || cleanPercent === 90 || cleanPercent >= 100)) {
+      try {
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (scrollErr) {}
     }
   });
 };
@@ -1231,6 +1378,11 @@ window.initBackupDropZone = function() {
 
 // 16. Display Restore Summary
 window.displayRestoreSummary = function(parsed, fileName) {
+  const nameSpan = document.getElementById('restoreFileName');
+  if (nameSpan && fileName) {
+    nameSpan.textContent = fileName;
+  }
+
   const detailsBox = document.getElementById('restoreSummaryDetails');
   if (detailsBox) {
     const eqC = (parsed.equipmentList || []).length;
@@ -1301,10 +1453,24 @@ window.displayRestoreSummary = function(parsed, fileName) {
   }
 
   const previewCard = document.getElementById('restorePreviewCard');
-  if (previewCard) previewCard.classList.remove('d-none');
+  if (previewCard) {
+    previewCard.classList.remove('d-none', 'bg-success', 'border-success');
+    previewCard.classList.add('bg-warning', 'bg-opacity-10', 'border-warning');
+  }
+
+  const fileStatus = document.getElementById('restoreFileStatus');
+  if (fileStatus) {
+    fileStatus.className = "badge bg-info text-dark px-3 py-1 fs-7 fw-bold";
+    fileStatus.innerHTML = '<i class="bi bi-file-earmark-check me-1"></i>พร้อมกู้คืนข้อมูล';
+  }
 
   const btnRestore = document.getElementById('btnExecuteRestore');
-  if (btnRestore) btnRestore.classList.remove('d-none');
+  if (btnRestore) {
+    btnRestore.classList.remove('d-none');
+    btnRestore.disabled = false;
+    btnRestore.className = "btn btn-danger btn-lg rounded-pill px-4 py-2.5 fw-bold shadow-sm";
+    btnRestore.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1.5"></i> เริ่มต้นกู้คืนข้อมูล (Restore Database)';
+  }
 };
 
 // 17. Execute Restore Database
@@ -1317,20 +1483,13 @@ window.executeRestoreDatabase = async function() {
   const modeElem = document.querySelector('input[name="restoreMode"]:checked');
   const mode = modeElem ? modeElem.value : 'REPLACE';
 
-  const modeText = mode === 'REPLACE' ? 'เขียนทับข้อมูลเดิมทั้งหมด' : 'รวมข้อมูลใหม่เข้ากับข้อมูลเดิม';
-  const confirmed = typeof window.showConfirmDialog === 'function'
-    ? await window.showConfirmDialog({
-        title: "ฟื้นฟูข้อมูลระบบ",
-        message: `ยืนยันการฟื้นฟูข้อมูล (${modeText}) หรือไม่? ข้อมูลจะถูกปรับเปลี่ยนตามไฟล์สำรองทันที`,
-        type: mode === 'REPLACE' ? 'warning' : 'primary',
-        icon: 'bi-database-fill-up',
-        confirmText: 'เริ่มฟื้นฟูข้อมูล'
-      })
-    : confirm(`ยืนยันการฟื้นฟูข้อมูลระบบ?\nรูปแบบ: ${modeText}`);
-
-  if (!confirmed) return;
-
   try {
+    const progressElem = document.getElementById('backupProgressContainer');
+    if (progressElem) {
+      progressElem.classList.remove('d-none');
+      progressElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     window.updateBackupProgress(10, "กำลังเริ่มฟื้นฟูข้อมูล...", "อ่านและปรับแต่งโครงสร้างข้อมูลพร้อมตรวจสอบความถูกต้องของแผนก", true, "bg-warning");
 
     let equipmentList = window.equipmentList || [];
@@ -1565,8 +1724,29 @@ window.executeRestoreDatabase = async function() {
       }
     }
 
-    window.updateBackupProgress(100, "กู้คืนข้อมูลสำเร็จ 100%", "ฟื้นฟูข้อมูลและลิงก์รูปภาพสมบูรณ์เรียบร้อยแล้ว", true, "bg-success");
+    const fileNameElem = document.getElementById('restoreFileName');
+    const fileNameStr = fileNameElem ? fileNameElem.textContent : '';
+    const isDriveRestore = (tempParsedRestoreData && tempParsedRestoreData.storageType === 'GOOGLE_DRIVE_UNCOMPRESSED') ||
+                           fileNameStr.includes('Google Drive');
+    const sourceLabel = isDriveRestore ? "กู้คืนข้อมูลจาก Google Drive" : "กู้คืนข้อมูลระบบ";
 
+    const finalDurationMs = backupTimerElapsedMs || (backupTimerStartTime ? (Date.now() - backupTimerStartTime) : 0);
+    const formattedTimer = window.formatBackupTimerDisplay(finalDurationMs);
+    const totalSeconds = Math.max(0, Math.floor(finalDurationMs / 1000));
+    const timeDetailStr = `ใช้เวลาประมวลผล: ${formattedTimer} (${totalSeconds} วินาที)`;
+
+    // Explicitly freeze timer and mark complete
+    window.stopBackupTimer(true);
+
+    window.updateBackupProgress(
+      100, 
+      `${sourceLabel} สำเร็จ 100%`, 
+      `ฟื้นฟูข้อมูลและลิงก์รูปภาพสมบูรณ์เรียบร้อยแล้ว (${timeDetailStr})`, 
+      true, 
+      "bg-success"
+    );
+
+    // Refresh application views & tables
     if (typeof window.renderCategoryDropdowns === 'function') window.renderCategoryDropdowns();
     if (typeof window.populateDepartmentDropdowns === 'function') window.populateDepartmentDropdowns();
     if (typeof window.populateEmployeeDropdowns === 'function') window.populateEmployeeDropdowns();
@@ -1580,14 +1760,39 @@ window.executeRestoreDatabase = async function() {
     if (typeof window.renderAttendanceTable === 'function') window.renderAttendanceTable();
     if (typeof window.updateStats === 'function') window.updateStats();
 
-    setTimeout(() => {
-      const modalElem = document.getElementById('backupRestoreModal');
-      const modalInst = bootstrap.Modal.getInstance(modalElem);
-      if (modalInst) modalInst.hide();
-    }, 1500);
+    // Refresh live stats cards inside the active Backup/Restore modal
+    if (typeof window.refreshBackupModalLiveStats === 'function') {
+      window.refreshBackupModalLiveStats();
+    }
 
-    getGlobalToast()("🎉 ฟื้นฟูข้อมูลระบบและลิงก์รูปภาพ เรียบร้อยแล้ว!");
-    alert("🎉 สำเร็จ! ระบบได้ฟื้นฟูข้อมูลและลิงก์รูปภาพทั้งหมดเรียบร้อยแล้ว");
+    // Update preview card to reflect completed status and processing duration
+    const previewCard = document.getElementById('restorePreviewCard');
+    if (previewCard) {
+      previewCard.classList.remove('bg-warning', 'border-warning');
+      previewCard.classList.add('bg-success', 'bg-opacity-10', 'border-success');
+      const fileStatus = document.getElementById('restoreFileStatus');
+      if (fileStatus) {
+        fileStatus.className = "badge bg-success px-3 py-1.5 fs-7 fw-bold shadow-2xs";
+        fileStatus.innerHTML = `<i class="bi bi-check2-circle me-1"></i>กู้คืนสำเร็จ 100%`;
+      }
+      const btnRestore = document.getElementById('btnExecuteRestore');
+      if (btnRestore) {
+        btnRestore.className = "btn btn-success btn-lg rounded-pill px-4 py-2.5 fw-bold shadow-sm";
+        btnRestore.disabled = true;
+        btnRestore.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i> ${sourceLabel} สำเร็จเรียบร้อย (${timeDetailStr})`;
+      }
+    }
+
+    // Ensure progress container stays centered and visible
+    if (progressElem) {
+      progressElem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    getGlobalToast()(`🎉 ${sourceLabel} สำเร็จเรียบร้อย! (${timeDetailStr})`);
+
+    if (typeof window.showFeedbackPopup === 'function') {
+      window.showFeedbackPopup(`${sourceLabel} สำเร็จ`, `ระบบได้ฟื้นฟูข้อมูลและรูปภาพทั้งหมดเรียบร้อยแล้ว\n⏱️ ${timeDetailStr}`);
+    }
   } catch (err) {
     console.error("Restore execution error:", err);
     window.updateBackupProgress(0, "เกิดข้อผิดพลาดในการกู้คืนข้อมูล", err.message, true, "bg-danger");
@@ -1721,6 +1926,37 @@ window.syncAllImagesToFirebaseStorage = async function() {
 
 // ==================== 20. GOOGLE DRIVE BACKUP & RESTORE INTEGRATION ====================
 
+// Safe fetch with auto token refresh on 401 Unauthorized
+let isRefreshingDriveToken = false;
+
+async function fetchWithDriveAuth(url, options = {}, retried = false) {
+  let token = window.googleDriveAccessToken || localStorage.getItem('google_drive_access_token') || sessionStorage.getItem('google_drive_access_token') || options.accessToken;
+  if (!token && typeof window.getGoogleDriveAccessToken === 'function') {
+    token = await window.getGoogleDriveAccessToken(true);
+  }
+  if (!token) throw new Error("ไม่พบสิทธิ์เข้าถึง Google Drive");
+
+  const headers = {
+    ...(options.headers || {}),
+    'Authorization': `Bearer ${token}`
+  };
+
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 && !retried && !isRefreshingDriveToken && typeof window.getGoogleDriveAccessToken === 'function') {
+    console.warn("Google Drive Token expired (401), refreshing token...");
+    isRefreshingDriveToken = true;
+    try {
+      const freshToken = await window.getGoogleDriveAccessToken(true, true);
+      if (freshToken) {
+        return await fetchWithDriveAuth(url, { ...options, accessToken: freshToken }, true);
+      }
+    } finally {
+      isRefreshingDriveToken = false;
+    }
+  }
+  return res;
+}
+
 // Find or create a folder in Google Drive
 async function findOrCreateDriveFolder(accessToken, folderName, parentFolderId = null) {
   let query = `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
@@ -1728,9 +1964,7 @@ async function findOrCreateDriveFolder(accessToken, folderName, parentFolderId =
     query += ` and '${parentFolderId}' in parents`;
   }
   const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive`;
-  const searchRes = await fetch(searchUrl, {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
+  const searchRes = await fetchWithDriveAuth(searchUrl, { accessToken });
   if (searchRes.ok) {
     const data = await searchRes.json();
     if (data.files && data.files.length > 0) {
@@ -1745,10 +1979,10 @@ async function findOrCreateDriveFolder(accessToken, folderName, parentFolderId =
     ...(parentFolderId ? { parents: [parentFolderId] } : {})
   };
 
-  const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+  const createRes = await fetchWithDriveAuth('https://www.googleapis.com/drive/v3/files?fields=id,name', {
     method: 'POST',
+    accessToken,
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(metadata)
@@ -1769,9 +2003,7 @@ async function listFilesInDriveFolder(accessToken, folderId) {
   let pageToken = '';
   do {
     const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,size,mimeType,createdTime,modifiedTime,webViewLink)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
+    const res = await fetchWithDriveAuth(url, { accessToken });
     if (!res.ok) break;
     const data = await res.json();
     if (data.files) {
@@ -1804,10 +2036,10 @@ async function uploadFileToDrive(accessToken, { name, mimeType, blob, parentFold
     ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&fields=id,name,size,webViewLink`
     : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink`;
 
-  const res = await fetch(url, {
+  const res = await fetchWithDriveAuth(url, {
     method: existingFileId ? 'PATCH' : 'POST',
+    accessToken,
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': `multipart/related; boundary=${boundary}`
     },
     body: multipartBlob
@@ -1829,9 +2061,7 @@ async function uploadFileToDrive(accessToken, { name, mimeType, blob, parentFold
 // Download file contents from Google Drive
 async function downloadFileFromDrive(accessToken, fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-  const res = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
+  const res = await fetchWithDriveAuth(url, { accessToken });
   if (!res.ok) {
     throw new Error(`ดาวน์โหลดไฟล์จาก Google Drive ไม่สำเร็จ (${res.status})`);
   }
@@ -2163,11 +2393,12 @@ window.startGoogleDriveBackup = async function() {
   }
 };
 
-// Execute Google Drive Restore
+// Execute Google Drive Restore (Fetch & Preview from Google Drive, Progress Bar runs upon confirmation)
 window.startGoogleDriveRestore = async function() {
   try {
-    window.updateBackupProgress(10, "กำลังเชื่อมต่อกับ Google Drive...", "ค้นหาไฟล์สำรองข้อมูลในโฟลเดอร์ Google AI Studio > FloraGarden_Backups > database...", true, "bg-warning");
-    getGlobalToast()("⏳ กำลังค้นหาไฟล์สำรองข้อมูลบน Google Drive...");
+    // Hide previous progress bar until user confirms actual restore
+    window.updateBackupProgress(0, "", "", false);
+    getGlobalToast()("⏳ กำลังเชื่อมต่อและค้นหาไฟล์สำรองข้อมูลบน Google Drive...");
 
     let accessToken = null;
     try {
@@ -2187,13 +2418,12 @@ window.startGoogleDriveRestore = async function() {
     const rootFolderId = await findOrCreateDriveFolder(accessToken, 'FloraGarden_Backups', aiStudioFolderId);
     const dbFolderId = await findOrCreateDriveFolder(accessToken, 'database', rootFolderId);
 
-    window.updateBackupProgress(30, "กำลังอ่านรายชื่อไฟล์สำรองจาก Google Drive...", "สแกนไฟล์ .json ในโฟลเดอร์ database...", true, "bg-warning");
+    getGlobalToast()("🔍 กำลังสแกนรายการไฟล์สำรอง (.json) ใน Google Drive...");
 
     const filesMap = await listFilesInDriveFolder(accessToken, dbFolderId);
     const jsonFiles = Array.from(filesMap.values()).filter(f => f.name.endsWith('.json'));
 
     if (jsonFiles.length === 0) {
-      window.updateBackupProgress(0, "ไม่พบไฟล์สำรองใน Google Drive", "โฟลเดอร์ Google AI Studio/FloraGarden_Backups/database ยังไม่มีไฟล์ .json", true, "bg-danger");
       alert("⚠️ ไม่พบไฟล์สำรองข้อมูล (.json) ในโฟลเดอร์ Google AI Studio/FloraGarden_Backups/database บน Google Drive ของคุณ\n\nกรุณากดปุ่ม 'สำรองข้อมูลสู่ Google Drive' ก่อนเพื่อสร้างไฟล์สำรองครับ");
       return;
     }
@@ -2213,7 +2443,7 @@ window.startGoogleDriveRestore = async function() {
       }
     }
 
-    window.updateBackupProgress(60, `กำลังดาวน์โหลดไฟล์ ${selectedFile.name}...`, "อ่านเนื้อหาไฟล์สำรองข้อมูลจาก Google Drive...", true, "bg-warning");
+    getGlobalToast()(`📥 กำลังดาวน์โหลดไฟล์ "${selectedFile.name}" จาก Google Drive...`);
 
     const jsonText = await downloadFileFromDrive(accessToken, selectedFile.id);
     const parsed = JSON.parse(jsonText);
@@ -2225,8 +2455,7 @@ window.startGoogleDriveRestore = async function() {
     tempParsedRestoreData = parsed;
     window.displayRestoreSummary(parsed, `Google Drive: ${selectedFile.name}`);
 
-    window.updateBackupProgress(100, "อ่านไฟล์สำรองจาก Google Drive สำเร็จ", `พร้อมตรวจสอบและกู้คืนข้อมูล (${selectedFile.name})`, true, "bg-success");
-    getGlobalToast()(`🟢 โหลดไฟล์สำรอง "${selectedFile.name}" จาก Google Drive เรียบร้อยแล้ว!`);
+    getGlobalToast()(`🟢 โหลดไฟล์ "${selectedFile.name}" สำเร็จ กรุณากดยืนยันการฟื้นฟูข้อมูลด้านล่าง`);
 
     const previewCard = document.getElementById('restorePreviewCard');
     if (previewCard) {
@@ -2234,7 +2463,7 @@ window.startGoogleDriveRestore = async function() {
     }
   } catch (err) {
     console.error("Google Drive restore fetch error:", err);
-    window.updateBackupProgress(0, "เกิดข้อผิดพลาดในการอ่านไฟล์จาก Google Drive", err.message, true, "bg-danger");
+    getGlobalToast()("❌ ไม่สามารถอ่านไฟล์จาก Google Drive: " + err.message);
     alert("เกิดข้อผิดพลาดขณะอ่านข้อมูลจาก Google Drive: " + err.message);
   }
 };
