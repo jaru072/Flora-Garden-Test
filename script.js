@@ -2503,13 +2503,13 @@
 
         if (item.status === 'VALID') {
           badgeHtml = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i>สมบูรณ์ (Storage)</span>`;
-          thumbHtml = `<img src="${item.imageUrl}" class="rounded-3 border style-object-cover" style="width: 44px; height: 44px;" onerror="this.src='https://via.placeholder.com/44?text=ERR'" />`;
+          thumbHtml = `<img src="${item.imageUrl}" loading="lazy" class="rounded-3 border style-object-cover" style="width: 44px; height: 44px;" onerror="this.src='https://via.placeholder.com/44?text=ERR'" />`;
         } else if (item.status === 'BROKEN') {
           badgeHtml = `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-2 py-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>ลิงก์เสีย / ไม่พบไฟล์</span>`;
           thumbHtml = `<div class="bg-danger bg-opacity-10 text-danger rounded-3 d-flex align-items-center justify-content-center border border-danger border-opacity-25" style="width: 44px; height: 44px;"><i class="bi bi-image-fill fs-5"></i></div>`;
         } else if (item.status === 'BASE64') {
           badgeHtml = `<span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 rounded-pill px-2 py-1"><i class="bi bi-file-earmark-code me-1"></i>Base64 (ยังไม่ได้ซิงก์)</span>`;
-          thumbHtml = `<img src="${item.imageUrl}" class="rounded-3 border style-object-cover" style="width: 44px; height: 44px;" />`;
+          thumbHtml = `<img src="${item.imageUrl}" loading="lazy" class="rounded-3 border style-object-cover" style="width: 44px; height: 44px;" />`;
         } else {
           badgeHtml = `<span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1"><i class="bi bi-dash-circle me-1"></i>ไม่มีรูปภาพ</span>`;
           thumbHtml = `<div class="bg-light text-secondary rounded-3 d-flex align-items-center justify-content-center border" style="width: 44px; height: 44px;"><i class="bi bi-card-image fs-5"></i></div>`;
@@ -4715,7 +4715,7 @@
                   <input type="checkbox" class="form-check-input emp-select-checkbox cursor-pointer" value="${emp.id}" ${isChecked ? 'checked' : ''} onchange="toggleEmployeeSelection('${emp.id}', this.checked)">
                 </td>
                 <td>
-                  <img src="${emp.photoUrl}" class="avatar-circle border" style="width: 38px; height: 38px; object-fit: cover;" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                  <img src="${emp.photoUrl}" loading="lazy" class="avatar-circle border" style="width: 38px; height: 38px; object-fit: cover;" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
                 </td>
                 <td>
                   <span class="badge bg-dark font-monospace px-2 py-1 fs-8">${typeof escapeHtml === 'function' ? escapeHtml(empCodeDisplay) : empCodeDisplay}</span>
@@ -4779,7 +4779,7 @@
                     <input type="checkbox" class="form-check-input cursor-pointer" value="${emp.id}" ${isChecked ? 'checked' : ''} onchange="toggleEmployeeSelection('${emp.id}', this.checked)" title="เลือกบุคลากร">
                   </div>
                   <div class="d-flex align-items-center gap-3 ms-4">
-                    <img src="${emp.photoUrl}" class="avatar-circle border" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                    <img src="${emp.photoUrl}" loading="lazy" class="avatar-circle border" alt="${typeof escapeHtml === 'function' ? escapeHtml(emp.name || '') : (emp.name || '')}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
                     <div>
                       <div class="fw-bold text-dark mb-1 fs-6">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>
                       <div class="fs-7 text-success fw-bold mb-1"><i class="bi bi-building me-1"></i>[${typeof escapeHtml === 'function' ? escapeHtml(empCodeDisplay) : empCodeDisplay}] ${typeof escapeHtml === 'function' ? escapeHtml(deptName) : deptName}</div>
@@ -5378,7 +5378,7 @@
             </td>
             <td class="ps-2" style="width: 70px;">
               <div class="position-relative ${isStaff ? 'cursor-pointer' : ''} d-inline-block" ${isStaff ? `onclick="openEquipmentPopupMenu('${item.id}')" title="คลิกรูปภาพเพื่อเปิดเมนู (Popup Menu)"` : ''}>
-                <img src="${item.imageUrl}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
+                <img src="${item.imageUrl}" loading="lazy" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
                 ${isStaff ? `
                   <span class="position-absolute bottom-0 end-0 bg-dark text-white rounded-circle p-1 d-flex align-items-center justify-content-center shadow-sm" style="width: 18px; height: 18px; font-size: 10px;">
                     <i class="bi bi-three-dots"></i>
@@ -10110,7 +10110,7 @@
             <td>${typeBadge}</td>
             <td>
               <div class="d-flex align-items-center gap-2">
-                <img src="${empAvatar}" class="rounded-circle border shadow-2xs" style="width: 28px; height: 28px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+                <img src="${empAvatar}" loading="lazy" class="rounded-circle border shadow-2xs" style="width: 28px; height: 28px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
                 <div>
                   <div class="fw-semibold text-dark fs-8 text-truncate" style="max-width: 170px;">${escapeHtml(empName)}</div>
                   <span class="badge bg-light text-secondary border fs-9 py-0.5">${escapeHtml(empDept)}</span>
@@ -10299,7 +10299,7 @@
               <tr class="${isOverdue ? 'overdue-pulse-row' : ''}">
                 <td>
                   <div class="d-flex align-items-center gap-2">
-                    <img src="${empAvatar}" class="rounded-circle border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;" />
+                    <img src="${empAvatar}" loading="lazy" class="rounded-circle border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;" />
                     <div>
                       <div class="fw-bold text-dark">${b.employeeName}</div>
                       ${b.empObj && b.empObj.employeeCode ? `<span class="badge bg-dark font-monospace fs-8">${b.empObj.employeeCode}</span>` : ''}
@@ -13783,7 +13783,7 @@
           rowsHtml += `
             <tr>
               <td class="ps-3 font-monospace fw-bold"><span class="badge bg-dark">${eq.code || eq.id}</span></td>
-              <td><img src="${eq.imageUrl || 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=100&auto=format&fit=crop&q=80'}" class="rounded-3 border shadow-sm" style="width: 42px; height: 42px; object-fit: cover;" /></td>
+              <td><img src="${eq.imageUrl || 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=100&auto=format&fit=crop&q=80'}" loading="lazy" class="rounded-3 border shadow-sm" style="width: 42px; height: 42px; object-fit: cover;" /></td>
               <td>
                 <div class="fw-bold text-dark">${eq.name}</div>
                 <div class="fs-8 text-muted">${eq.description || 'ไม่มีคำอธิบาย'}</div>
@@ -13833,7 +13833,7 @@
           rowsHtml += `
             <tr>
               <td class="ps-3 font-monospace fw-bold"><span class="badge bg-dark">${emp.id}</span></td>
-              <td><img src="${emp.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}" class="rounded-circle border shadow-sm" style="width: 40px; height: 40px; object-fit: cover;" /></td>
+              <td><img src="${emp.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}" loading="lazy" class="rounded-circle border shadow-sm" style="width: 40px; height: 40px; object-fit: cover;" /></td>
               <td>
                 <div class="fw-bold text-dark">${formatEmpName(emp)}</div>
                 <div class="fs-8 text-muted">${emp.email || '-'}</div>
