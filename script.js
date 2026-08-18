@@ -218,6 +218,15 @@
           if (typeof window.hideMandatoryLoginScreen === 'function') {
             window.hideMandatoryLoginScreen();
           }
+
+          // Trigger automatic daily hybrid backup for Admin
+          if (user.email === 'jaru072@gmail.com' || currentRole === 'ADMIN') {
+            setTimeout(() => {
+              if (typeof window.runHybridDailyBackup === 'function') {
+                window.runHybridDailyBackup(false).catch(e => console.warn("[AutoBackup]", e));
+              }
+            }, 3500);
+          }
         } else {
           console.log("Firebase Auth User initialized without active session. Defaulting to Admin Thamma Srithong.");
           if (lastKnownUserForLogout) {
@@ -238,6 +247,13 @@
           if (typeof window.hideMandatoryLoginScreen === 'function') {
             window.hideMandatoryLoginScreen();
           }
+
+          // Trigger automatic daily hybrid backup for Admin Default
+          setTimeout(() => {
+            if (typeof window.runHybridDailyBackup === 'function') {
+              window.runHybridDailyBackup(false).catch(e => console.warn("[AutoBackup]", e));
+            }
+          }, 3500);
         }
       });
     }
@@ -1339,14 +1355,47 @@
       ];
     }
 
-    // LocalStorage Helper Functions - Disabled database entity caching to ensure Cloud Firestore is single source of truth
+    // LocalStorage Helper Functions - Multi-tiered caching for instant 0ms app start
     function saveToLocalStorage() {
       try {
-        localStorage.removeItem('flora_employees');
-        localStorage.removeItem('flora_equipment');
-        localStorage.removeItem('flora_transactions');
-        localStorage.removeItem('flora_attendance');
-        localStorage.removeItem('flora_categories');
+        if (Array.isArray(employeeList) && employeeList.length > 0) {
+          try {
+            localStorage.setItem('flora_employees', JSON.stringify(employeeList));
+          } catch(eQuota) {
+            // If quota exceeded due to heavy base64, save sanitized version
+            const sanitized = employeeList.map(emp => ({
+              ...emp,
+              photoUrl: (emp.photoUrl && emp.photoUrl.length > 2000) ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' : emp.photoUrl
+            }));
+            try { localStorage.setItem('flora_employees', JSON.stringify(sanitized)); } catch(e){}
+          }
+        }
+        if (Array.isArray(equipmentList) && equipmentList.length > 0) {
+          try {
+            localStorage.setItem('flora_equipment', JSON.stringify(equipmentList));
+          } catch(eQuota) {
+            const sanitized = equipmentList.map(eq => ({
+              ...eq,
+              imageUrl: (eq.imageUrl && eq.imageUrl.length > 2000) ? DEFAULT_EQUIPMENT_IMAGE : eq.imageUrl
+            }));
+            try { localStorage.setItem('flora_equipment', JSON.stringify(sanitized)); } catch(e){}
+          }
+        }
+        if (Array.isArray(transactionHistory) && transactionHistory.length > 0) {
+          try {
+            localStorage.setItem('flora_transactions', JSON.stringify(transactionHistory));
+          } catch(e){}
+        }
+        if (Array.isArray(attendanceLogs) && attendanceLogs.length > 0) {
+          try {
+            localStorage.setItem('flora_attendance', JSON.stringify(attendanceLogs));
+          } catch(e){}
+        }
+        if (Array.isArray(categoriesList) && categoriesList.length > 0) {
+          try {
+            localStorage.setItem('flora_categories', JSON.stringify(categoriesList));
+          } catch(e){}
+        }
         if (departmentsList && Array.isArray(departmentsList) && departmentsList.length > 0) {
           localStorage.setItem('flora_departments', JSON.stringify(departmentsList));
         }
@@ -1354,18 +1403,57 @@
           localStorage.setItem('flora_locations', JSON.stringify(locationsList));
         }
       } catch (e) {
-        console.warn("LocalStorage cleanup notice:", e);
+        console.warn("LocalStorage save notice:", e);
       }
     }
 
     function loadFromLocalStorage() {
       try {
-        saveToLocalStorage();
-        employeeList = [];
-        equipmentList = [];
-        transactionHistory = [];
-        attendanceLogs = [];
-        categoriesList = [...defaultCategoriesList];
+        const savedEquip = localStorage.getItem('flora_equipment');
+        if (savedEquip) {
+          try {
+            const parsed = JSON.parse(savedEquip);
+            if (Array.isArray(parsed) && parsed.length > 0) equipmentList = parsed;
+          } catch(e){}
+        }
+
+        const savedEmps = localStorage.getItem('flora_employees');
+        if (savedEmps) {
+          try {
+            const parsed = JSON.parse(savedEmps);
+            if (Array.isArray(parsed) && parsed.length > 0) employeeList = parsed;
+          } catch(e){}
+        }
+
+        const savedTx = localStorage.getItem('flora_transactions');
+        if (savedTx) {
+          try {
+            const parsed = JSON.parse(savedTx);
+            if (Array.isArray(parsed) && parsed.length > 0) transactionHistory = parsed;
+          } catch(e){}
+        }
+
+        const savedAtt = localStorage.getItem('flora_attendance');
+        if (savedAtt) {
+          try {
+            const parsed = JSON.parse(savedAtt);
+            if (Array.isArray(parsed) && parsed.length > 0) attendanceLogs = parsed;
+          } catch(e){}
+        }
+
+        const savedCats = localStorage.getItem('flora_categories');
+        if (savedCats) {
+          try {
+            const parsed = JSON.parse(savedCats);
+            if (Array.isArray(parsed) && parsed.length > 0) categoriesList = parsed;
+            else categoriesList = [...defaultCategoriesList];
+          } catch(e) {
+            categoriesList = [...defaultCategoriesList];
+          }
+        } else {
+          categoriesList = [...defaultCategoriesList];
+        }
+
         const savedDepts = localStorage.getItem('flora_departments');
         if (savedDepts) {
           try {
@@ -1450,7 +1538,13 @@
       }
       if (typeof toggleTransTypeUI === 'function') toggleTransTypeUI();
 
-      if (isFirebaseReady) setupFirestoreListeners();
+      if (isFirebaseReady) {
+        setupFirestoreListeners();
+      } else {
+        setTimeout(() => {
+          if (isFirebaseReady) setupFirestoreListeners();
+        }, 500);
+      }
       setupEventListeners();
     }
 
@@ -14181,8 +14275,191 @@
       }
     }
 
+    let isInitialFetchCompleted = false;
+    let isListenersAttached = false;
+
+    async function fetchInitialFirestoreData(isRetry = false) {
+      if (!isFirebaseReady || !db) return;
+      try {
+        const [empSnap, attSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap] = await Promise.allSettled([
+          getDocs(collection(db, "employees")),
+          getDocs(collection(db, "attendance")),
+          getDocs(collection(db, "categories")),
+          getDocs(collection(db, "equipment")),
+          getDocs(collection(db, "transactions")),
+          getDocs(collection(db, "departments")),
+          getDocs(collection(db, "locations"))
+        ]);
+
+        let hasData = false;
+
+        if (empSnap.status === 'fulfilled' && !empSnap.value.empty) {
+          const deptMap = {
+            "เจ้าหน้าที่สำนักงาน (Staff)": "แผนกงานธุรการ",
+            "แผนกเรือนกระจกและเพาะชำ": "แผนกงานทดลอง",
+            "แผนกตกแต่งและตัดแต่งกิ่ง": "แผนกทีมเจดีย์/แปลง G",
+            "แผนกระบบน้ำและบำรุงดิน": "แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน",
+            "สวนกุหลาบและไม้ดอก": "แผนกทีมกุหลาบ",
+            "สวนไม้ผลและไม้ยืนต้น": "แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)",
+            "แผนกดูแลไม้ดอก (Rose & Tulip)": "แผนกทีมกุหลาบ",
+            "แผนกไม้ประดับใบ (Indoor Flora)": "แผนกงานทดลอง"
+          };
+          employeeList = empSnap.value.docs.map(d => {
+            const data = d.data();
+            let updatedDept = data.department;
+            if (deptMap[data.department]) {
+              updatedDept = deptMap[data.department];
+            }
+            return { id: d.id, ...data, department: updatedDept };
+          });
+          renderEmployeeDirectory();
+          populateEmployeeDropdowns();
+          renderStaffTable();
+          hasData = true;
+        }
+
+        if (catSnap.status === 'fulfilled' && !catSnap.value.empty) {
+          const fsCatsMap = new Map();
+          for (const d of catSnap.value.docs) {
+            const data = d.data() || {};
+            const officialCode = (data.code || data.id || d.id || '').trim();
+            const catName = (data.name || '').trim();
+            const item = { ...data, id: officialCode || d.id, code: officialCode || d.id, name: catName || officialCode };
+            const mapKey = (item.code || item.id || item.name).toLowerCase();
+            if (!fsCatsMap.has(mapKey)) {
+              fsCatsMap.set(mapKey, item);
+            }
+          }
+          const fsCats = Array.from(fsCatsMap.values());
+          fsCats.sort((a, b) => {
+            const numA = parseInt(((a.code || a.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
+            const numB = parseInt(((b.code || b.id || '').match(/^CAT-(\d+)$/i) || [0, 999999])[1], 10);
+            if (numA !== numB) return numA - numB;
+            return (a.name || '').localeCompare(b.name || '', 'th');
+          });
+          categoriesList = fsCats;
+          renderCategoryDropdowns();
+          renderCategoryManagementList();
+          hasData = true;
+        }
+
+        if (eqSnap.status === 'fulfilled' && !eqSnap.value.empty) {
+          const fsEquipMap = new Map();
+          for (const d of eqSnap.value.docs) {
+            const data = d.data() || {};
+            const expectedCode = (data.code || d.id || '').trim();
+            const item = { ...data, id: expectedCode || d.id, code: expectedCode || d.id };
+            if (item.minQuantity === undefined || item.minQuantity === null) {
+              item.minQuantity = 3;
+            }
+            const mapKey = (item.code || item.id).toLowerCase();
+            if (!fsEquipMap.has(mapKey)) {
+              fsEquipMap.set(mapKey, item);
+            }
+          }
+          const fsEquip = Array.from(fsEquipMap.values());
+          fsEquip.sort((a, b) => {
+            const codeA = (a.code || a.id || '').toString();
+            const codeB = (b.code || b.id || '').toString();
+            return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+          });
+          equipmentList = fsEquip;
+          renderCatalogGrid();
+          renderStaffTable();
+          populateEquipmentDropdown();
+          populateQuickScanDropdown();
+          hasData = true;
+        }
+
+        if (txSnap.status === 'fulfilled' && !txSnap.value.empty) {
+          const list = txSnap.value.docs.map(d => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => {
+            const timeA = getRecordTimestampMs(a);
+            const timeB = getRecordTimestampMs(b);
+            return timeB - timeA;
+          });
+          transactionHistory = list;
+          renderHistoryTable();
+          hasData = true;
+        }
+
+        if (attSnap.status === 'fulfilled' && !attSnap.value.empty) {
+          attendanceLogs = attSnap.value.docs.map(d => ({ id: d.id, ...d.data() }));
+          renderAttendanceTable();
+          hasData = true;
+        }
+
+        if (deptSnap.status === 'fulfilled' && !deptSnap.value.empty) {
+          const deptMap = new Map();
+          for (const dSnap of deptSnap.value.docs) {
+            const data = dSnap.data() || {};
+            const name = (data.name || dSnap.id || '').trim();
+            const officialCode = (data.code || data.id || dSnap.id || '').trim();
+            if (name) {
+              const key = name.toLowerCase();
+              if (!deptMap.has(key)) {
+                deptMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name });
+              }
+            }
+          }
+          const validDocs = Array.from(deptMap.values());
+          validDocs.sort((a, b) => {
+            const numA = parseInt(((a.code || a.id).match(/^DEP-(\d+)$/i) || [0, 999999])[1], 10);
+            const numB = parseInt(((b.code || b.id).match(/^DEP-(\d+)$/i) || [0, 999999])[1], 10);
+            if (numA !== numB) return numA - numB;
+            return a.name.localeCompare(b.name, 'th');
+          });
+          departmentsList = validDocs.map(d => d.name);
+          populateDepartmentDropdowns();
+          hasData = true;
+        }
+
+        if (locSnap.status === 'fulfilled' && !locSnap.value.empty) {
+          const locMap = new Map();
+          for (const dSnap of locSnap.value.docs) {
+            const data = dSnap.data() || {};
+            const name = (data.name || dSnap.id || '').trim();
+            const officialCode = (data.code || data.id || dSnap.id || '').trim();
+            if (name) {
+              const key = name.toLowerCase();
+              if (!locMap.has(key)) {
+                locMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name });
+              }
+            }
+          }
+          const locDocs = Array.from(locMap.values());
+          locDocs.sort((a, b) => {
+            const numA = parseInt(((a.code || a.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
+            const numB = parseInt(((b.code || b.id || '').match(/^LOC-(\d+)$/i) || [0, 999999])[1], 10);
+            if (numA !== numB) return numA - numB;
+            return (a.name || a.id).localeCompare((b.name || b.id), 'th');
+          });
+          locationsList = locDocs.map(d => (d.name || d.id)).filter(Boolean);
+          populateLocationDropdowns();
+          hasData = true;
+        }
+
+        if (hasData) {
+          saveToLocalStorage();
+          updateStats();
+        }
+
+        isInitialFetchCompleted = true;
+      } catch (err) {
+        console.warn("Direct Firestore fetch notice:", err);
+        if (!isRetry) {
+          setTimeout(() => fetchInitialFirestoreData(true), 2000);
+        }
+      }
+    }
+
     async function setupFirestoreListeners() {
       if (!isFirebaseReady || !db) return;
+      if (isListenersAttached) return;
+      isListenersAttached = true;
+
+      // Trigger parallel direct fetch to ensure data lands immediately
+      fetchInitialFirestoreData();
 
       try {
         onSnapshot(collection(db, "employees"), async (snapshot) => {

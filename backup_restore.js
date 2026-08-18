@@ -181,16 +181,17 @@ window.startBackupTimer = function() {
 
   timerElems.forEach(el => {
     el.textContent = '00:00';
-    el.className = 'font-monospace text-danger fw-bolder';
+    el.className = 'font-monospace text-white fw-bolder';
   });
   timerBadges.forEach(b => {
-    b.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
+    b.className = 'badge bg-danger text-white rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
   });
   timerIcons.forEach(i => {
-    i.className = 'bi bi-stopwatch text-danger';
+    i.className = 'bi bi-stopwatch text-white';
   });
   timerLabels.forEach(l => {
     l.textContent = 'เวลา:';
+    l.className = 'text-white';
   });
 
   backupTimerInterval = setInterval(() => {
@@ -199,6 +200,7 @@ window.startBackupTimer = function() {
     const formatted = window.formatBackupTimerDisplay(backupTimerElapsedMs);
     document.querySelectorAll('#backupProgressTimer').forEach(el => {
       el.textContent = formatted;
+      el.className = 'font-monospace text-white fw-bolder';
     });
   }, 200);
 };
@@ -218,7 +220,7 @@ window.stopBackupTimer = function(markComplete = false) {
   
   document.querySelectorAll('#backupProgressTimer').forEach(el => {
     el.textContent = formatted;
-    el.className = 'font-monospace text-danger fw-bolder fs-6';
+    el.className = 'font-monospace text-white fw-bolder fs-6';
   });
 
   if (markComplete) {
@@ -226,13 +228,14 @@ window.stopBackupTimer = function(markComplete = false) {
     const timerIcons = document.querySelectorAll('#backupProgressTimerIcon');
     const timerLabels = document.querySelectorAll('#backupProgressTimerLabel');
     timerBadges.forEach(b => {
-      b.className = 'badge bg-danger bg-opacity-15 text-danger border border-danger border-opacity-35 rounded-pill px-3.5 py-1.5 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-sm';
+      b.className = 'badge bg-danger text-white rounded-pill px-3.5 py-1.5 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-sm';
     });
     timerIcons.forEach(i => {
-      i.className = 'bi bi-check-circle-fill text-danger fs-6';
+      i.className = 'bi bi-check-circle-fill text-white fs-6';
     });
     timerLabels.forEach(l => {
       l.textContent = '⏱️ ใช้เวลา:';
+      l.className = 'text-white';
     });
 
     const subStatus = document.querySelectorAll('#backupProgressSubStatus');
@@ -253,19 +256,20 @@ window.resetBackupTimer = function() {
 
   document.querySelectorAll('#backupProgressTimer').forEach(el => {
     el.textContent = '00:00';
-    el.className = 'font-monospace text-danger fw-bolder';
+    el.className = 'font-monospace text-white fw-bolder';
   });
   const timerBadges = document.querySelectorAll('#backupProgressTimerBadge');
   const timerIcons = document.querySelectorAll('#backupProgressTimerIcon');
   const timerLabels = document.querySelectorAll('#backupProgressTimerLabel');
   timerBadges.forEach(b => {
-    b.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
+    b.className = 'badge bg-danger text-white rounded-pill px-3 py-1 fs-7 fw-bold d-flex align-items-center gap-1.5 shadow-2xs';
   });
   timerIcons.forEach(i => {
-    i.className = 'bi bi-stopwatch text-danger';
+    i.className = 'bi bi-stopwatch text-white';
   });
   timerLabels.forEach(l => {
     l.textContent = 'เวลา:';
+    l.className = 'text-white';
   });
 };
 
@@ -2068,8 +2072,194 @@ async function downloadFileFromDrive(accessToken, fileId) {
   return await res.text();
 }
 
+// Helper: Delete a file from Google Drive (used to clean up obsolete duplicate extensions)
+async function deleteFileFromDrive(accessToken, fileId) {
+  try {
+    await fetchWithDriveAuth(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE',
+      accessToken
+    });
+  } catch (e) {
+    console.warn("Delete obsolete Drive file notice:", e);
+  }
+}
+
+// Helper: Get Deduplicated Canonical Image List for Backup & Drive Sync
+async function getCanonicalImageSyncList() {
+  let rawStorageFiles = [];
+  try {
+    const listResp = await fetch('/api/list-storage-files');
+    if (listResp.ok) {
+      const listData = await listResp.json();
+      if (listData.items && Array.isArray(listData.items)) {
+        rawStorageFiles = listData.items;
+      } else if (listData.files && Array.isArray(listData.files)) {
+        rawStorageFiles = listData.files;
+      }
+    }
+  } catch (e) {
+    console.warn("Storage list fetch notice:", e);
+  }
+
+  const eqList = window.equipmentList || [];
+  const empList = window.employeeList || [];
+  const finalImageMap = new Map(); // key: 'equipment/eq-001' -> canonical item
+
+  function extractStoragePathFromUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    if (url.includes('/o/')) {
+      const match = url.match(/\/o\/([^?]+)/);
+      if (match && match[1]) {
+        try {
+          return decodeURIComponent(match[1]);
+        } catch (e) {
+          return match[1];
+        }
+      }
+    }
+    return null;
+  }
+
+  const storageByExactName = new Map();
+  const storageByBaseCode = new Map();
+
+  rawStorageFiles.forEach(item => {
+    if (!item || !item.name) return;
+    storageByExactName.set(item.name, item);
+
+    const parts = item.name.split('/');
+    const folder = parts[0] || '';
+    const rawFileName = parts.slice(1).join('/') || parts[0];
+    const dotIdx = rawFileName.lastIndexOf('.');
+    const baseCode = dotIdx > 0 ? rawFileName.substring(0, dotIdx) : rawFileName;
+    const cleanKey = `${folder}/${baseCode}`.toLowerCase();
+
+    if (!storageByBaseCode.has(cleanKey)) {
+      storageByBaseCode.set(cleanKey, []);
+    }
+    storageByBaseCode.get(cleanKey).push(item);
+  });
+
+  // A. Deduplicate Equipment Images (Strictly 1 canonical image per equipment)
+  eqList.forEach((eq, idx) => {
+    const code = (eq.code || eq.id || `eq_${idx + 1}`).trim();
+    const safeCode = code.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const key = `equipment/${safeCode}`.toLowerCase();
+    const url = eq.imageUrl || eq.photoUrl || eq.image || eq.photo || eq.imageBase64 || eq.photoBase64;
+    if (!url) return;
+
+    // Check exact storage match from URL
+    const storagePath = extractStoragePathFromUrl(url);
+    if (storagePath && storageByExactName.has(storagePath)) {
+      finalImageMap.set(key, storageByExactName.get(storagePath));
+      return;
+    }
+
+    // Check base code match in storage (prefer webp > png > jpg, or newest)
+    const matches = storageByBaseCode.get(key) || [];
+    if (matches.length > 0) {
+      matches.sort((a, b) => {
+        const extA = (a.name.split('.').pop() || '').toLowerCase();
+        const extB = (b.name.split('.').pop() || '').toLowerCase();
+        if (extA === 'webp' && extB !== 'webp') return -1;
+        if (extB === 'webp' && extA !== 'webp') return 1;
+        return (new Date(b.updated || 0).getTime()) - (new Date(a.updated || 0).getTime());
+      });
+      finalImageMap.set(key, matches[0]);
+      return;
+    }
+
+    // Fallback: Use image url with matching extension (no duplicates)
+    let ext = 'jpg';
+    if (url.startsWith('data:image/webp') || url.includes('.webp')) ext = 'webp';
+    else if (url.startsWith('data:image/png') || url.includes('.png')) ext = 'png';
+    else if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/jpg') || url.includes('.jpg') || url.includes('.jpeg')) ext = 'jpg';
+
+    finalImageMap.set(key, {
+      name: `equipment/${safeCode}.${ext}`,
+      downloadUrl: url,
+      size: 0,
+      contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
+    });
+  });
+
+  // B. Deduplicate Employee Images (Strictly 1 canonical image per employee)
+  empList.forEach((emp, idx) => {
+    const code = (emp.code || emp.id || `emp_${idx + 1}`).trim();
+    const safeCode = code.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const key = `employees/${safeCode}`.toLowerCase();
+    const url = emp.photoURL || emp.photoUrl || emp.photo || emp.image || emp.imageUrl || emp.photoBase64 || emp.imageBase64;
+    if (!url) return;
+
+    const storagePath = extractStoragePathFromUrl(url);
+    if (storagePath && storageByExactName.has(storagePath)) {
+      finalImageMap.set(key, storageByExactName.get(storagePath));
+      return;
+    }
+
+    const matches = storageByBaseCode.get(key) || [];
+    if (matches.length > 0) {
+      matches.sort((a, b) => {
+        const extA = (a.name.split('.').pop() || '').toLowerCase();
+        const extB = (b.name.split('.').pop() || '').toLowerCase();
+        if (extA === 'webp' && extB !== 'webp') return -1;
+        if (extB === 'webp' && extA !== 'webp') return 1;
+        return (new Date(b.updated || 0).getTime()) - (new Date(a.updated || 0).getTime());
+      });
+      finalImageMap.set(key, matches[0]);
+      return;
+    }
+
+    let ext = 'jpg';
+    if (url.startsWith('data:image/webp') || url.includes('.webp')) ext = 'webp';
+    else if (url.startsWith('data:image/png') || url.includes('.png')) ext = 'png';
+    else if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/jpg') || url.includes('.jpg') || url.includes('.jpeg')) ext = 'jpg';
+
+    finalImageMap.set(key, {
+      name: `employees/${safeCode}.${ext}`,
+      downloadUrl: url,
+      size: 0,
+      contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
+    });
+  });
+
+  // C. Add other unique non-colliding storage files if any
+  rawStorageFiles.forEach(item => {
+    if (!item || !item.name) return;
+    const parts = item.name.split('/');
+    const folder = parts[0] || '';
+    const rawFileName = parts.slice(1).join('/') || parts[0];
+    const dotIdx = rawFileName.lastIndexOf('.');
+    const baseCode = dotIdx > 0 ? rawFileName.substring(0, dotIdx) : rawFileName;
+    const key = `${folder}/${baseCode}`.toLowerCase();
+
+    if (!finalImageMap.has(key)) {
+      finalImageMap.set(key, item);
+    }
+  });
+
+  return Array.from(finalImageMap.values());
+}
+
 // Helper to fetch actual image binary as Blob (using local backup endpoint or server proxy)
 async function fetchDriveImageBlob(item) {
+  // Try 0: Base64 data URI directly
+  if (item.downloadUrl && typeof item.downloadUrl === 'string' && item.downloadUrl.startsWith('data:image/')) {
+    try {
+      const parts = item.downloadUrl.split(';base64,');
+      const contentType = parts[0].split(':')[1] || 'image/jpeg';
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+      return new Blob([uInt8Array], { type: contentType });
+    } catch (e) {
+      console.warn("Base64 decode error for image:", e);
+    }
+  }
+
   // Try 1: Local server backup file (fastest & high reliability)
   try {
     const localUrl = `/api/backup-image-file?path=${encodeURIComponent(item.name)}`;
@@ -2142,49 +2332,8 @@ window.startGoogleDriveBackup = async function() {
     // Trigger server image backup in background to populate disk cache
     fetch('/api/auto-backup-images', { method: 'POST' }).catch(() => {});
 
-    // Step 2: Get complete list of actual files from Firebase Storage
-    let storageFiles = [];
-    try {
-      const listResp = await fetch('/api/list-storage-files');
-      if (listResp.ok) {
-        const listData = await listResp.json();
-        if (listData.items && Array.isArray(listData.items)) {
-          storageFiles = listData.items;
-        }
-      }
-    } catch (listErr) {
-      console.warn("List storage files notice:", listErr);
-    }
-
-    // Fallback: If storage list is empty, build from memory list
-    if (storageFiles.length === 0) {
-      const eqList = window.equipmentList || [];
-      eqList.forEach((eq, idx) => {
-        const url = eq.imageUrl || eq.photoUrl || eq.imageBase64 || eq.photoBase64;
-        if (url) {
-          const safeCode = (eq.code || eq.id || `eq_${idx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-          storageFiles.push({
-            name: `equipment/${safeCode}.jpg`,
-            downloadUrl: url,
-            size: 0,
-            contentType: 'image/jpeg'
-          });
-        }
-      });
-      const empList = window.employeeList || [];
-      empList.forEach((emp, idx) => {
-        const url = emp.photoUrl || emp.photoBase64 || emp.imageUrl || emp.imageBase64;
-        if (url) {
-          const safeCode = (emp.code || emp.id || `emp_${idx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-          storageFiles.push({
-            name: `employees/${safeCode}.jpg`,
-            downloadUrl: url,
-            size: 0,
-            contentType: 'image/jpeg'
-          });
-        }
-      });
-    }
+    // Step 2: Get deduplicated canonical list of actual images from Firebase Storage & Database
+    const storageFiles = await getCanonicalImageSyncList();
 
     window.updateBackupProgress(18, "กำลังเตรียมโครงสร้างโฟลเดอร์บน Google Drive...", "สร้าง/ค้นหาโฟลเดอร์ Google AI Studio > FloraGarden_Backups...", true, "bg-success");
 
@@ -2199,7 +2348,7 @@ window.startGoogleDriveBackup = async function() {
     const empFolderId = await findOrCreateDriveFolder(accessToken, 'employees', rootFolderId);
     const dbFolderId = await findOrCreateDriveFolder(accessToken, 'database', rootFolderId);
 
-    window.updateBackupProgress(25, "กำลังสแกนไฟล์เดิมบน Google Drive (Smart Diff)...", "ตรวจสอบขนาดไฟล์เดิมเพื่อป้องกันการอัปโหลดซ้ำซ้อน...", true, "bg-success");
+    window.updateBackupProgress(25, "กำลังสแกนไฟล์เดิมบน Google Drive (Smart Diff)...", "ตรวจสอบขนาดไฟล์เดิมและตัดไฟล์นามสกุลซ้ำซ้อน...", true, "bg-success");
 
     // 4. Scan existing files in Drive subfolders
     const existingEquipFiles = await listFilesInDriveFolder(accessToken, equipFolderId);
@@ -2214,7 +2363,7 @@ window.startGoogleDriveBackup = async function() {
       dbBackupName: ''
     };
 
-    // 5. Upload All Genuine Image Files to Google Drive
+    // 5. Upload All Genuine Deduplicated Image Files to Google Drive
     const totalFiles = storageFiles.length;
     for (let i = 0; i < totalFiles; i++) {
       const item = storageFiles[i];
@@ -2226,6 +2375,18 @@ window.startGoogleDriveBackup = async function() {
       const fileName = parts.slice(1).join('_') || parts[0];
       const safeFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
       const existingFile = existingMap.get(safeFileName);
+
+      // Clean up obsolete duplicate extensions on Google Drive for this code (e.g. remove old EQ-001.jpg if active is EQ-001.webp)
+      const dotIdx = safeFileName.lastIndexOf('.');
+      const baseCode = dotIdx > 0 ? safeFileName.substring(0, dotIdx) : safeFileName;
+      for (const [dName, dFile] of existingMap.entries()) {
+        const dDot = dName.lastIndexOf('.');
+        const dBase = dDot > 0 ? dName.substring(0, dDot) : dName;
+        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName !== safeFileName) {
+          await deleteFileFromDrive(accessToken, dFile.id);
+          existingMap.delete(dName);
+        }
+      }
 
       // Smart Diff Check: If size exists on Drive and matches remoteSize > 0
       if (existingFile && item.size > 0 && parseInt(existingFile.size, 10) === item.size) {
@@ -2468,10 +2629,345 @@ window.startGoogleDriveRestore = async function() {
   }
 };
 
+// =========================================================================
+// 20. HYBRID DUAL BACKUP SYSTEM (Automatic Once-Per-Day for Admin)
+// =========================================================================
+// Dual Backup Targets:
+// 1) Google Drive: Rotating Folders (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
+// 2) Local Machine: Direct JSON download to user's computer / mobile device
+// =========================================================================
+
+window.getRotationDayInfo = function(date = new Date()) {
+  const daysOfWeekEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const daysOfWeekTh = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+  const dayIndex = date.getDay();
+  const dayOfWeekEn = daysOfWeekEn[dayIndex];
+  const dayOfWeekTh = daysOfWeekTh[dayIndex];
+  const dateIso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const thaiDateStr = date.toLocaleString('th-TH');
+
+  return {
+    dayIndex,
+    dayOfWeekEn,
+    dayOfWeekTh,
+    dateIso,
+    thaiDateStr,
+    timestamp: date.toISOString()
+  };
+};
+
+window.executeLocalHybridBackup = function(dayInfo = window.getRotationDayInfo()) {
+  try {
+    const now = new Date();
+    const clonedEquipment = safeJsonClone(window.equipmentList || []);
+    const clonedEmployees = safeJsonClone(window.employeeList || []);
+    
+    clonedEquipment.forEach(eq => {
+      delete eq.imageBase64;
+      delete eq.photoBase64;
+    });
+    clonedEmployees.forEach(emp => {
+      delete emp.imageBase64;
+      delete emp.photoBase64;
+    });
+
+    const backupData = {
+      version: "2.0",
+      appName: "Flora Garden Stock & Employee System",
+      backupTimestamp: now.toISOString(),
+      backupDateThai: dayInfo.thaiDateStr,
+      rotationDay: dayInfo.dayOfWeekEn,
+      rotationDayThai: dayInfo.dayOfWeekTh,
+      storageType: "HYBRID_LOCAL_AUTO_BACKUP",
+      adminTarget: "jaru072@gmail.com",
+      equipmentList: clonedEquipment,
+      employeeList: clonedEmployees,
+      transactionHistory: window.transactionHistory || [],
+      attendanceLogs: window.attendanceLogs || [],
+      auditLogs: window.auditLogs || [],
+      categoriesList: window.categoriesList || [],
+      departmentsList: getComprehensiveDepartmentsList(),
+      locationsList: getComprehensiveLocationsList(),
+      imagesBase64Map: {}
+    };
+
+    const jsonString = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const fileName = `FloraGarden_Backup_${dayInfo.dayOfWeekEn}_${dayInfo.dateIso}.json`;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+
+    console.log(`[HybridBackup] Local backup downloaded successfully: ${fileName} (${blob.size} bytes)`);
+    return { success: true, fileName, size: blob.size };
+  } catch (err) {
+    console.error("[HybridBackup] Local file generation error:", err);
+    return { success: false, reason: err.message };
+  }
+};
+
+window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRotationDayInfo(), isSilent = true) {
+  try {
+    let accessToken = null;
+    try {
+      if (typeof window.getGoogleDriveAccessToken === 'function') {
+        accessToken = await window.getGoogleDriveAccessToken(!isSilent);
+      } else {
+        accessToken = window.googleDriveAccessToken;
+      }
+    } catch (authErr) {
+      if (!isSilent) throw authErr;
+      console.warn("[HybridDriveBackup] Google Drive silent OAuth check:", authErr.message || authErr);
+      return { success: false, reason: "Google Drive OAuth token not active" };
+    }
+
+    if (!accessToken) {
+      return { success: false, reason: "No active Google Drive token" };
+    }
+
+    // 1. Find or create folder structure:
+    // Google AI Studio > FloraGarden_Backups > Daily_Rotation > [Monday / Tuesday / ...]
+    const aiStudioFolderId = await findOrCreateDriveFolder(accessToken, 'Google AI Studio');
+    const rootFolderId = await findOrCreateDriveFolder(accessToken, 'FloraGarden_Backups', aiStudioFolderId);
+    const rotationRootId = await findOrCreateDriveFolder(accessToken, 'Daily_Rotation', rootFolderId);
+    const dayFolderId = await findOrCreateDriveFolder(accessToken, dayInfo.dayOfWeekEn, rotationRootId);
+
+    // 2. Subfolders inside day folder
+    const equipFolderId = await findOrCreateDriveFolder(accessToken, 'equipment', dayFolderId);
+    const empFolderId = await findOrCreateDriveFolder(accessToken, 'employees', dayFolderId);
+    const dbFolderId = await findOrCreateDriveFolder(accessToken, 'database', dayFolderId);
+
+    // 3. Scan & Upload Image Files to Day Folder (Deduplicated Canonical Images + Smart Diff)
+    const storageFiles = await getCanonicalImageSyncList();
+    const existingEquipFiles = await listFilesInDriveFolder(accessToken, equipFolderId);
+    const existingEmpFiles = await listFilesInDriveFolder(accessToken, empFolderId);
+
+    let imagesUploaded = 0;
+    for (const item of storageFiles) {
+      const parts = item.name.split('/');
+      const isEmployee = parts[0] === 'employees' || parts[0] === 'employee_photos';
+      const targetFolderId = isEmployee ? empFolderId : equipFolderId;
+      const existingMap = isEmployee ? existingEmpFiles : existingEquipFiles;
+
+      const fileName = parts.slice(1).join('_') || parts[0];
+      const safeFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const existingFile = existingMap.get(safeFileName);
+
+      // Clean up obsolete duplicate extensions on Google Drive for this code (e.g. remove old EQ-001.jpg if active is EQ-001.webp)
+      const dotIdx = safeFileName.lastIndexOf('.');
+      const baseCode = dotIdx > 0 ? safeFileName.substring(0, dotIdx) : safeFileName;
+      for (const [dName, dFile] of existingMap.entries()) {
+        const dDot = dName.lastIndexOf('.');
+        const dBase = dDot > 0 ? dName.substring(0, dDot) : dName;
+        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName !== safeFileName) {
+          await deleteFileFromDrive(accessToken, dFile.id);
+          existingMap.delete(dName);
+        }
+      }
+
+      if (existingFile && item.size > 0 && parseInt(existingFile.size, 10) === item.size) {
+        continue; // Identical, skip
+      }
+
+      try {
+        const blob = await fetchDriveImageBlob(item);
+        if (blob && blob.size > 0) {
+          if (existingFile && parseInt(existingFile.size, 10) === blob.size) {
+            continue;
+          }
+          await uploadFileToDrive(accessToken, {
+            name: safeFileName,
+            mimeType: blob.type || item.contentType || 'image/jpeg',
+            blob: blob,
+            parentFolderId: targetFolderId,
+            existingFileId: existingFile ? existingFile.id : null
+          });
+          imagesUploaded++;
+        }
+      } catch (uploadErr) {
+        console.warn(`[HybridDriveBackup] Image upload notice for ${item.name}:`, uploadErr);
+      }
+    }
+
+    // 4. Upload Day-stamped Database JSON
+    const now = new Date();
+    const clonedEquipment = safeJsonClone(window.equipmentList || []);
+    const clonedEmployees = safeJsonClone(window.employeeList || []);
+    clonedEquipment.forEach(eq => { delete eq.imageBase64; delete eq.photoBase64; });
+    clonedEmployees.forEach(emp => { delete emp.imageBase64; delete emp.photoBase64; });
+
+    const backupData = {
+      version: "2.0",
+      appName: "Flora Garden Stock & Employee System",
+      backupTimestamp: now.toISOString(),
+      backupDateThai: dayInfo.thaiDateStr,
+      rotationDay: dayInfo.dayOfWeekEn,
+      rotationDayThai: dayInfo.dayOfWeekTh,
+      storageType: "GOOGLE_DRIVE_ROTATION_UNCOMPRESSED",
+      equipmentList: clonedEquipment,
+      employeeList: clonedEmployees,
+      transactionHistory: window.transactionHistory || [],
+      attendanceLogs: window.attendanceLogs || [],
+      auditLogs: window.auditLogs || [],
+      categoriesList: window.categoriesList || [],
+      departmentsList: getComprehensiveDepartmentsList(),
+      locationsList: getComprehensiveLocationsList(),
+      imagesBase64Map: {}
+    };
+
+    const jsonString = JSON.stringify(backupData, null, 2);
+    const jsonBlob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+    const jsonFileName = `flora_garden_backup_${dayInfo.dayOfWeekEn}_${dayInfo.dateIso}.json`;
+
+    await uploadFileToDrive(accessToken, {
+      name: jsonFileName,
+      mimeType: 'application/json',
+      blob: jsonBlob,
+      parentFolderId: dbFolderId
+    });
+
+    const existingDbFiles = await listFilesInDriveFolder(accessToken, dbFolderId);
+    const latestFile = existingDbFiles.get(`flora_garden_backup_${dayInfo.dayOfWeekEn}_latest.json`);
+    await uploadFileToDrive(accessToken, {
+      name: `flora_garden_backup_${dayInfo.dayOfWeekEn}_latest.json`,
+      mimeType: 'application/json',
+      blob: jsonBlob,
+      parentFolderId: dbFolderId,
+      existingFileId: latestFile ? latestFile.id : null
+    });
+
+    console.log(`[HybridDriveBackup] Google Drive rotation backup completed for ${dayInfo.dayOfWeekEn}`);
+    return {
+      success: true,
+      dayFolder: dayInfo.dayOfWeekEn,
+      dayFolderId,
+      imagesUploaded,
+      jsonFileName
+    };
+  } catch (err) {
+    console.warn("[HybridDriveBackup] Google Drive backup error:", err);
+    return { success: false, reason: err.message };
+  }
+};
+
+window.runHybridDailyBackup = async function(isManual = false) {
+  const dayInfo = window.getRotationDayInfo();
+  const todayStr = dayInfo.dateIso;
+  const lastBackupDate = localStorage.getItem('flora_last_hybrid_backup_date');
+
+  // Guard: 1 backup per day unless explicitly triggered manually
+  if (!isManual && lastBackupDate === todayStr) {
+    console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) has already run today.`);
+    window.updateHybridBackupStatusUI();
+    return { skipped: true, reason: "Already completed today" };
+  }
+
+  // Admin Identity Check: Thamma Srithong (jaru072@gmail.com) or ADMIN role
+  const currentEmail = (window.currentAuthUser && window.currentAuthUser.email) ||
+                       (window.currentUserProfile && window.currentUserProfile.email) ||
+                       (window.currentUser && window.currentUser.email) ||
+                       '';
+  const currentRole = window.currentRole || '';
+  const isAdmin = currentEmail.toLowerCase() === 'jaru072@gmail.com' || currentRole === 'ADMIN';
+
+  if (!isAdmin && !isManual) {
+    console.log("[HybridBackup] Active user is not Admin. Auto daily backup skipped.");
+    return { skipped: true, reason: "Not Admin user" };
+  }
+
+  // Wait briefly if initial data lists are still loading
+  if ((!window.equipmentList || window.equipmentList.length === 0) && (!window.employeeList || window.employeeList.length === 0)) {
+    await new Promise(r => setTimeout(r, 2500));
+  }
+
+  console.log(`[HybridBackup] Executing Hybrid Dual Backup for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh})...`);
+
+  // 1. Part 1: Local Download to User Machine (Zero Token Required)
+  let localRes = null;
+  try {
+    localRes = window.executeLocalHybridBackup(dayInfo);
+  } catch (lErr) {
+    console.error("[HybridBackup] Local backup error:", lErr);
+  }
+
+  // 2. Part 2: Google Drive Day Rotation Backup (Monday-Sunday)
+  let driveRes = null;
+  try {
+    driveRes = await window.executeGoogleDriveRotationBackup(dayInfo, !isManual);
+  } catch (dErr) {
+    console.warn("[HybridBackup] Drive backup warning:", dErr);
+  }
+
+  // Record Completion Timestamps in LocalStorage
+  localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
+  localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
+  localStorage.setItem('flora_last_hybrid_backup_day', dayInfo.dayOfWeekEn);
+  localStorage.setItem('flora_last_hybrid_backup_day_th', dayInfo.dayOfWeekTh);
+  localStorage.setItem('flora_last_hybrid_backup_drive_ok', driveRes && driveRes.success ? 'true' : 'false');
+  localStorage.setItem('flora_last_hybrid_backup_local_ok', localRes && localRes.success ? 'true' : 'false');
+
+  window.updateHybridBackupStatusUI();
+
+  // Toast Notification
+  const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
+
+  if (driveRes && driveRes.success && localRes && localRes.success) {
+    toast(`☁️ สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ครบทั้ง 2 ระบบ (Google Drive & ดาวน์โหลดลงเครื่อง) เรียบร้อยแล้ว!`);
+  } else if (localRes && localRes.success) {
+    toast(`💾 สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ดาวน์โหลดลงเครื่องเรียบร้อยแล้ว`);
+  }
+
+  return { success: true, local: localRes, drive: driveRes };
+};
+
+window.updateHybridBackupStatusUI = function() {
+  const dayInfo = window.getRotationDayInfo();
+  const folderTextElem = document.getElementById('hybridTodayFolderText');
+  const badgeElem = document.getElementById('hybridLastBackupBadge');
+
+  if (folderTextElem) {
+    folderTextElem.textContent = `${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh})`;
+  }
+
+  if (badgeElem) {
+    const lastDate = localStorage.getItem('flora_last_hybrid_backup_date');
+    const lastTime = localStorage.getItem('flora_last_hybrid_backup_time');
+    const lastDayTh = localStorage.getItem('flora_last_hybrid_backup_day_th') || '';
+    const lastDayEn = localStorage.getItem('flora_last_hybrid_backup_day') || '';
+    const driveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
+
+    if (lastDate === dayInfo.dateIso && lastTime) {
+      const timeStr = new Date(lastTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      if (driveOk) {
+        badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - Drive & เครื่อง)`;
+      } else {
+        badgeElem.className = 'badge bg-primary text-white px-2.5 py-1';
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - ดาวน์โหลดลงเครื่อง)`;
+      }
+    } else if (lastDate && lastTime) {
+      const dateFormatted = new Date(lastTime).toLocaleDateString('th-TH');
+      badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
+      badgeElem.innerHTML = `สำรองล่าสุดเมื่อ ${dateFormatted} (${lastDayEn})`;
+    } else {
+      badgeElem.className = 'badge bg-light text-dark border px-2.5 py-1';
+      badgeElem.innerHTML = `พร้อมสำรองอัตโนมัติวันนี้`;
+    }
+  }
+};
+
 // 19. Listeners for folder UI refresh
 function initBackupRestore() {
   if (typeof window.refreshFolderUIDisplay === 'function') {
     window.refreshFolderUIDisplay();
+  }
+  if (typeof window.updateHybridBackupStatusUI === 'function') {
+    window.updateHybridBackupStatusUI();
   }
 
   const modalElem = document.getElementById('backupRestoreModal');
@@ -2480,10 +2976,16 @@ function initBackupRestore() {
       if (typeof window.refreshFolderUIDisplay === 'function') {
         window.refreshFolderUIDisplay();
       }
+      if (typeof window.updateHybridBackupStatusUI === 'function') {
+        window.updateHybridBackupStatusUI();
+      }
     });
     modalElem.addEventListener('shown.bs.modal', () => {
       if (typeof window.refreshFolderUIDisplay === 'function') {
         window.refreshFolderUIDisplay();
+      }
+      if (typeof window.updateHybridBackupStatusUI === 'function') {
+        window.updateHybridBackupStatusUI();
       }
     });
   }
