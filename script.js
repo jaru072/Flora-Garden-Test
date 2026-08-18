@@ -1537,6 +1537,7 @@
         window.hideMandatoryLoginScreen();
       }
       if (typeof toggleTransTypeUI === 'function') toggleTransTypeUI();
+      if (typeof updateNavHistoryButtons === 'function') updateNavHistoryButtons();
 
       if (isFirebaseReady) {
         setupFirestoreListeners();
@@ -1550,6 +1551,78 @@
 
     // initApp will be invoked at the end of the script after all functions are loaded
 
+    // ==================== NAVIGATION HISTORY STACK (BACK / FORWARD) ====================
+    let navHistoryStack = ['catalog-tab'];
+    let navHistoryIndex = 0;
+    let isNavigatingHistory = false;
+
+    window.updateNavHistoryButtons = function() {
+      const btnBack = document.getElementById('navBtnBack');
+      const btnForward = document.getElementById('navBtnForward');
+
+      const canGoBack = navHistoryIndex > 0;
+      const canGoForward = navHistoryIndex < navHistoryStack.length - 1;
+
+      if (btnBack) {
+        btnBack.disabled = !canGoBack;
+        if (canGoBack) {
+          btnBack.classList.remove('opacity-50');
+          btnBack.style.cursor = 'pointer';
+        } else {
+          btnBack.classList.add('opacity-50');
+          btnBack.style.cursor = 'not-allowed';
+        }
+      }
+
+      if (btnForward) {
+        btnForward.disabled = !canGoForward;
+        if (canGoForward) {
+          btnForward.classList.remove('opacity-50');
+          btnForward.style.cursor = 'pointer';
+        } else {
+          btnForward.classList.add('opacity-50');
+          btnForward.style.cursor = 'not-allowed';
+        }
+      }
+    };
+
+    window.recordTabNavigation = function(tabId) {
+      const validTabs = ['catalog-tab', 'transaction-tab', 'attendance-tab', 'employees-tab', 'manage-tab', 'history-tab'];
+      if (!validTabs.includes(tabId)) return;
+
+      if (!isNavigatingHistory) {
+        if (navHistoryIndex < navHistoryStack.length - 1) {
+          navHistoryStack = navHistoryStack.slice(0, navHistoryIndex + 1);
+        }
+        if (navHistoryStack[navHistoryIndex] !== tabId) {
+          navHistoryStack.push(tabId);
+          navHistoryIndex = navHistoryStack.length - 1;
+        }
+        window.updateNavHistoryButtons();
+      }
+    };
+
+    window.goNavBack = function() {
+      if (navHistoryIndex > 0) {
+        navHistoryIndex--;
+        const targetTab = navHistoryStack[navHistoryIndex];
+        isNavigatingHistory = true;
+        window.switchNavTab(targetTab);
+        isNavigatingHistory = false;
+        window.updateNavHistoryButtons();
+      }
+    };
+
+    window.goNavForward = function() {
+      if (navHistoryIndex < navHistoryStack.length - 1) {
+        navHistoryIndex++;
+        const targetTab = navHistoryStack[navHistoryIndex];
+        isNavigatingHistory = true;
+        window.switchNavTab(targetTab);
+        isNavigatingHistory = false;
+        window.updateNavHistoryButtons();
+      }
+    };
 
     window.switchNavTab = function(tabId) {
       if (currentRole === 'WORKER' && (tabId === 'employees-tab' || tabId === 'manage-tab' || tabId === 'history-tab')) {
@@ -1608,6 +1681,7 @@
       document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tabEl => {
         tabEl.addEventListener('shown.bs.tab', (e) => {
           updateGearMenuActiveState(e.target.id);
+          recordTabNavigation(e.target.id);
           if (e.target.id === 'auth-roles-tab') {
             loadUsersTableFromFirestore();
           } else if (e.target.id === 'history-tab') {

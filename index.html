@@ -155,6 +155,16 @@
     </a>
 
     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+      <!-- Back / Forward Navigation Buttons (◀ ย้อนกลับ  ▶ ถัดไป) -->
+      <div class="btn-group shadow-sm me-1" role="group" aria-label="นำทางย้อนกลับและถัดไป">
+        <button type="button" class="btn btn-outline-light btn-sm rounded-start-pill px-2.5 py-1 fw-bold d-flex align-items-center gap-1 opacity-50" id="navBtnBack" onclick="goNavBack()" title="ย้อนกลับ" disabled>
+          <span class="fs-8">◀ ย้อนกลับ</span>
+        </button>
+        <button type="button" class="btn btn-outline-light btn-sm rounded-end-pill px-2.5 py-1 fw-bold d-flex align-items-center gap-1 opacity-50" id="navBtnForward" onclick="goNavForward()" title="ถัดไป" disabled>
+          <span class="fs-8">▶ ถัดไป</span>
+        </button>
+      </div>
+
       <!-- User Profile & Firebase Auth Button -->
       <button class="btn btn-outline-light btn-sm rounded-pill px-3 fw-semibold d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#userAuthModal" id="userAuthNavBtn">
         <img id="navUserAvatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" class="rounded-circle d-none" style="width: 22px; height: 22px; object-fit: cover;" />
