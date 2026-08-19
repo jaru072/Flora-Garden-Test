@@ -401,7 +401,16 @@
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             window.googleDriveAccessToken = credential.accessToken;
+            localStorage.setItem('google_drive_access_token', credential.accessToken);
+            localStorage.setItem('google_drive_token_expires', String(Date.now() + 3500 * 1000));
             sessionStorage.setItem('google_drive_access_token', credential.accessToken);
+            
+            // Check if Google Drive daily backup is pending
+            setTimeout(() => {
+              if (typeof window.runHybridDailyBackup === 'function') {
+                window.runHybridDailyBackup(false).catch(e => console.warn("[GoogleSignIn] Hybrid backup trigger notice:", e));
+              }
+            }, 1000);
           }
         } catch (credErr) {
           console.warn("Credential extraction notice:", credErr);

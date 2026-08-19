@@ -42,6 +42,30 @@ function getGlobalToast() {
   return typeof window.showToast === 'function' ? window.showToast : (msg) => console.log("Toast:", msg);
 }
 
+// Thailand Timezone (UTC+7 Asia/Bangkok) Formatted Timestamp Filename Generator
+window.getThaiDateTimeFilenameString = function(date = new Date()) {
+  try {
+    const d = date instanceof Date ? date : new Date(date);
+    const thaiFmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = thaiFmt.formatToParts(d);
+    const partMap = {};
+    parts.forEach(p => { partMap[p.type] = p.value; });
+    return `${partMap.year}-${partMap.month}-${partMap.day}_${partMap.hour}-${partMap.minute}-${partMap.second}`;
+  } catch (e) {
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toISOString().replace(/[:.]/g, '-');
+  }
+};
+
 function safeJsonClone(obj) {
   try {
     if (typeof window.safeJsonStringify === 'function') {
@@ -2635,25 +2659,70 @@ window.startGoogleDriveRestore = async function() {
 // Dual Backup Targets:
 // 1) Google Drive: Rotating Folders (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
 // 2) Local Machine: Direct JSON download to user's computer / mobile device
+// Timezone: Thailand (UTC+7, Asia/Bangkok)
 // =========================================================================
 
-window.getRotationDayInfo = function(date = new Date()) {
-  const daysOfWeekEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const daysOfWeekTh = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-  const dayIndex = date.getDay();
-  const dayOfWeekEn = daysOfWeekEn[dayIndex];
-  const dayOfWeekTh = daysOfWeekTh[dayIndex];
-  const dateIso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const thaiDateStr = date.toLocaleString('th-TH');
+window.getRotationDayInfo = function(inputDate = new Date()) {
+  try {
+    const d = inputDate instanceof Date ? inputDate : new Date(inputDate);
+    
+    // Explicitly compute day-of-week and date strings in Thailand Timezone (Asia/Bangkok)
+    const thaiFmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
 
-  return {
-    dayIndex,
-    dayOfWeekEn,
-    dayOfWeekTh,
-    dateIso,
-    thaiDateStr,
-    timestamp: date.toISOString()
-  };
+    const parts = thaiFmt.formatToParts(d);
+    const partMap = {};
+    parts.forEach(p => { partMap[p.type] = p.value; });
+
+    const dayOfWeekEn = partMap.weekday || 'Monday';
+    const year = partMap.year || String(d.getFullYear());
+    const month = partMap.month || String(d.getMonth() + 1).padStart(2, '0');
+    const day = partMap.day || String(d.getDate()).padStart(2, '0');
+    const hour = partMap.hour || '00';
+    const minute = partMap.minute || '00';
+    const second = partMap.second || '00';
+
+    const daysOfWeekEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const daysOfWeekTh = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+    const dayIndex = daysOfWeekEn.indexOf(dayOfWeekEn) !== -1 ? daysOfWeekEn.indexOf(dayOfWeekEn) : d.getDay();
+    const dayOfWeekTh = daysOfWeekTh[dayIndex] || 'วันจันทร์';
+
+    const dateIso = `${year}-${month}-${day}`;
+    const thaiDateStr = d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+
+    return {
+      dayIndex,
+      dayOfWeekEn,
+      dayOfWeekTh,
+      dateIso,
+      thaiDateStr,
+      thaiTimeStr: `${hour}:${minute}:${second}`,
+      timestamp: d.toISOString()
+    };
+  } catch (e) {
+    const d = inputDate instanceof Date ? inputDate : new Date(inputDate);
+    const daysOfWeekEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const daysOfWeekTh = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+    const dayIndex = d.getDay();
+    return {
+      dayIndex,
+      dayOfWeekEn: daysOfWeekEn[dayIndex],
+      dayOfWeekTh: daysOfWeekTh[dayIndex],
+      dateIso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      thaiDateStr: d.toLocaleString('th-TH'),
+      thaiTimeStr: '00:00:00',
+      timestamp: d.toISOString()
+    };
+  }
 };
 
 window.executeLocalHybridBackup = function(dayInfo = window.getRotationDayInfo()) {
@@ -2675,6 +2744,7 @@ window.executeLocalHybridBackup = function(dayInfo = window.getRotationDayInfo()
       version: "2.0",
       appName: "Flora Garden Stock & Employee System",
       backupTimestamp: now.toISOString(),
+      backupTimezone: "Asia/Bangkok (UTC+7)",
       backupDateThai: dayInfo.thaiDateStr,
       rotationDay: dayInfo.dayOfWeekEn,
       rotationDayThai: dayInfo.dayOfWeekTh,
@@ -2718,7 +2788,7 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
       if (typeof window.getGoogleDriveAccessToken === 'function') {
         accessToken = await window.getGoogleDriveAccessToken(!isSilent);
       } else {
-        accessToken = window.googleDriveAccessToken;
+        accessToken = window.googleDriveAccessToken || localStorage.getItem('google_drive_access_token') || sessionStorage.getItem('google_drive_access_token');
       }
     } catch (authErr) {
       if (!isSilent) throw authErr;
@@ -2727,6 +2797,7 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
     }
 
     if (!accessToken) {
+      console.warn("[HybridDriveBackup] No active Google Drive access token found in session.");
       return { success: false, reason: "No active Google Drive token" };
     }
 
@@ -2805,6 +2876,7 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
       version: "2.0",
       appName: "Flora Garden Stock & Employee System",
       backupTimestamp: now.toISOString(),
+      backupTimezone: "Asia/Bangkok (UTC+7)",
       backupDateThai: dayInfo.thaiDateStr,
       rotationDay: dayInfo.dayOfWeekEn,
       rotationDayThai: dayInfo.dayOfWeekTh,
@@ -2859,10 +2931,12 @@ window.runHybridDailyBackup = async function(isManual = false) {
   const dayInfo = window.getRotationDayInfo();
   const todayStr = dayInfo.dateIso;
   const lastBackupDate = localStorage.getItem('flora_last_hybrid_backup_date');
+  const lastDriveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
+  const lastLocalOk = localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true';
 
-  // Guard: 1 backup per day unless explicitly triggered manually
-  if (!isManual && lastBackupDate === todayStr) {
-    console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) has already run today.`);
+  // Guard: If both local and drive are already completed for today in Thailand timezone, skip auto run
+  if (!isManual && lastBackupDate === todayStr && lastDriveOk && lastLocalOk) {
+    console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) in Thailand timezone has already fully run today.`);
     window.updateHybridBackupStatusUI();
     return { skipped: true, reason: "Already completed today" };
   }
@@ -2885,14 +2959,18 @@ window.runHybridDailyBackup = async function(isManual = false) {
     await new Promise(r => setTimeout(r, 2500));
   }
 
-  console.log(`[HybridBackup] Executing Hybrid Dual Backup for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh})...`);
+  console.log(`[HybridBackup] Executing Hybrid Dual Backup for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh}) [Asia/Bangkok]...`);
 
   // 1. Part 1: Local Download to User Machine (Zero Token Required)
   let localRes = null;
-  try {
-    localRes = window.executeLocalHybridBackup(dayInfo);
-  } catch (lErr) {
-    console.error("[HybridBackup] Local backup error:", lErr);
+  if (isManual || lastBackupDate !== todayStr || !lastLocalOk) {
+    try {
+      localRes = window.executeLocalHybridBackup(dayInfo);
+    } catch (lErr) {
+      console.error("[HybridBackup] Local backup error:", lErr);
+    }
+  } else {
+    localRes = { success: true, reason: "Already downloaded earlier today" };
   }
 
   // 2. Part 2: Google Drive Day Rotation Backup (Monday-Sunday)
@@ -2908,8 +2986,8 @@ window.runHybridDailyBackup = async function(isManual = false) {
   localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
   localStorage.setItem('flora_last_hybrid_backup_day', dayInfo.dayOfWeekEn);
   localStorage.setItem('flora_last_hybrid_backup_day_th', dayInfo.dayOfWeekTh);
-  localStorage.setItem('flora_last_hybrid_backup_drive_ok', driveRes && driveRes.success ? 'true' : 'false');
-  localStorage.setItem('flora_last_hybrid_backup_local_ok', localRes && localRes.success ? 'true' : 'false');
+  localStorage.setItem('flora_last_hybrid_backup_drive_ok', driveRes && driveRes.success ? 'true' : (lastDriveOk && lastBackupDate === todayStr ? 'true' : 'false'));
+  localStorage.setItem('flora_last_hybrid_backup_local_ok', localRes && localRes.success ? 'true' : (lastLocalOk && lastBackupDate === todayStr ? 'true' : 'false'));
 
   window.updateHybridBackupStatusUI();
 
@@ -2918,6 +2996,8 @@ window.runHybridDailyBackup = async function(isManual = false) {
 
   if (driveRes && driveRes.success && localRes && localRes.success) {
     toast(`☁️ สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ครบทั้ง 2 ระบบ (Google Drive & ดาวน์โหลดลงเครื่อง) เรียบร้อยแล้ว!`);
+  } else if (driveRes && driveRes.success) {
+    toast(`☁️ สำรองข้อมูลขึ้น Google Drive ประจำ${dayInfo.dayOfWeekTh} เรียบร้อยแล้ว`);
   } else if (localRes && localRes.success) {
     toast(`💾 สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ดาวน์โหลดลงเครื่องเรียบร้อยแล้ว`);
   }
@@ -2942,26 +3022,29 @@ window.updateHybridBackupStatusUI = function() {
     const driveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
 
     if (lastDate === dayInfo.dateIso && lastTime) {
-      const timeStr = new Date(lastTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const timeStr = new Date(lastTime).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
       if (driveOk) {
         badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
-        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - Drive & เครื่อง)`;
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - Google Drive & เครื่อง)`;
       } else {
-        badgeElem.className = 'badge bg-primary text-white px-2.5 py-1';
-        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - ดาวน์โหลดลงเครื่อง)`;
+        badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
+        badgeElem.style.cursor = 'pointer';
+        badgeElem.title = 'คลิกเพื่อสำรองขึ้น Google Drive';
+        badgeElem.onclick = () => window.runHybridDailyBackup(true);
+        badgeElem.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> สำรองลงเครื่องแล้ว (${timeStr} น.) [คลิกเชื่อม Google Drive]`;
       }
     } else if (lastDate && lastTime) {
-      const dateFormatted = new Date(lastTime).toLocaleDateString('th-TH');
+      const dateFormatted = new Date(lastTime).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' });
       badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
-      badgeElem.innerHTML = `สำรองล่าสุดเมื่อ ${dateFormatted} (${lastDayEn})`;
+      badgeElem.innerHTML = `สำรองล่าสุดเมื่อ ${dateFormatted} (${lastDayTh || lastDayEn})`;
     } else {
       badgeElem.className = 'badge bg-light text-dark border px-2.5 py-1';
-      badgeElem.innerHTML = `พร้อมสำรองอัตโนมัติวันนี้`;
+      badgeElem.innerHTML = `พร้อมสำรองอัตโนมัติวันนี้ (${dayInfo.dayOfWeekTh})`;
     }
   }
 };
 
-// 19. Listeners for folder UI refresh
+// 19. Listeners for folder UI refresh & Auto-sync on startup
 function initBackupRestore() {
   if (typeof window.refreshFolderUIDisplay === 'function') {
     window.refreshFolderUIDisplay();
@@ -2969,6 +3052,13 @@ function initBackupRestore() {
   if (typeof window.updateHybridBackupStatusUI === 'function') {
     window.updateHybridBackupStatusUI();
   }
+
+  // Automatic Hybrid Daily Backup check after startup
+  setTimeout(() => {
+    if (typeof window.runHybridDailyBackup === 'function') {
+      window.runHybridDailyBackup(false).catch(e => console.warn("[HybridBackup] Startup auto-check notice:", e));
+    }
+  }, 3500);
 
   const modalElem = document.getElementById('backupRestoreModal');
   if (modalElem) {
