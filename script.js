@@ -10,7 +10,8 @@
       getDoc,
       setDoc,
       updateDoc, 
-      deleteDoc, 
+      deleteDoc,
+      writeBatch,
       serverTimestamp 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -16071,9 +16072,25 @@
 
       let addedCount = 0;
       let updatedCount = 0;
+      const empsToSave = [];
 
-      for (const emp of parsedExcelEmployeesData) {
-        const normName = (emp.name || '').trim().toLowerCase();
+      for (const rawEmp of parsedExcelEmployeesData) {
+        const emp = {
+          id: String(rawEmp.id || '').trim(),
+          code: String(rawEmp.code || rawEmp.id || '').trim(),
+          name: String(rawEmp.name || '').trim(),
+          nickname: String(rawEmp.nickname || '').trim(),
+          department: String(rawEmp.department || 'ทั่วไป').trim(),
+          position: String(rawEmp.position || 'พนักงาน').trim(),
+          role: rawEmp.role || 'WORKER',
+          phone: String(rawEmp.phone || '').trim(),
+          details: String(rawEmp.details || rawEmp.note || '').trim(),
+          photoUrl: rawEmp.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+          reportsTo: String(rawEmp.reportsTo || '').trim(),
+          status: rawEmp.status || 'ปฏิบัติงาน'
+        };
+
+        const normName = emp.name.toLowerCase();
 
         // Check if existing employee found by ID or by Name
         let existingIdx = employeeList.findIndex(x => x.id === emp.id || (x.code && x.code === emp.id));
@@ -16097,18 +16114,30 @@
             }
             employeeList[existingIdx] = { ...existingEmp, ...emp };
             updatedCount++;
+            empsToSave.push(employeeList[existingIdx]);
           }
         } else {
           employeeList.unshift(emp);
           addedCount++;
+          empsToSave.push(emp);
         }
+      }
 
-        if (isFirebaseReady && db) {
-          try {
-            await setDoc(doc(db, "employees", emp.id), emp, { merge: true });
-          } catch (fErr) {
-            console.warn("Firestore import employee setDoc error:", fErr);
+      // Fast Atomic Batch Write to Firestore (Chunks of 450)
+      if (isFirebaseReady && db && empsToSave.length > 0) {
+        try {
+          const chunkSize = 450;
+          for (let i = 0; i < empsToSave.length; i += chunkSize) {
+            const chunk = empsToSave.slice(i, i + chunkSize);
+            const batch = writeBatch(db);
+            chunk.forEach(e => {
+              const docRef = doc(db, "employees", e.id);
+              batch.set(docRef, e, { merge: true });
+            });
+            await batch.commit();
           }
+        } catch (fErr) {
+          console.warn("Firestore import employee batch error:", fErr);
         }
       }
 

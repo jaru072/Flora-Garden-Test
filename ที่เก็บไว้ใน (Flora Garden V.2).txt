@@ -1,5 +1,0 @@
-📋 สรุปสิ่งที่เก็บไว้ในโปรเจกต์หลัก(Flora Garden V.2)ที่จะอัพเดทโค้ด (ไม่ต้องลบ)  แต่ต้องลบโค้ดของ Flora Garden Test ที่จะ copy มาแทนที่
-✅ โฟลเดอร์ assets/
-✅ metadata.json
-✅ firebase-applet-config.json
-✅ รันบน V2.md

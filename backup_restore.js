@@ -2025,23 +2025,60 @@ async function findOrCreateDriveFolder(accessToken, folderName, parentFolderId =
   return created.id;
 }
 
-// List all files in a Google Drive folder
+// List all files in a Google Drive folder and auto-clean any redundant duplicate files
 async function listFilesInDriveFolder(accessToken, folderId) {
   const filesMap = new Map();
+  const duplicateFilesToDelete = [];
   let pageToken = '';
   do {
     const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,size,mimeType,createdTime,modifiedTime,webViewLink)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
     const res = await fetchWithDriveAuth(url, { accessToken });
     if (!res.ok) break;
     const data = await res.json();
-    if (data.files) {
+    if (data.files && Array.isArray(data.files)) {
       data.files.forEach(f => {
-        filesMap.set(f.name, f);
+        if (!f || !f.name) return;
+        const key = f.name.toLowerCase().trim();
+        if (!filesMap.has(key)) {
+          filesMap.set(key, f);
+        } else {
+          // A duplicate file with the exact same name already exists in this Google Drive folder!
+          const existing = filesMap.get(key);
+          const fTime = new Date(f.modifiedTime || f.createdTime || 0).getTime();
+          const exTime = new Date(existing.modifiedTime || existing.createdTime || 0).getTime();
+          const fSize = parseInt(f.size || '0', 10);
+          const exSize = parseInt(existing.size || '0', 10);
+
+          // Keep the newest/largest file, mark older redundant file for immediate deletion
+          if (fSize > 0 && exSize === 0) {
+            duplicateFilesToDelete.push(existing.id);
+            filesMap.set(key, f);
+          } else if (fTime > exTime) {
+            duplicateFilesToDelete.push(existing.id);
+            filesMap.set(key, f);
+          } else {
+            duplicateFilesToDelete.push(f.id);
+          }
+        }
       });
     }
     pageToken = data.nextPageToken || '';
   } while (pageToken);
-  return filesMap;
+
+  // Auto-purge redundant duplicate files found in this Google Drive folder
+  if (duplicateFilesToDelete.length > 0) {
+    for (const dupId of duplicateFilesToDelete) {
+      deleteFileFromDrive(accessToken, dupId).catch(() => {});
+    }
+  }
+
+  // Create combined map supporting both exact name and lowercase name lookups
+  const finalMap = new Map();
+  for (const [, f] of filesMap.entries()) {
+    finalMap.set(f.name, f);
+    finalMap.set(f.name.toLowerCase(), f);
+  }
+  return finalMap;
 }
 
 // Upload a single file (image or json) directly to Google Drive without zip
@@ -2096,7 +2133,7 @@ async function downloadFileFromDrive(accessToken, fileId) {
   return await res.text();
 }
 
-// Helper: Delete a file from Google Drive (used to clean up obsolete duplicate extensions)
+// Helper: Delete a file from Google Drive (used to clean up obsolete duplicate extensions or duplicate files)
 async function deleteFileFromDrive(accessToken, fileId) {
   try {
     await fetchWithDriveAuth(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
@@ -2152,10 +2189,20 @@ async function getCanonicalImageSyncList() {
     storageByExactName.set(item.name, item);
 
     const parts = item.name.split('/');
-    const folder = parts[0] || '';
+    let rawFolder = (parts[0] || '').toLowerCase();
+    // Normalize folder names
+    let folder = 'equipment';
+    if (rawFolder.includes('emp') || rawFolder.includes('staff')) {
+      folder = 'employees';
+    }
+
     const rawFileName = parts.slice(1).join('/') || parts[0];
     const dotIdx = rawFileName.lastIndexOf('.');
-    const baseCode = dotIdx > 0 ? rawFileName.substring(0, dotIdx) : rawFileName;
+    let baseCode = dotIdx > 0 ? rawFileName.substring(0, dotIdx) : rawFileName;
+    // Strip timestamp prefix if formatted as timestamp_code
+    if (/^\d{9,13}_/.test(baseCode)) {
+      baseCode = baseCode.replace(/^\d{9,13}_/, '');
+    }
     const cleanKey = `${folder}/${baseCode}`.toLowerCase();
 
     if (!storageByBaseCode.has(cleanKey)) {
@@ -2175,7 +2222,11 @@ async function getCanonicalImageSyncList() {
     // Check exact storage match from URL
     const storagePath = extractStoragePathFromUrl(url);
     if (storagePath && storageByExactName.has(storagePath)) {
-      finalImageMap.set(key, storageByExactName.get(storagePath));
+      const matched = storageByExactName.get(storagePath);
+      finalImageMap.set(key, {
+        ...matched,
+        canonicalFileName: `${safeCode}.${(matched.name.split('.').pop() || 'jpg').toLowerCase()}`
+      });
       return;
     }
 
@@ -2189,7 +2240,11 @@ async function getCanonicalImageSyncList() {
         if (extB === 'webp' && extA !== 'webp') return 1;
         return (new Date(b.updated || 0).getTime()) - (new Date(a.updated || 0).getTime());
       });
-      finalImageMap.set(key, matches[0]);
+      const chosen = matches[0];
+      finalImageMap.set(key, {
+        ...chosen,
+        canonicalFileName: `${safeCode}.${(chosen.name.split('.').pop() || 'jpg').toLowerCase()}`
+      });
       return;
     }
 
@@ -2201,6 +2256,7 @@ async function getCanonicalImageSyncList() {
 
     finalImageMap.set(key, {
       name: `equipment/${safeCode}.${ext}`,
+      canonicalFileName: `${safeCode}.${ext}`,
       downloadUrl: url,
       size: 0,
       contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
@@ -2217,7 +2273,11 @@ async function getCanonicalImageSyncList() {
 
     const storagePath = extractStoragePathFromUrl(url);
     if (storagePath && storageByExactName.has(storagePath)) {
-      finalImageMap.set(key, storageByExactName.get(storagePath));
+      const matched = storageByExactName.get(storagePath);
+      finalImageMap.set(key, {
+        ...matched,
+        canonicalFileName: `${safeCode}.${(matched.name.split('.').pop() || 'jpg').toLowerCase()}`
+      });
       return;
     }
 
@@ -2230,7 +2290,11 @@ async function getCanonicalImageSyncList() {
         if (extB === 'webp' && extA !== 'webp') return 1;
         return (new Date(b.updated || 0).getTime()) - (new Date(a.updated || 0).getTime());
       });
-      finalImageMap.set(key, matches[0]);
+      const chosen = matches[0];
+      finalImageMap.set(key, {
+        ...chosen,
+        canonicalFileName: `${safeCode}.${(chosen.name.split('.').pop() || 'jpg').toLowerCase()}`
+      });
       return;
     }
 
@@ -2241,28 +2305,33 @@ async function getCanonicalImageSyncList() {
 
     finalImageMap.set(key, {
       name: `employees/${safeCode}.${ext}`,
+      canonicalFileName: `${safeCode}.${ext}`,
       downloadUrl: url,
       size: 0,
       contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
     });
   });
 
-  // C. Add other unique non-colliding storage files if any
-  rawStorageFiles.forEach(item => {
-    if (!item || !item.name) return;
+  // C. Guarantee strictly one unique output file per destination path
+  const deduplicatedItems = [];
+  const seenDestinationKeys = new Set();
+
+  for (const item of finalImageMap.values()) {
     const parts = item.name.split('/');
-    const folder = parts[0] || '';
-    const rawFileName = parts.slice(1).join('/') || parts[0];
-    const dotIdx = rawFileName.lastIndexOf('.');
-    const baseCode = dotIdx > 0 ? rawFileName.substring(0, dotIdx) : rawFileName;
-    const key = `${folder}/${baseCode}`.toLowerCase();
-
-    if (!finalImageMap.has(key)) {
-      finalImageMap.set(key, item);
+    let targetFolder = 'equipment';
+    if (parts[0].toLowerCase().includes('emp') || parts[0].toLowerCase().includes('staff')) {
+      targetFolder = 'employees';
     }
-  });
+    const finalName = item.canonicalFileName || parts.slice(1).join('_') || parts[0];
+    const safeDestKey = `${targetFolder}/${finalName.toLowerCase()}`;
 
-  return Array.from(finalImageMap.values());
+    if (!seenDestinationKeys.has(safeDestKey)) {
+      seenDestinationKeys.add(safeDestKey);
+      deduplicatedItems.push(item);
+    }
+  }
+
+  return deduplicatedItems;
 }
 
 // Helper to fetch actual image binary as Blob (using local backup endpoint or server proxy)
@@ -2389,16 +2458,26 @@ window.startGoogleDriveBackup = async function() {
 
     // 5. Upload All Genuine Deduplicated Image Files to Google Drive
     const totalFiles = storageFiles.length;
+    const processedDriveFileNames = new Set();
+
     for (let i = 0; i < totalFiles; i++) {
       const item = storageFiles[i];
       const parts = item.name.split('/');
-      const isEmployee = parts[0] === 'employees' || parts[0] === 'employee_photos';
+      const isEmployee = parts[0].toLowerCase().includes('emp') || parts[0].toLowerCase().includes('staff');
       const targetFolderId = isEmployee ? empFolderId : equipFolderId;
       const existingMap = isEmployee ? existingEmpFiles : existingEquipFiles;
 
-      const fileName = parts.slice(1).join('_') || parts[0];
+      const fileName = item.canonicalFileName || parts.slice(1).join('_') || parts[0];
       const safeFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      const existingFile = existingMap.get(safeFileName);
+      const destKey = `${isEmployee ? 'emp' : 'eq'}_${safeFileName.toLowerCase()}`;
+
+      // Skip if already processed in this batch
+      if (processedDriveFileNames.has(destKey)) {
+        continue;
+      }
+      processedDriveFileNames.add(destKey);
+
+      const existingFile = existingMap.get(safeFileName) || existingMap.get(safeFileName.toLowerCase());
 
       // Clean up obsolete duplicate extensions on Google Drive for this code (e.g. remove old EQ-001.jpg if active is EQ-001.webp)
       const dotIdx = safeFileName.lastIndexOf('.');
@@ -2406,9 +2485,10 @@ window.startGoogleDriveBackup = async function() {
       for (const [dName, dFile] of existingMap.entries()) {
         const dDot = dName.lastIndexOf('.');
         const dBase = dDot > 0 ? dName.substring(0, dDot) : dName;
-        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName !== safeFileName) {
+        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName.toLowerCase() !== safeFileName.toLowerCase()) {
           await deleteFileFromDrive(accessToken, dFile.id);
           existingMap.delete(dName);
+          existingMap.delete(dName.toLowerCase());
         }
       }
 
@@ -2819,15 +2899,25 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
     const existingEmpFiles = await listFilesInDriveFolder(accessToken, empFolderId);
 
     let imagesUploaded = 0;
+    const processedRotationFileNames = new Set();
+
     for (const item of storageFiles) {
       const parts = item.name.split('/');
-      const isEmployee = parts[0] === 'employees' || parts[0] === 'employee_photos';
+      const isEmployee = parts[0].toLowerCase().includes('emp') || parts[0].toLowerCase().includes('staff');
       const targetFolderId = isEmployee ? empFolderId : equipFolderId;
       const existingMap = isEmployee ? existingEmpFiles : existingEquipFiles;
 
-      const fileName = parts.slice(1).join('_') || parts[0];
+      const fileName = item.canonicalFileName || parts.slice(1).join('_') || parts[0];
       const safeFileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      const existingFile = existingMap.get(safeFileName);
+      const destKey = `${isEmployee ? 'emp' : 'eq'}_${safeFileName.toLowerCase()}`;
+
+      // Skip if already processed in this batch
+      if (processedRotationFileNames.has(destKey)) {
+        continue;
+      }
+      processedRotationFileNames.add(destKey);
+
+      const existingFile = existingMap.get(safeFileName) || existingMap.get(safeFileName.toLowerCase());
 
       // Clean up obsolete duplicate extensions on Google Drive for this code (e.g. remove old EQ-001.jpg if active is EQ-001.webp)
       const dotIdx = safeFileName.lastIndexOf('.');
@@ -2835,9 +2925,10 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
       for (const [dName, dFile] of existingMap.entries()) {
         const dDot = dName.lastIndexOf('.');
         const dBase = dDot > 0 ? dName.substring(0, dDot) : dName;
-        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName !== safeFileName) {
+        if (dBase.toLowerCase() === baseCode.toLowerCase() && dName.toLowerCase() !== safeFileName.toLowerCase()) {
           await deleteFileFromDrive(accessToken, dFile.id);
           existingMap.delete(dName);
+          existingMap.delete(dName.toLowerCase());
         }
       }
 
@@ -2849,7 +2940,7 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
         const blob = await fetchDriveImageBlob(item);
         if (blob && blob.size > 0) {
           if (existingFile && parseInt(existingFile.size, 10) === blob.size) {
-            continue;
+            continue; // Identical, skip
           }
           await uploadFileToDrive(accessToken, {
             name: safeFileName,
@@ -2927,15 +3018,40 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
   }
 };
 
+window._isHybridBackupRunning = false;
+window._lastHybridBackupAttemptTimestamp = 0;
+
 window.runHybridDailyBackup = async function(isManual = false) {
   const dayInfo = window.getRotationDayInfo();
   const todayStr = dayInfo.dateIso;
-  const lastBackupDate = localStorage.getItem('flora_last_hybrid_backup_date');
-  const lastDriveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
-  const lastLocalOk = localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true';
 
-  // Guard: If both local and drive are already completed for today in Thailand timezone, skip auto run
-  if (!isManual && lastBackupDate === todayStr && lastDriveOk && lastLocalOk) {
+  // 1. Concurrency Mutex Lock: prevent multiple callers from running simultaneously
+  if (window._isHybridBackupRunning) {
+    console.log(`[HybridBackup] Backup process is currently running. Skipping concurrent trigger.`);
+    return { skipped: true, reason: "Backup already running" };
+  }
+
+  // 2. Debounce Lock: ignore repeated auto-triggers within 15 seconds
+  const nowMs = Date.now();
+  if (!isManual && (nowMs - (window._lastHybridBackupAttemptTimestamp || 0)) < 15000) {
+    console.log(`[HybridBackup] Debounced: auto-backup triggered too quickly.`);
+    return { skipped: true, reason: "Debounced" };
+  }
+  window._lastHybridBackupAttemptTimestamp = nowMs;
+
+  // 3. Status checks for today (Separate Local vs Google Drive)
+  const lastLocalBackupDate = localStorage.getItem('flora_last_local_backup_date');
+  const lastDriveBackupDate = localStorage.getItem('flora_last_drive_backup_date');
+  const legacyLastBackupDate = localStorage.getItem('flora_last_hybrid_backup_date');
+  const lastLocalOk = localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true';
+  const lastDriveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
+
+  // Determine if already completed today
+  const isLocalDoneToday = (lastLocalBackupDate === todayStr) || (legacyLastBackupDate === todayStr && lastLocalOk);
+  const isDriveDoneToday = (lastDriveBackupDate === todayStr) || (legacyLastBackupDate === todayStr && lastDriveOk);
+
+  // If auto-backup (not manual) and BOTH systems are already done today, skip completely
+  if (!isManual && isLocalDoneToday && isDriveDoneToday) {
     console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) in Thailand timezone has already fully run today.`);
     window.updateHybridBackupStatusUI();
     return { skipped: true, reason: "Already completed today" };
@@ -2954,55 +3070,84 @@ window.runHybridDailyBackup = async function(isManual = false) {
     return { skipped: true, reason: "Not Admin user" };
   }
 
-  // Wait briefly if initial data lists are still loading
-  if ((!window.equipmentList || window.equipmentList.length === 0) && (!window.employeeList || window.employeeList.length === 0)) {
-    await new Promise(r => setTimeout(r, 2500));
-  }
+  // Acquire Mutex Lock
+  window._isHybridBackupRunning = true;
 
-  console.log(`[HybridBackup] Executing Hybrid Dual Backup for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh}) [Asia/Bangkok]...`);
-
-  // 1. Part 1: Local Download to User Machine (Zero Token Required)
-  let localRes = null;
-  if (isManual || lastBackupDate !== todayStr || !lastLocalOk) {
-    try {
-      localRes = window.executeLocalHybridBackup(dayInfo);
-    } catch (lErr) {
-      console.error("[HybridBackup] Local backup error:", lErr);
-    }
-  } else {
-    localRes = { success: true, reason: "Already downloaded earlier today" };
-  }
-
-  // 2. Part 2: Google Drive Day Rotation Backup (Monday-Sunday)
-  let driveRes = null;
   try {
-    driveRes = await window.executeGoogleDriveRotationBackup(dayInfo, !isManual);
-  } catch (dErr) {
-    console.warn("[HybridBackup] Drive backup warning:", dErr);
+    // Wait briefly if initial data lists are still loading
+    if ((!window.equipmentList || window.equipmentList.length === 0) && (!window.employeeList || window.employeeList.length === 0)) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    console.log(`[HybridBackup] Executing Hybrid Dual Backup check for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh}) [Asia/Bangkok]...`);
+
+    // -------------------------------------------------------------
+    // Part 1: Local Download to User Machine (Max 1 auto-download per calendar day)
+    // -------------------------------------------------------------
+    let localRes = null;
+    if (isManual || !isLocalDoneToday) {
+      try {
+        localRes = window.executeLocalHybridBackup(dayInfo);
+        if (localRes && localRes.success) {
+          // Immediately mark local backup completed for today to eliminate race windows
+          localStorage.setItem('flora_last_local_backup_date', todayStr);
+          localStorage.setItem('flora_last_hybrid_backup_local_ok', 'true');
+          localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
+          localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
+        }
+      } catch (lErr) {
+        console.error("[HybridBackup] Local backup error:", lErr);
+      }
+    } else {
+      localRes = { success: true, reason: "Already downloaded earlier today" };
+    }
+
+    // -------------------------------------------------------------
+    // Part 2: Google Drive Day Rotation Backup (Monday-Sunday)
+    // -------------------------------------------------------------
+    let driveRes = null;
+    if (isManual || !isDriveDoneToday) {
+      try {
+        driveRes = await window.executeGoogleDriveRotationBackup(dayInfo, !isManual);
+        if (driveRes && driveRes.success) {
+          // Immediately mark drive backup completed for today
+          localStorage.setItem('flora_last_drive_backup_date', todayStr);
+          localStorage.setItem('flora_last_hybrid_backup_drive_ok', 'true');
+          localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
+          localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
+        }
+      } catch (dErr) {
+        console.warn("[HybridBackup] Drive backup warning:", dErr);
+      }
+    } else {
+      driveRes = { success: true, reason: "Already backed up to Drive earlier today" };
+    }
+
+    // Record meta fields
+    localStorage.setItem('flora_last_hybrid_backup_day', dayInfo.dayOfWeekEn);
+    localStorage.setItem('flora_last_hybrid_backup_day_th', dayInfo.dayOfWeekTh);
+
+    window.updateHybridBackupStatusUI();
+
+    // Toast Notification (only notify if actual work was performed)
+    const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
+
+    const didLocalWork = localRes && localRes.success && localRes.reason !== "Already downloaded earlier today";
+    const didDriveWork = driveRes && driveRes.success && driveRes.reason !== "Already backed up to Drive earlier today";
+
+    if (didDriveWork && didLocalWork) {
+      toast(`☁️ สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ครบทั้ง 2 ระบบ (Google Drive & ดาวน์โหลดลงเครื่อง) เรียบร้อยแล้ว!`);
+    } else if (didDriveWork) {
+      toast(`☁️ สำรองข้อมูลขึ้น Google Drive ประจำ${dayInfo.dayOfWeekTh} เรียบร้อยแล้ว`);
+    } else if (didLocalWork) {
+      toast(`💾 สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ดาวน์โหลดลงเครื่องเรียบร้อยแล้ว`);
+    }
+
+    return { success: true, local: localRes, drive: driveRes };
+  } finally {
+    // Always release Mutex Lock
+    window._isHybridBackupRunning = false;
   }
-
-  // Record Completion Timestamps in LocalStorage
-  localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
-  localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
-  localStorage.setItem('flora_last_hybrid_backup_day', dayInfo.dayOfWeekEn);
-  localStorage.setItem('flora_last_hybrid_backup_day_th', dayInfo.dayOfWeekTh);
-  localStorage.setItem('flora_last_hybrid_backup_drive_ok', driveRes && driveRes.success ? 'true' : (lastDriveOk && lastBackupDate === todayStr ? 'true' : 'false'));
-  localStorage.setItem('flora_last_hybrid_backup_local_ok', localRes && localRes.success ? 'true' : (lastLocalOk && lastBackupDate === todayStr ? 'true' : 'false'));
-
-  window.updateHybridBackupStatusUI();
-
-  // Toast Notification
-  const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
-
-  if (driveRes && driveRes.success && localRes && localRes.success) {
-    toast(`☁️ สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ครบทั้ง 2 ระบบ (Google Drive & ดาวน์โหลดลงเครื่อง) เรียบร้อยแล้ว!`);
-  } else if (driveRes && driveRes.success) {
-    toast(`☁️ สำรองข้อมูลขึ้น Google Drive ประจำ${dayInfo.dayOfWeekTh} เรียบร้อยแล้ว`);
-  } else if (localRes && localRes.success) {
-    toast(`💾 สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ดาวน์โหลดลงเครื่องเรียบร้อยแล้ว`);
-  }
-
-  return { success: true, local: localRes, drive: driveRes };
 };
 
 window.updateHybridBackupStatusUI = function() {
@@ -3015,23 +3160,30 @@ window.updateHybridBackupStatusUI = function() {
   }
 
   if (badgeElem) {
+    const todayStr = dayInfo.dateIso;
+    const lastLocalBackupDate = localStorage.getItem('flora_last_local_backup_date');
+    const lastDriveBackupDate = localStorage.getItem('flora_last_drive_backup_date');
     const lastDate = localStorage.getItem('flora_last_hybrid_backup_date');
     const lastTime = localStorage.getItem('flora_last_hybrid_backup_time');
     const lastDayTh = localStorage.getItem('flora_last_hybrid_backup_day_th') || '';
     const lastDayEn = localStorage.getItem('flora_last_hybrid_backup_day') || '';
-    const driveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
+    const driveOk = (lastDriveBackupDate === todayStr) || (lastDate === todayStr && localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true');
+    const localOk = (lastLocalBackupDate === todayStr) || (lastDate === todayStr && localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true');
 
-    if (lastDate === dayInfo.dateIso && lastTime) {
+    if ((lastDate === todayStr || localOk || driveOk) && lastTime) {
       const timeStr = new Date(lastTime).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
-      if (driveOk) {
+      if (driveOk && localOk) {
         badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
         badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - Google Drive & เครื่อง)`;
-      } else {
+      } else if (localOk) {
         badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
         badgeElem.style.cursor = 'pointer';
         badgeElem.title = 'คลิกเพื่อสำรองขึ้น Google Drive';
         badgeElem.onclick = () => window.runHybridDailyBackup(true);
         badgeElem.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> สำรองลงเครื่องแล้ว (${timeStr} น.) [คลิกเชื่อม Google Drive]`;
+      } else if (driveOk) {
+        badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองขึ้น Google Drive วันนี้แล้ว (${timeStr} น.)`;
       }
     } else if (lastDate && lastTime) {
       const dateFormatted = new Date(lastTime).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' });

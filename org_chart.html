@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>แผนผังบุคลากร (Org Chart) - โครงการทุ่งสวรรค์ ตะวันฉาย</title>
+
+  <!-- App Icons -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="favicon.png">
+
+  <!-- Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <style>
+    :root {
+      --primary-color: #1b4332;
+      --primary-hover: #143527;
+      --secondary-color: #2d6a4f;
+      --accent-color: #d97706;
+      --accent-light: #fef3c7;
+      --bg-canvas: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --tree-line-color: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Top Navbar */
+    .org-navbar {
+      background: linear-gradient(135deg, #1b4332 0%, #0d2818 100%);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      z-index: 1040;
+    }
+
+    /* Toolbar */
+    .org-toolbar {
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      position: sticky;
+      top: 60px;
+      z-index: 1030;
+    }
+
+    /* Canvas / Flowchart Area */
+    .chart-container {
+      min-height: calc(100vh - 140px);
+      padding: 30px 20px 80px 20px;
+      overflow: auto;
+      background-color: #f8fafc;
+      background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+      background-size: 24px 24px;
+      position: relative;
+      user-select: none;
+    }
+
+    .chart-zoom-layer {
+      transform-origin: top center;
+      transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 100%;
+    }
+
+    /* Tree Node Hierarchy */
+    .org-level {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 24px;
+      position: relative;
+      padding: 10px 0;
+      flex-wrap: wrap;
+    }
+
+    .org-branch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    /* Connector lines */
+    .tree-connector-down {
+      width: 2px;
+      height: 28px;
+      background-color: var(--tree-line-color);
+      margin: 0 auto;
+    }
+
+    .tree-connector-horizontal {
+      height: 2px;
+      background-color: var(--tree-line-color);
+      width: 100%;
+      margin-bottom: 0px;
+    }
+
+    /* Employee Card */
+    .emp-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      width: 260px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      position: relative;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .emp-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(27, 67, 50, 0.15);
+      border-color: #2d6a4f;
+    }
+
+    .emp-card.highlighted {
+      outline: 3px solid #f59e0b;
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+      transform: scale(1.05);
+      animation: pulseHighlight 1.5s infinite;
+    }
+
+    @keyframes pulseHighlight {
+      0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); }
+      50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.9); }
+    }
+
+    /* Role Top Badges & Accents */
+    .emp-card.role-admin {
+      border-top: 5px solid #dc2626;
+    }
+    .emp-card.role-manager {
+      border-top: 5px solid #2563eb;
+    }
+    .emp-card.role-staff {
+      border-top: 5px solid #059669;
+    }
+    .emp-card.role-worker {
+      border-top: 5px solid #d97706;
+    }
+
+    /* Avatar */
+    .emp-avatar-wrapper {
+      position: relative;
+      width: 84px;
+      height: 84px;
+      margin: 0 auto 12px auto;
+    }
+
+    .emp-avatar {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      background-color: #f1f5f9;
+      transition: transform 0.2s ease;
+    }
+
+    .emp-card:hover .emp-avatar {
+      transform: scale(1.06);
+    }
+
+    .emp-status-badge {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      background-color: #10b981;
+    }
+
+    .emp-code-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
+    .emp-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+      line-height: 1.3;
+    }
+
+    .emp-position {
+      font-size: 13px;
+      color: #2d6a4f;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .emp-dept-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #ecfdf5;
+      color: #065f46;
+      display: inline-block;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .emp-phone {
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    /* Card Action Buttons */
+    .emp-actions {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed #e2e8f0;
+    }
+
+    .btn-emp-action {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #64748b;
+      transition: all 0.15s ease;
+    }
+
+    .btn-emp-action:hover {
+      background: #f8fafc;
+      color: var(--primary-color);
+      border-color: var(--secondary-color);
+      transform: scale(1.1);
+    }
+
+    .btn-emp-action.btn-del:hover {
+      background: #fef2f2;
+      color: #dc2626;
+      border-color: #fca5a5;
+    }
+
+    /* Department Section Containers (for Department Flow View) */
+    .dept-section {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid #e2e8f0;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+      width: 100%;
+      max-width: 1280px;
+    }
+
+    .dept-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+    }
+
+    .dept-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1b4332;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .dept-count-badge {
+      background: #e2e8f0;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .dept-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+      justify-items: center;
+    }
+
+    /* Floating Zoom Controls */
+    .zoom-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #ffffff;
+      padding: 6px;
+      border-radius: 999px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      z-index: 1050;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-zoom {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: background 0.15s ease;
+    }
+
+    .btn-zoom:hover {
+      background: #f1f5f9;
+      color: #1b4332;
+    }
+
+    .zoom-percent-text {
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      min-width: 45px;
+      text-align: center;
+      user-select: none;
+    }
+
+    /* Stats Banner */
+    .stat-pill {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Toast */
+    #orgToastContainer {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 1090;
+    }
+
+    /* Print styling */
+    @media print {
+      .org-navbar, .org-toolbar, .zoom-controls, .emp-actions, .no-print {
+        display: none !important;
+      }
+      body, .chart-container {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+      .emp-card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+      }
+      .dept-section {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== TOP NAVBAR ==================== -->
+  <nav class="navbar navbar-dark org-navbar sticky-top py-2.5">
+    <div class="container-fluid px-3 px-md-4">
+      <div class="d-flex align-items-center gap-3">
+        <!-- Back to Main App Link (Close Tab if opened via target=_blank, or Fallback to index.html) -->
+        <button type="button" onclick="handleGoBackToMain()" class="btn btn-outline-light btn-sm rounded-pill px-3 py-1.5 fw-semibold d-flex align-items-center gap-1.5 shadow-sm" title="ปิดหน้านี้และกลับสู่หน้าหลัก Flora Garden">
+          <i class="bi bi-arrow-left-circle-fill fs-6 text-warning"></i>
+          <span>กลับหน้าหลัก</span>
+        </button>
+
+        <div class="d-flex align-items-center gap-2">
+          <div class="bg-warning text-dark p-2 rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+            <i class="bi bi-diagram-3-fill fs-5"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-white mb-0 lh-1">แผนผังบุคลากร (Org Chart)</h5>
+            <small class="text-white-50 fs-8">โครงการทุ่งสวรรค์ ตะวันฉาย - Flora Garden</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header Stats & Quick Action -->
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="d-none d-md-flex align-items-center gap-2 me-2">
+          <span class="stat-pill"><i class="bi bi-people-fill text-warning"></i> บุคลากรทั้งหมด: <b id="statTotalEmps">0</b> คน</span>
+          <span class="stat-pill"><i class="bi bi-diagram-2 text-info"></i> แผนก/ฝ่าย: <b id="statTotalDepts">0</b> แผนก</span>
+        </div>
+
+        <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm d-flex align-items-center gap-1.5 text-dark" onclick="openAddModal()">
+          <i class="bi bi-person-plus-fill fs-6"></i>
+          <span>เพิ่มบุคลากรใหม่</span>
+        </button>
+
+        <button type="button" class="btn btn-outline-light btn-sm rounded-pill px-3 py-1.5 fw-semibold shadow-sm d-flex align-items-center gap-1.5" onclick="window.print()" title="พิมพ์ผังองค์กร">
+          <i class="bi bi-printer-fill fs-6"></i>
+          <span class="d-none d-sm-inline">พิมพ์ผัง</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ==================== TOOLBAR & FILTERS ==================== -->
+  <div class="org-toolbar py-2.5 px-3 px-md-4">
+    <div class="container-fluid p-0 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      
+      <!-- View Modes -->
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="btn-group btn-group-sm rounded-pill p-1 bg-light border" role="group">
+          <button type="button" class="btn btn-sm rounded-pill px-3 py-1 fw-bold btn-success active shadow-sm" id="btnViewHierarchy" onclick="switchView('hierarchy')">
+            <i class="bi bi-diagram-3 me-1"></i> ผังลำดับขั้น (Tree)
+          </button>
+          <button type="button" class="btn btn-sm rounded-pill px-3 py-1 fw-semibold text-muted" id="btnViewDept" onclick="switchView('department')">
+            <i class="bi bi-grid-3x3-gap-fill me-1"></i> ผังแยกตามแผนก (Departments)
+          </button>
+          <button type="button" class="btn btn-sm rounded-pill px-3 py-1 fw-semibold text-muted" id="btnViewGrid" onclick="switchView('grid')">
+            <i class="bi bi-card-list me-1"></i> รายชื่อทั้งหมด (Grid)
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Department Filter -->
+      <div class="d-flex align-items-center gap-2 flex-wrap flex-grow-1 justify-content-end" style="max-width: 650px;">
+        <!-- Search -->
+        <div class="input-group input-group-sm flex-grow-1" style="min-width: 220px; max-width: 320px;">
+          <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" id="searchInput" class="form-control border-start-0 bg-light fs-7" placeholder="🔍 ค้นหาชื่อ, รหัส, ตำแหน่ง..." oninput="handleSearch(this.value)">
+          <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()" title="ล้างการค้นหา"><i class="bi bi-x-circle-fill"></i></button>
+        </div>
+
+        <!-- Department Filter Dropdown -->
+        <div style="min-width: 180px;">
+          <select id="deptFilterSelect" class="form-select form-select-sm fw-semibold bg-light border" onchange="filterByDepartment(this.value)">
+            <option value="ALL">🏢 ทุกแผนก / ฝ่ายงาน</option>
+          </select>
+        </div>
+
+        <!-- Refresh Data Button -->
+        <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-2.5 py-1 fw-semibold shadow-sm" onclick="reloadEmployeeData()" title="รีเฟรชข้อมูลจากระบบ">
+          <i class="bi bi-arrow-clockwise fs-6"></i>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== MAIN FLOWCHART CANVAS ==================== -->
+  <main class="chart-container" id="chartContainer">
+    <div class="chart-zoom-layer" id="zoomLayer">
+      <!-- Dynamic Flowchart Content Populated by JavaScript -->
+      <div id="chartContent" class="w-100 d-flex flex-column align-items-center">
+        <div class="text-center py-5">
+          <div class="spinner-border text-success mb-3" role="status"></div>
+          <p class="text-muted fw-semibold">กำลังโหลดแผนผังบุคลากร...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== FLOATING ZOOM CONTROLS ==================== -->
+  <div class="zoom-controls no-print">
+    <button class="btn-zoom" onclick="zoomOut()" title="ย่อผัง (-)"><i class="bi bi-dash-lg"></i></button>
+    <span class="zoom-percent-text" id="zoomPercentText">100%</span>
+    <button class="btn-zoom" onclick="zoomIn()" title="ขยายผัง (+)"><i class="bi bi-plus-lg"></i></button>
+    <button class="btn-zoom" onclick="resetZoom()" title="รีเซ็ตขนาด (100%)"><i class="bi bi-arrows-angle-expand"></i></button>
+  </div>
+
+  <!-- ==================== MODAL: ADD / EDIT EMPLOYEE ==================== -->
+  <div class="modal fade" id="empModal" tabindex="-1" aria-labelledby="empModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+        
+        <!-- Modal Header -->
+        <div class="modal-header bg-success text-white py-3 px-4">
+          <div class="d-flex align-items-center gap-2">
+            <div class="bg-white bg-opacity-20 p-2 rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+              <i class="bi bi-person-gear fs-5" id="modalHeaderIcon"></i>
+            </div>
+            <h5 class="modal-title fw-bold mb-0" id="empModalTitle">แก้ไขข้อมูลบุคลากร</h5>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <!-- Modal Body -->
+        <form id="empForm" onsubmit="handleSaveEmployee(event)">
+          <input type="hidden" id="empEditId" value="" />
+
+          <div class="modal-body p-4">
+            <div class="row g-4">
+              
+              <!-- Left Column: Photo Upload & Preview -->
+              <div class="col-12 col-md-4 text-center border-end-md">
+                <label class="form-label fw-bold text-dark mb-2">รูปถ่ายบุคลากร</label>
+                
+                <div class="position-relative d-inline-block mb-3">
+                  <img id="formPhotoPreview" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80" 
+                       class="rounded-circle shadow border border-3 border-success" 
+                       style="width: 140px; height: 140px; object-fit: cover; background: #f8fafc;"
+                       onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'" />
+                  
+                  <button type="button" class="btn btn-warning btn-sm rounded-circle position-absolute bottom-0 end-0 p-2 shadow-sm border border-2 border-white" onclick="document.getElementById('formPhotoFileInput').click()" title="เปลี่ยนรูปถ่าย">
+                    <i class="bi bi-camera-fill text-dark"></i>
+                  </button>
+                </div>
+
+                <input type="file" id="formPhotoFileInput" accept="image/*" class="d-none" onchange="handlePhotoFileSelected(event)" />
+                <input type="hidden" id="formPhotoDataUrl" value="" />
+
+                <div class="d-grid gap-1 mb-2">
+                  <button type="button" class="btn btn-outline-success btn-sm rounded-pill fw-semibold py-1.5" onclick="document.getElementById('formPhotoFileInput').click()">
+                    <i class="bi bi-upload me-1"></i> อัปโหลดรูปภาพใหม่
+                  </button>
+                </div>
+                
+                <div class="mb-2 text-start">
+                  <label class="form-label fs-8 text-muted fw-semibold mb-1" for="formPhotoUrlInput">หรือใส่ลิงก์รูป (URL):</label>
+                  <input type="url" id="formPhotoUrlInput" class="form-control form-control-sm fs-8" placeholder="https://..." oninput="handlePhotoUrlInput(this.value)" />
+                </div>
+                <small class="text-muted fs-9 d-block">รองรับไฟล์ JPG, PNG, WEBP หรือถ่ายภาพ</small>
+              </div>
+
+              <!-- Right Column: Employee Info Fields -->
+              <div class="col-12 col-md-8">
+                <div class="row g-3">
+                  
+                  <!-- Employee Code -->
+                  <div class="col-6 col-sm-4">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpCode">รหัสพนักงาน <span class="text-danger">*</span></label>
+                    <input type="text" id="formEmpCode" class="form-control fw-bold font-monospace" placeholder="เช่น SF-01, WK-01" required />
+                  </div>
+
+                  <!-- Role / Hierarchy Level -->
+                  <div class="col-6 col-sm-4">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpRole">ระดับ / บทบาท <span class="text-danger">*</span></label>
+                    <select id="formEmpRole" class="form-select fw-semibold" required onchange="handleRoleChange(this.value)">
+                      <option value="ADMIN">🔴 ผู้บริหาร / ผู้อำนวยการ (Admin)</option>
+                      <option value="MANAGER">🔵 ผู้จัดการ / หัวหน้างาน (Manager)</option>
+                      <option value="STAFF" selected>🟢 เจ้าหน้าที่ / หัวหน้าทีม (Staff)</option>
+                      <option value="WORKER">🟡 พนักงานเกษตร / ประจำแปลง (Worker)</option>
+                    </select>
+                  </div>
+
+                  <!-- Status -->
+                  <div class="col-12 col-sm-4">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpStatus">สถานะการทำงาน</label>
+                    <select id="formEmpStatus" class="form-select fw-semibold">
+                      <option value="ปฏิบัติงาน" selected>🟢 ปฏิบัติงานปกติ</option>
+                      <option value="ลาพักผ่อน">🟡 ลาพัก / วันหยุด</option>
+                      <option value="ทดลองงาน">🔵 ทดลองงาน</option>
+                      <option value="พ้นสภาพ">⚪ พ้นสภาพ</option>
+                    </select>
+                  </div>
+
+                  <!-- Full Name -->
+                  <div class="col-12 col-sm-7">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpName">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+                    <input type="text" id="formEmpName" class="form-control fw-bold text-success" placeholder="เช่น สมชาย ใจดี" required />
+                  </div>
+
+                  <!-- Position Title -->
+                  <div class="col-12 col-sm-5">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpPosition">ตำแหน่งที่แสดง</label>
+                    <input type="text" id="formEmpPosition" class="form-control" placeholder="เช่น หัวหน้าทีมกุหลาบ, เจ้าหน้าที่ธุรการ" />
+                  </div>
+
+                  <!-- Department -->
+                  <div class="col-12 col-sm-6">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpDept">แผนก / ฝ่ายงาน <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <select id="formEmpDept" class="form-select fw-semibold" required>
+                        <option value="แผนกงานธุรการ">แผนกงานธุรการ</option>
+                        <option value="แผนกงานทดลอง">แผนกงานทดลอง</option>
+                        <option value="แผนกทีมกุหลาบ">แผนกทีมกุหลาบ</option>
+                        <option value="แผนกทีมเจดีย์/แปลง G">แผนกทีมเจดีย์/แปลง G</option>
+                        <option value="แผนกทีมแปลง A-B">แผนกทีมแปลง A-B</option>
+                        <option value="แผนกทีมแปลง E/P11">แผนกทีมแปลง E/P11</option>
+                        <option value="แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน">แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน</option>
+                        <option value="แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)">แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)</option>
+                      </select>
+                      <button type="button" class="btn btn-outline-secondary" onclick="promptNewDepartment()" title="พิมพ์แผนกใหม่">
+                        <i class="bi bi-plus-lg"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Phone Number -->
+                  <div class="col-12 col-sm-6">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpPhone">เบอร์โทรศัพท์ติดต่อ</label>
+                    <input type="tel" id="formEmpPhone" class="form-control" placeholder="08x-xxx-xxxx" />
+                  </div>
+
+                  <!-- Reports To / Supervisor -->
+                  <div class="col-12">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpReportsTo">หัวหน้างานผู้บังคับบัญชาโดยตรง (Reports To)</label>
+                    <select id="formEmpReportsTo" class="form-select fs-7">
+                      <option value="">-- เป็นระดับสูงสุด / ไม่มีหัวหน้างานกำกับโดยตรง --</option>
+                    </select>
+                    <small class="text-muted fs-8">กำหนดเพื่อให้เส้นลำดับขั้นในผังองค์กรเชื่อมโยงอย่างถูกต้อง</small>
+                  </div>
+
+                  <!-- Note / Remark -->
+                  <div class="col-12">
+                    <label class="form-label fw-bold text-dark fs-7" for="formEmpNote">หมายเหตุ / ความรับผิดชอบ</label>
+                    <textarea id="formEmpNote" class="form-control fs-7" rows="2" placeholder="เช่น ดูแลระบบน้ำแปลง A, เพาะขยายพันธุ์กุหลาบ"></textarea>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="modal-footer bg-light py-3 px-4 d-flex justify-content-between align-items-center">
+            <div>
+              <button type="button" id="btnDeleteEmployee" class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5 fw-semibold d-none" onclick="confirmDeleteCurrentEmployee()">
+                <i class="bi bi-trash-fill me-1"></i> ลบข้อมูลบุคลากรนี้
+              </button>
+            </div>
+            
+            <div class="d-flex align-items-center gap-2">
+              <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-semibold" data-bs-dismiss="modal">ยกเลิก</button>
+              <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm" id="btnSaveEmp">
+                <i class="bi bi-check-circle-fill me-1"></i> บันทึกข้อมูล
+              </button>
+            </div>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Alert Container -->
+  <div id="orgToastContainer"></div>
+
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase Modular SDK via CDN -->
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      getDocs, 
+      setDoc, 
+      updateDoc, 
+      deleteDoc, 
+      onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Global App State
+    window.employees = [];
+    window.departments = [];
+    window.currentView = 'hierarchy'; // 'hierarchy' | 'department' | 'grid'
+    window.currentZoom = 1.0;
+    window.activeFilterDept = 'ALL';
+    window.searchKeyword = '';
+    window.db = null;
+
+    // Load Firebase Config
+    async function initFirebase() {
+      try {
+        let config = null;
+        try {
+          const resp = await fetch('firebase-applet-config.json');
+          if (resp.ok) {
+            config = await resp.json();
+          }
+        } catch (e) {}
+
+        if (!config || !config.projectId) {
+          config = {
+            projectId: "flora-gaden",
+            appId: "1:633519077693:web:6267796ae34a8286ff6d54",
+            apiKey: "AIzaSyCVFTo7glMah6eeubjCLQa6HtIrnwpmrc4",
+            authDomain: "flora-gaden.firebaseapp.com",
+            storageBucket: "flora-gaden.firebasestorage.app"
+          };
+        }
+
+        const app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
+        window.db = getFirestore(app);
+
+        // Real-time listener for employees collection
+        onSnapshot(collection(window.db, "employees"), (snapshot) => {
+          let list = [];
+          if (!snapshot.empty) {
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              list.push({ id: docSnap.id, ...data });
+            });
+          }
+
+          // Check if localStorage has more employees (e.g. from Excel imports or offline state)
+          try {
+            const saved = localStorage.getItem('flora_employees');
+            if (saved) {
+              const localList = JSON.parse(saved);
+              if (Array.isArray(localList) && localList.length > list.length) {
+                const existingMap = new Map();
+                list.forEach(e => {
+                  const key = String(e.id || e.code || '').trim().toLowerCase();
+                  if (key) existingMap.set(key, e);
+                });
+
+                const missingEmps = [];
+                localList.forEach(e => {
+                  if (!e) return;
+                  const key = String(e.id || e.code || '').trim().toLowerCase();
+                  if (key && !existingMap.has(key)) {
+                    missingEmps.push(e);
+                    list.push(e);
+                  }
+                });
+
+                // Write missing employees to Firestore in background
+                if (missingEmps.length > 0 && window.db) {
+                  missingEmps.forEach(mEmp => {
+                    const mId = mEmp.id || mEmp.code;
+                    if (mId) {
+                      setDoc(doc(window.db, "employees", mId), mEmp, { merge: true }).catch(() => {});
+                    }
+                  });
+                }
+              }
+            }
+          } catch (e) {}
+
+          if (list.length > 0) {
+            window.employees = list;
+            syncToLocalStorage();
+            renderOrgChart();
+          } else {
+            loadFromLocalStorageOrSeed();
+          }
+        }, (error) => {
+          console.warn("Firestore snapshot notice:", error);
+          loadFromLocalStorageOrSeed();
+        });
+
+      } catch (err) {
+        console.error("Firebase init error in Org Chart:", err);
+        loadFromLocalStorageOrSeed();
+      }
+    }
+
+    function loadFromLocalStorageOrSeed() {
+      try {
+        const saved = localStorage.getItem('flora_employees');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            window.employees = parsed;
+            renderOrgChart();
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Seed Default Structure if empty
+      window.employees = generateSeedEmployees();
+      syncToLocalStorage();
+      renderOrgChart();
+    }
+
+    function syncToLocalStorage() {
+      try {
+        if (Array.isArray(window.employees) && window.employees.length > 0) {
+          localStorage.setItem('flora_employees', JSON.stringify(window.employees));
+        }
+      } catch (e) {}
+    }
+
+    // Generate Rich Initial Dataset if nothing in storage
+    function generateSeedEmployees() {
+      return [
+        {
+          id: "ADM-01",
+          code: "ADM-01",
+          name: "พระอาจารย์ / ผู้จัดการโครงการ",
+          role: "ADMIN",
+          position: "ผู้อำนวยการโครงการทุ่งสวรรค์ ตะวันฉาย",
+          department: "คณะผู้บริหารและอำนวยการ",
+          phone: "081-072-0000",
+          status: "ปฏิบัติงาน",
+          reportsTo: "",
+          photoUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80",
+          note: "กำกับดูแลนโยบายและทิศทางงานทั้งหมดของโครงการ"
+        },
+        {
+          id: "SF-01",
+          code: "SF-01",
+          name: "สมชาย ใจดี",
+          role: "MANAGER",
+          position: "หัวหน้าฝ่ายธุรการและประสานงาน",
+          department: "แผนกงานธุรการ",
+          phone: "081-456-7890",
+          status: "ปฏิบัติงาน",
+          reportsTo: "ADM-01",
+          photoUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80",
+          note: "บริหารจัดการงานเอกสาร สต๊อกกลาง และการเบิกจ่าย"
+        },
+        {
+          id: "SF-02",
+          code: "SF-02",
+          name: "นภา หัตถกรรม",
+          role: "MANAGER",
+          position: "หัวหน้างานวิจัยและทดลองพืช",
+          department: "แผนกงานทดลอง",
+          phone: "089-123-4567",
+          status: "ปฏิบัติงาน",
+          reportsTo: "ADM-01",
+          photoUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&auto=format&fit=crop&q=80",
+          note: "ทดสอบสายพันธุ์ไม้ดอกและปุ๋ยชีวภาพ"
+        },
+        {
+          id: "SF-03",
+          code: "SF-03",
+          name: "วิชัย การจัดการ",
+          role: "STAFF",
+          position: "หัวหน้าทีมกุหลาบ",
+          department: "แผนกทีมกุหลาบ",
+          phone: "086-789-0123",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-01",
+          photoUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80",
+          note: "ดูแลการปลูก ตัดแต่งกิ่ง และระบบให้น้ำแปลงกุหลาบ"
+        },
+        {
+          id: "SF-04",
+          code: "SF-04",
+          name: "สุดา สวนเกษตร",
+          role: "STAFF",
+          position: "หัวหน้าทีมแปลง A-B",
+          department: "แผนกทีมแปลง A-B",
+          phone: "084-567-8901",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-01",
+          photoUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300&auto=format&fit=crop&q=80",
+          note: "ดูแลไม้ดอกไม้ประดับแปลงหลัก A และ B"
+        },
+        {
+          id: "WK-01",
+          code: "WK-01",
+          name: "สุชาติ การเกษตร",
+          role: "WORKER",
+          position: "พนักงานดูแลแปลงกุหลาบ",
+          department: "แผนกทีมกุหลาบ",
+          phone: "089-321-6540",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-03",
+          photoUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&auto=format&fit=crop&q=80",
+          note: "ตัดแต่งกิ่ง ให้ปุ๋ย และเก็บเกี่ยวผลผลิต"
+        },
+        {
+          id: "WK-02",
+          code: "WK-02",
+          name: "สมบูรณ์ การเกษตร",
+          role: "WORKER",
+          position: "พนักงานดูแลแปลงกุหลาบ",
+          department: "แผนกทีมกุหลาบ",
+          phone: "089-654-7890",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-03",
+          photoUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=300&auto=format&fit=crop&q=80",
+          note: "ดูแลระบบน้ำและให้ฮอร์โมนพืช"
+        },
+        {
+          id: "WK-03",
+          code: "WK-03",
+          name: "บุญมี การเกษตร",
+          role: "WORKER",
+          position: "พนักงานดูแลแปลง A-B",
+          department: "แผนกทีมแปลง A-B",
+          phone: "089-987-1234",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-04",
+          photoUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&auto=format&fit=crop&q=80",
+          note: "พรวนดิน ขนย้ายกระถาง และตัดหญ้า"
+        },
+        {
+          id: "WK-04",
+          code: "WK-04",
+          name: "มะลิ การเกษตร",
+          role: "WORKER",
+          position: "พนักงานขยายพันธุ์ไม้ทดลอง",
+          department: "แผนกงานทดลอง",
+          phone: "087-654-3210",
+          status: "ปฏิบัติงาน",
+          reportsTo: "SF-02",
+          photoUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80",
+          note: "เพาะชำต้นกล้าและบันทึกการเติบโต"
+        }
+      ];
+    }
+
+    // Extract All Unique Departments
+    function updateDepartmentOptions() {
+      const depts = new Set();
+      window.employees.forEach(e => {
+        if (e.department) depts.add(e.department.trim());
+      });
+      window.departments = Array.from(depts);
+
+      // Populate Filter Dropdown
+      const select = document.getElementById('deptFilterSelect');
+      const formDeptSelect = document.getElementById('formEmpDept');
+      
+      if (select) {
+        const currentVal = select.value;
+        select.innerHTML = '<option value="ALL">🏢 ทุกแผนก / ฝ่ายงาน</option>';
+        window.departments.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = `📁 ${d}`;
+          if (d === currentVal) opt.selected = true;
+          select.appendChild(opt);
+        });
+      }
+
+      if (formDeptSelect) {
+        const currentFormVal = formDeptSelect.value;
+        formDeptSelect.innerHTML = '';
+        window.departments.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          if (d === currentFormVal) opt.selected = true;
+          formDeptSelect.appendChild(opt);
+        });
+      }
+
+      // Update Header Stats
+      document.getElementById('statTotalEmps').textContent = window.employees.length;
+      document.getElementById('statTotalDepts').textContent = window.departments.length;
+    }
+
+    // Populate Supervisor Dropdown in Form
+    function updateSupervisorOptions(currentEmpId = '') {
+      const select = document.getElementById('formEmpReportsTo');
+      if (!select) return;
+      
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">-- เป็นระดับสูงสุด / ไม่มีหัวหน้างานกำกับโดยตรง --</option>';
+
+      window.employees
+        .filter(e => e.id !== currentEmpId && (e.id || e.code))
+        .forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id || e.code;
+          const roleBadge = e.role === 'ADMIN' ? '🔴' : e.role === 'MANAGER' ? '🔵' : '🟢';
+          opt.textContent = `${roleBadge} [${e.code || e.id}] ${e.name} (${e.position || e.department || 'เจ้าหน้าที่'})`;
+          if ((e.id || e.code) === currentVal) opt.selected = true;
+          select.appendChild(opt);
+        });
+    }
+
+    // ==================== RENDERING ENGINE ====================
+    window.renderOrgChart = function() {
+      updateDepartmentOptions();
+
+      const container = document.getElementById('chartContent');
+      if (!container) return;
+
+      let filteredList = [...window.employees];
+
+      // Filter by Department
+      if (window.activeFilterDept !== 'ALL') {
+        filteredList = filteredList.filter(e => e.department === window.activeFilterDept);
+      }
+
+      // Search keyword filter
+      if (window.searchKeyword) {
+        const kw = window.searchKeyword.toLowerCase();
+        filteredList = filteredList.filter(e => 
+          (e.name && e.name.toLowerCase().includes(kw)) ||
+          (e.code && e.code.toLowerCase().includes(kw)) ||
+          (e.position && e.position.toLowerCase().includes(kw)) ||
+          (e.department && e.department.toLowerCase().includes(kw)) ||
+          (e.phone && e.phone.includes(kw))
+        );
+      }
+
+      if (filteredList.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-5">
+            <div class="bg-light d-inline-flex p-4 rounded-circle mb-3">
+              <i class="bi bi-person-x fs-1 text-muted"></i>
+            </div>
+            <h5 class="fw-bold text-dark">ไม่พบบุคลากรตามเงื่อนไข</h5>
+            <p class="text-muted fs-7">ลองค้นหาด้วยคำอื่น หรือคลิกปุ่มเพิ่มบุคลากรใหม่ด้านบน</p>
+            <button class="btn btn-warning btn-sm rounded-pill px-4 fw-bold shadow-sm" onclick="openAddModal()">
+              <i class="bi bi-person-plus-fill me-1"></i> เพิ่มบุคลากรใหม่
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      if (window.currentView === 'hierarchy') {
+        renderHierarchyTree(filteredList, container);
+      } else if (window.currentView === 'department') {
+        renderDepartmentView(filteredList, container);
+      } else {
+        renderGridView(filteredList, container);
+      }
+    };
+
+    // 1. Hierarchy Tree Renderer
+    function renderHierarchyTree(list, container) {
+      // Group logically by roles
+      let admins = list.filter(e => e.role === 'ADMIN');
+      let middleGroup = list.filter(e => (e.role === 'MANAGER' || e.role === 'STAFF') && e.role !== 'ADMIN');
+      let workerGroup = list.filter(e => e.role !== 'ADMIN' && e.role !== 'MANAGER' && e.role !== 'STAFF');
+
+      // If no explicit ADMIN, pick top staff/manager or the first employee as leader
+      if (admins.length === 0) {
+        if (middleGroup.length > 0) {
+          admins = [middleGroup[0]];
+          middleGroup = middleGroup.slice(1);
+        } else if (workerGroup.length > 0) {
+          admins = [workerGroup[0]];
+          workerGroup = workerGroup.slice(1);
+        }
+      }
+
+      // Build Top Level
+      let html = `<div class="org-level" style="margin-bottom: 20px;">`;
+      if (admins.length > 0) {
+        admins.forEach(emp => {
+          html += renderEmployeeCardHtml(emp);
+        });
+      }
+      html += `</div>`;
+
+      // Connector Down
+      html += `<div class="tree-connector-down"></div>`;
+
+      // Middle Level: Managers / Staff / Supervisors
+      if (middleGroup.length > 0) {
+        html += `<div class="tree-connector-horizontal" style="max-width: ${Math.min(middleGroup.length * 280, 1100)}px;"></div>`;
+        html += `<div class="org-level" style="gap: 20px; margin-top: -1px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;">`;
+        middleGroup.forEach(emp => {
+          html += `
+            <div class="org-branch">
+              <div class="tree-connector-down" style="height: 16px;"></div>
+              ${renderEmployeeCardHtml(emp)}
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // Bottom Level: Field Workers & Team Members Grouped By Department (EMP-001 to EMP-102+)
+      if (workerGroup.length > 0) {
+        html += `<div class="tree-connector-down"></div>`;
+        html += `<div class="tree-connector-horizontal" style="max-width: 95%;"></div>`;
+        
+        // Group workers by department
+        const workersByDept = {};
+        workerGroup.forEach(w => {
+          const dept = w.department || 'ทั่วไป';
+          if (!workersByDept[dept]) workersByDept[dept] = [];
+          workersByDept[dept].push(w);
+        });
+
+        html += `<div class="org-level" style="gap: 24px; align-items: stretch; margin-top: 10px; flex-wrap: wrap; justify-content: center;">`;
+        Object.keys(workersByDept).forEach(deptName => {
+          const deptWorkers = workersByDept[deptName];
+          html += `
+            <div class="dept-section p-3" style="min-width: 280px; max-width: 340px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+              <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                <span class="fw-bold text-success fs-7"><i class="bi bi-folder2-open me-1"></i>${escapeHtml(deptName)}</span>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle px-2 py-1">${deptWorkers.length} คน</span>
+              </div>
+              <div class="d-flex flex-column gap-2" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">
+                ${deptWorkers.map(w => renderCompactEmployeeCardHtml(w)).join('')}
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    // 2. Department Group Flow View Renderer
+    function renderDepartmentView(list, container) {
+      const depts = {};
+      list.forEach(e => {
+        const d = e.department || 'ไม่ระบุแผนก';
+        if (!depts[d]) depts[d] = [];
+        depts[d].push(e);
+      });
+
+      let html = `<div class="w-100 d-flex flex-column align-items-center gap-4">`;
+
+      Object.keys(depts).forEach(deptName => {
+        const members = depts[deptName];
+        html += `
+          <div class="dept-section">
+            <div class="dept-header">
+              <div class="dept-title">
+                <i class="bi bi-building text-success fs-4"></i>
+                <span>${deptName}</span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="dept-count-badge">${members.length} บุคลากร</span>
+                <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold" onclick="openAddModalForDept('${escapeHtml(deptName)}')">
+                  <i class="bi bi-plus-lg me-1"></i> เพิ่มคนในแผนกนี้
+                </button>
+              </div>
+            </div>
+
+            <div class="dept-grid">
+              ${members.map(emp => renderEmployeeCardHtml(emp)).join('')}
+            </div>
+          </div>
+        `;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    // 3. Grid View Renderer
+    function renderGridView(list, container) {
+      let html = `
+        <div class="w-100 max-w-7xl">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted fs-7 fw-semibold">แสดงผลแบบการ์ดทั้งหมด (${list.length} คน)</span>
+            <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 fw-bold" onclick="openAddModal()">
+              <i class="bi bi-person-plus-fill me-1"></i> เพิ่มบุคลากร
+            </button>
+          </div>
+          <div class="d-flex flex-wrap justify-content-center gap-3">
+            ${list.map(emp => renderEmployeeCardHtml(emp)).join('')}
+          </div>
+        </div>
+      `;
+      container.innerHTML = html;
+    }
+
+    // HTML Generator for Full Employee Card
+    function renderEmployeeCardHtml(emp) {
+      const safeId = escapeHtml(emp.id || emp.code);
+      const safeCode = escapeHtml(emp.code || emp.id || '');
+      const safeName = escapeHtml(emp.name || 'ไม่ระบุชื่อ');
+      const safePos = escapeHtml(emp.position || emp.role || 'บุคลากร');
+      const safeDept = escapeHtml(emp.department || 'โครงการทุ่งสวรรค์');
+      const safePhone = escapeHtml(emp.phone || '-');
+      const photoUrl = emp.photoUrl || emp.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+      
+      const roleClass = (emp.role === 'ADMIN') ? 'role-admin' :
+                        (emp.role === 'MANAGER') ? 'role-manager' :
+                        (emp.role === 'STAFF') ? 'role-staff' : 'role-worker';
+
+      const roleBadge = (emp.role === 'ADMIN') ? '<span class="badge bg-danger">🔴 ผู้บริหาร</span>' :
+                        (emp.role === 'MANAGER') ? '<span class="badge bg-primary">🔵 ผู้จัดการ</span>' :
+                        (emp.role === 'STAFF') ? '<span class="badge bg-success">🟢 หัวหน้าทีม</span>' :
+                        '<span class="badge bg-warning text-dark">🟡 พนักงาน</span>';
+
+      return `
+        <div class="emp-card ${roleClass}" id="card_${safeId}" onclick="openEditModal('${safeId}')" title="คลิกที่รูปหรือการ์ดเพื่อแก้ไขข้อมูล">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="emp-code-pill">${safeCode}</span>
+            ${roleBadge}
+          </div>
+
+          <div class="emp-avatar-wrapper">
+            <img src="${photoUrl}" class="emp-avatar" alt="${safeName}" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'" />
+            <span class="emp-status-badge" title="สถานะ: ${escapeHtml(emp.status || 'ปฏิบัติงาน')}"></span>
+          </div>
+
+          <div class="emp-name">${safeName}</div>
+          <div class="emp-position">${safePos}</div>
+          <div class="emp-dept-badge"><i class="bi bi-geo-alt-fill me-1"></i>${safeDept}</div>
+          
+          <div class="emp-phone">
+            <i class="bi bi-telephone-fill text-success fs-9"></i>
+            <span>${safePhone}</span>
+          </div>
+
+          <div class="emp-actions" onclick="event.stopPropagation()">
+            <button type="button" class="btn-emp-action" onclick="openEditModal('${safeId}')" title="แก้ไขข้อมูลบุคลากร">
+              <i class="bi bi-pencil-fill"></i>
+            </button>
+            <button type="button" class="btn-emp-action" onclick="openAddSubordinateModal('${safeId}')" title="เพิ่มผู้ใต้บังคับบัญชา / ลูกทีม">
+              <i class="bi bi-person-plus-fill"></i>
+            </button>
+            <button type="button" class="btn-emp-action btn-del" onclick="confirmDeleteEmployee('${safeId}', '${safeName}')" title="ลบข้อมูล">
+              <i class="bi bi-trash-fill"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // HTML Generator for Compact Card
+    function renderCompactEmployeeCardHtml(emp) {
+      const safeId = escapeHtml(emp.id || emp.code);
+      const safeName = escapeHtml(emp.name || 'ไม่ระบุชื่อ');
+      const safePos = escapeHtml(emp.position || 'พนักงาน');
+      const safeCode = escapeHtml(emp.code || emp.id || '');
+      const photoUrl = emp.photoUrl || emp.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80';
+
+      return `
+        <div class="d-flex align-items-center justify-content-between p-2 rounded-3 bg-light border hover-shadow" 
+             style="cursor: pointer; transition: background 0.15s ease;"
+             onclick="openEditModal('${safeId}')" title="คลิกเพื่อแก้ไขข้อมูล">
+          <div class="d-flex align-items-center gap-2">
+            <img src="${photoUrl}" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'" />
+            <div class="text-start">
+              <div class="fw-bold text-dark fs-8 lh-1 mb-1">${safeName}</div>
+              <small class="text-muted fs-9 font-monospace">[${safeCode}] ${safePos}</small>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle p-1 border-0" onclick="event.stopPropagation(); openEditModal('${safeId}')">
+            <i class="bi bi-pencil fs-8"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    // Helper: Escape HTML
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // ==================== CRUD OPERATIONS ====================
+    window.openAddModal = function() {
+      document.getElementById('empForm').reset();
+      document.getElementById('empEditId').value = '';
+      document.getElementById('empModalTitle').textContent = 'เพิ่มข้อมูลบุคลากรใหม่';
+      document.getElementById('modalHeaderIcon').className = 'bi bi-person-plus-fill fs-5';
+      document.getElementById('btnDeleteEmployee').classList.add('d-none');
+
+      // Auto generate next code
+      const nextCode = generateNextEmpCode('WK');
+      document.getElementById('formEmpCode').value = nextCode;
+      document.getElementById('formEmpRole').value = 'WORKER';
+      document.getElementById('formEmpStatus').value = 'ปฏิบัติงาน';
+      
+      const defaultAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+      document.getElementById('formPhotoPreview').src = defaultAvatar;
+      document.getElementById('formPhotoDataUrl').value = defaultAvatar;
+      document.getElementById('formPhotoUrlInput').value = '';
+
+      updateSupervisorOptions('');
+
+      const modal = new bootstrap.Modal(document.getElementById('empModal'));
+      modal.show();
+    };
+
+    window.openAddModalForDept = function(deptName) {
+      window.openAddModal();
+      const formDept = document.getElementById('formEmpDept');
+      if (formDept) formDept.value = deptName;
+    };
+
+    window.openAddSubordinateModal = function(parentId) {
+      window.openAddModal();
+      const reportsToSelect = document.getElementById('formEmpReportsTo');
+      if (reportsToSelect) reportsToSelect.value = parentId;
+      const parent = window.employees.find(e => (e.id || e.code) === parentId);
+      if (parent && parent.department) {
+        document.getElementById('formEmpDept').value = parent.department;
+      }
+    };
+
+    window.openEditModal = function(empId) {
+      const emp = window.employees.find(e => (e.id || e.code) === empId);
+      if (!emp) return;
+
+      document.getElementById('empEditId').value = emp.id || emp.code;
+      document.getElementById('empModalTitle').textContent = `แก้ไขข้อมูล: ${emp.name}`;
+      document.getElementById('modalHeaderIcon').className = 'bi bi-person-gear fs-5';
+      document.getElementById('btnDeleteEmployee').classList.remove('d-none');
+
+      document.getElementById('formEmpCode').value = emp.code || emp.id || '';
+      document.getElementById('formEmpName').value = emp.name || '';
+      document.getElementById('formEmpRole').value = emp.role || 'WORKER';
+      document.getElementById('formEmpPosition').value = emp.position || '';
+      document.getElementById('formEmpDept').value = emp.department || 'แผนกงานธุรการ';
+      document.getElementById('formEmpPhone').value = emp.phone || '';
+      document.getElementById('formEmpStatus').value = emp.status || 'ปฏิบัติงาน';
+      document.getElementById('formEmpNote').value = emp.note || '';
+
+      const photo = emp.photoUrl || emp.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+      document.getElementById('formPhotoPreview').src = photo;
+      document.getElementById('formPhotoDataUrl').value = photo;
+      document.getElementById('formPhotoUrlInput').value = photo.startsWith('http') ? photo : '';
+
+      updateSupervisorOptions(emp.id || emp.code);
+      document.getElementById('formEmpReportsTo').value = emp.reportsTo || '';
+
+      const modal = new bootstrap.Modal(document.getElementById('empModal'));
+      modal.show();
+    };
+
+    window.handleRoleChange = function(newRole) {
+      const codeInput = document.getElementById('formEmpCode');
+      if (!codeInput.value || codeInput.value.startsWith('SF-') || codeInput.value.startsWith('WK-') || codeInput.value.startsWith('ADM-')) {
+        const prefix = newRole === 'ADMIN' ? 'ADM' : newRole === 'MANAGER' ? 'MGR' : newRole === 'STAFF' ? 'SF' : 'WK';
+        codeInput.value = generateNextEmpCode(prefix);
+      }
+    };
+
+    function generateNextEmpCode(prefix = 'WK') {
+      const matches = window.employees
+        .map(e => e.code || e.id || '')
+        .filter(c => c.startsWith(`${prefix}-`))
+        .map(c => parseInt(c.replace(`${prefix}-`, ''), 10))
+        .filter(n => !isNaN(n));
+      const maxNum = matches.length > 0 ? Math.max(...matches) : 0;
+      return `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
+    }
+
+    // Photo Handlers
+    window.handlePhotoFileSelected = function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Check size
+      if (file.size > 5 * 1024 * 1024) {
+        showToast("ขนาดรูปภาพต้องไม่เกิน 5 MB");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        document.getElementById('formPhotoPreview').src = dataUrl;
+        document.getElementById('formPhotoDataUrl').value = dataUrl;
+        document.getElementById('formPhotoUrlInput').value = '';
+      };
+      reader.readAsDataURL(file);
+    };
+
+    window.handlePhotoUrlInput = function(url) {
+      if (url && url.trim().startsWith('http')) {
+        document.getElementById('formPhotoPreview').src = url.trim();
+        document.getElementById('formPhotoDataUrl').value = url.trim();
+      }
+    };
+
+    window.promptNewDepartment = function() {
+      const newDept = prompt("กรุณาระบุชื่อแผนก/ฝ่ายงานใหม่:");
+      if (newDept && newDept.trim()) {
+        const trimmed = newDept.trim();
+        const select = document.getElementById('formEmpDept');
+        const opt = document.createElement('option');
+        opt.value = trimmed;
+        opt.textContent = trimmed;
+        opt.selected = true;
+        select.appendChild(opt);
+        showToast(`เพิ่มแผนก "${trimmed}" เรียบร้อย`);
+      }
+    };
+
+    // Save Employee (Insert / Update to Firestore & LocalStorage)
+    window.handleSaveEmployee = async function(event) {
+      event.preventDefault();
+      
+      const editId = document.getElementById('empEditId').value.trim();
+      const code = document.getElementById('formEmpCode').value.trim();
+      const name = document.getElementById('formEmpName').value.trim();
+      const role = document.getElementById('formEmpRole').value;
+      const position = document.getElementById('formEmpPosition').value.trim() || role;
+      const department = document.getElementById('formEmpDept').value.trim();
+      const phone = document.getElementById('formEmpPhone').value.trim();
+      const status = document.getElementById('formEmpStatus').value;
+      const reportsTo = document.getElementById('formEmpReportsTo').value;
+      const note = document.getElementById('formEmpNote').value.trim();
+      const photoUrl = document.getElementById('formPhotoDataUrl').value || document.getElementById('formPhotoPreview').src;
+
+      const empData = {
+        id: editId || code || `EMP-${Date.now()}`,
+        code: code || editId,
+        name: name,
+        role: role,
+        position: position,
+        department: department,
+        phone: phone,
+        status: status,
+        reportsTo: reportsTo,
+        note: note,
+        photoUrl: photoUrl,
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Update In-Memory List
+      if (editId) {
+        const idx = window.employees.findIndex(e => (e.id || e.code) === editId);
+        if (idx !== -1) {
+          window.employees[idx] = { ...window.employees[idx], ...empData };
+        } else {
+          window.employees.push(empData);
+        }
+      } else {
+        window.employees.push(empData);
+      }
+
+      // 2. Persist to LocalStorage
+      syncToLocalStorage();
+
+      // 3. Persist to Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "employees", empData.id);
+          await setDoc(docRef, empData, { merge: true });
+        } catch (err) {
+          console.warn("Firestore save notice:", err);
+        }
+      }
+
+      // Close modal & refresh
+      const modalEl = document.getElementById('empModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+
+      showToast(`บันทึกข้อมูล "${name}" เรียบร้อยแล้ว!`);
+      renderOrgChart();
+    };
+
+    // Delete Employee
+    window.confirmDeleteCurrentEmployee = function() {
+      const editId = document.getElementById('empEditId').value;
+      const emp = window.employees.find(e => (e.id || e.code) === editId);
+      if (emp) {
+        confirmDeleteEmployee(editId, emp.name);
+      }
+    };
+
+    window.confirmDeleteEmployee = async function(empId, empName) {
+      if (!confirm(`คุณต้องการลบข้อมูลบุคลากร "${empName}" [${empId}] ออกจากผังและระบบใช่หรือไม่?`)) {
+        return;
+      }
+
+      // 1. Remove from in-memory
+      window.employees = window.employees.filter(e => (e.id || e.code) !== empId);
+      syncToLocalStorage();
+
+      // 2. Remove from Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "employees", empId);
+          await deleteDoc(docRef);
+        } catch (err) {
+          console.warn("Firestore delete notice:", err);
+        }
+      }
+
+      // Close modal if open
+      const modalEl = document.getElementById('empModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+
+      showToast(`ลบข้อมูล "${empName}" เรียบร้อยแล้ว`);
+      renderOrgChart();
+    };
+
+    // ==================== INTERACTION & CONTROLS ====================
+    window.switchView = function(view) {
+      window.currentView = view;
+      document.getElementById('btnViewHierarchy').className = `btn btn-sm rounded-pill px-3 py-1 ${view === 'hierarchy' ? 'btn-success active shadow-sm fw-bold' : 'fw-semibold text-muted'}`;
+      document.getElementById('btnViewDept').className = `btn btn-sm rounded-pill px-3 py-1 ${view === 'department' ? 'btn-success active shadow-sm fw-bold' : 'fw-semibold text-muted'}`;
+      document.getElementById('btnViewGrid').className = `btn btn-sm rounded-pill px-3 py-1 ${view === 'grid' ? 'btn-success active shadow-sm fw-bold' : 'fw-semibold text-muted'}`;
+      renderOrgChart();
+    };
+
+    window.filterByDepartment = function(dept) {
+      window.activeFilterDept = dept;
+      renderOrgChart();
+    };
+
+    window.handleSearch = function(keyword) {
+      window.searchKeyword = keyword.trim();
+      renderOrgChart();
+
+      // If exact card found, scroll and highlight
+      if (keyword.trim().length > 1) {
+        setTimeout(() => {
+          const cards = document.querySelectorAll('.emp-card');
+          if (cards.length > 0) {
+            cards[0].classList.add('highlighted');
+            cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => cards[0].classList.remove('highlighted'), 3000);
+          }
+        }, 150);
+      }
+    };
+
+    window.clearSearch = function() {
+      document.getElementById('searchInput').value = '';
+      window.searchKeyword = '';
+      renderOrgChart();
+    };
+
+    window.reloadEmployeeData = async function() {
+      showToast("🔄 กำลังรีเฟรชและซิงค์ข้อมูลบุคลากร...");
+      try {
+        let count = 0;
+        if (window.db) {
+          const snap = await getDocs(collection(window.db, "employees"));
+          if (!snap.empty) {
+            const list = [];
+            snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+            window.employees = list;
+            count = list.length;
+          }
+        }
+        
+        // Merge with local storage if local storage has more records
+        const saved = localStorage.getItem('flora_employees');
+        if (saved) {
+          const localList = JSON.parse(saved);
+          if (Array.isArray(localList) && localList.length > 0) {
+            const existingMap = new Map();
+            window.employees.forEach(e => {
+              const k = String(e.id || e.code || '').trim().toLowerCase();
+              if (k) existingMap.set(k, e);
+            });
+            let addedFromLocal = 0;
+            localList.forEach(e => {
+              const k = String(e.id || e.code || '').trim().toLowerCase();
+              if (k && !existingMap.has(k)) {
+                window.employees.push(e);
+                addedFromLocal++;
+              }
+            });
+            if (addedFromLocal > 0 && window.db) {
+              // batch push to firestore
+              window.employees.forEach(emp => {
+                const docId = emp.id || emp.code;
+                if (docId) setDoc(doc(window.db, "employees", docId), emp, { merge: true }).catch(()=>{});
+              });
+            }
+          }
+        }
+
+        syncToLocalStorage();
+        renderOrgChart();
+        showToast(`✅ โหลดข้อมูลบุคลากรทั้งหมดเรียบร้อยแล้ว (${window.employees.length} คน)`);
+      } catch (err) {
+        console.warn("Reload error:", err);
+        loadFromLocalStorageOrSeed();
+        showToast(`โหลดข้อมูลบุคลากรเรียบร้อยแล้ว (${window.employees.length} คน)`);
+      }
+    };
+
+    // Zoom Controls
+    window.zoomIn = function() {
+      window.currentZoom = Math.min(window.currentZoom + 0.15, 2.0);
+      applyZoom();
+    };
+
+    window.zoomOut = function() {
+      window.currentZoom = Math.max(window.currentZoom - 0.15, 0.4);
+      applyZoom();
+    };
+
+    window.resetZoom = function() {
+      window.currentZoom = 1.0;
+      applyZoom();
+    };
+
+    function applyZoom() {
+      const layer = document.getElementById('zoomLayer');
+      const text = document.getElementById('zoomPercentText');
+      if (layer) {
+        layer.style.transform = `scale(${window.currentZoom})`;
+      }
+      if (text) {
+        text.textContent = `${Math.round(window.currentZoom * 100)}%`;
+      }
+    }
+
+    // Toast Utility
+    function showToast(msg) {
+      const container = document.getElementById('orgToastContainer');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = 'toast align-items-center text-white bg-dark border-0 show shadow-lg mb-2';
+      toast.style.borderRadius = '12px';
+      toast.setAttribute('role', 'alert');
+      toast.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body py-2.5 px-3 fs-7 fw-semibold">
+            <i class="bi bi-info-circle-fill text-warning me-2"></i> ${msg}
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    // Navigation Handler: Close tab or navigate to index.html
+    window.handleGoBackToMain = function() {
+      // 1. Try to close current tab (works if opened via window.open / target=_blank)
+      window.close();
+
+      // 2. If the browser blocks window.close (e.g. opened directly in tab), fallback after a short delay to history.back() or index.html
+      setTimeout(() => {
+        if (window.opener) {
+          try {
+            window.opener.focus();
+          } catch (e) {}
+        }
+        if (window.history.length > 1 && document.referrer) {
+          window.location.href = 'index.html';
+        } else {
+          window.location.href = 'index.html';
+        }
+      }, 100);
+    };
+
+    // Initialize on Page Load
+    window.addEventListener('DOMContentLoaded', () => {
+      initFirebase();
+    });
+
+  </script>
+</body>
+</html>

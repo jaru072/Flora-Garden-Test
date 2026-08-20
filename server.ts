@@ -513,6 +513,9 @@ async function main() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+    app.get(['/org_chart.html', '/org_chart'], (req, res) => {
+      res.sendFile(path.join(distPath, 'org_chart.html'));
+    });
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
