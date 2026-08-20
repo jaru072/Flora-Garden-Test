@@ -1557,6 +1557,9 @@
         }, 500);
       }
       setupEventListeners();
+      if (typeof initGlobalScannerAutoDetectEngine === 'function') {
+        initGlobalScannerAutoDetectEngine();
+      }
     }
 
     // initApp will be invoked at the end of the script after all functions are loaded
@@ -11056,22 +11059,772 @@
     };
 
     // ==========================================
-    // AUDIO & SCANNER ENGINE LOGIC
+    // HARDWARE SCANNER AUTO-DETECT ENGINE (โหมดยิงสแกนบาร์โค้ด & QR Code อัตโนมัติ)
     // ==========================================
-    function playScanBeep() {
+    let scannerAutoDetectEnabled = true;
+    let scannerSoundEnabled = true;
+    let scannerAutoActionMode = 'SMART_CONTEXT'; // 'SMART_CONTEXT' | 'AUTO_CLOCK_IN' | 'AUTO_SELECT_FORM' | 'SHOW_POPUP_MODAL'
+    let scannerHistoryList = [];
+    let scannerKeyBuffer = '';
+    let scannerKeyTimestamps = [];
+    let scannerBufferResetTimer = null;
+    let scannerHudDismissTimer = null;
+    let scannerLastProcessedCode = '';
+    let scannerLastProcessedTime = 0;
+
+    function loadScannerSettings() {
+      try {
+        const savedAuto = localStorage.getItem('flora_scanner_autodetect_enabled');
+        if (savedAuto !== null) scannerAutoDetectEnabled = savedAuto === 'true';
+
+        const savedSound = localStorage.getItem('flora_scanner_sound_enabled');
+        if (savedSound !== null) scannerSoundEnabled = savedSound === 'true';
+
+        const savedMode = localStorage.getItem('flora_scanner_auto_action');
+        if (savedMode) scannerAutoActionMode = savedMode;
+
+        const savedHistory = localStorage.getItem('flora_scanner_history');
+        if (savedHistory) {
+          const parsed = JSON.parse(savedHistory);
+          if (Array.isArray(parsed)) scannerHistoryList = parsed.slice(0, 50);
+        }
+      } catch (e) {
+        console.warn("Scanner settings load error:", e);
+      }
+      updateScannerStatusUI();
+    }
+
+    function saveScannerSettings() {
+      try {
+        localStorage.setItem('flora_scanner_autodetect_enabled', String(scannerAutoDetectEnabled));
+        localStorage.setItem('flora_scanner_sound_enabled', String(scannerSoundEnabled));
+        localStorage.setItem('flora_scanner_auto_action', scannerAutoActionMode);
+        localStorage.setItem('flora_scanner_history', JSON.stringify(scannerHistoryList.slice(0, 50)));
+      } catch (e) {}
+      updateScannerStatusUI();
+    }
+
+    function updateScannerStatusUI() {
+      const headerBtn = document.getElementById('btnHardwareScannerStatus');
+      const pulseDot = document.getElementById('scannerStatusPulseDot');
+      const btnText = document.getElementById('scannerStatusBtnText');
+      const modalDot = document.getElementById('modalScannerPulseDot');
+      const chkAuto = document.getElementById('chkScannerAutoDetectEnabled');
+      const chkSound = document.getElementById('chkScannerSoundEnabled');
+
+      if (chkAuto) chkAuto.checked = scannerAutoDetectEnabled;
+      if (chkSound) chkSound.checked = scannerSoundEnabled;
+
+      const radios = document.getElementsByName('scannerAutoActionRadio');
+      if (radios) {
+        radios.forEach(r => {
+          if (r.value === scannerAutoActionMode) r.checked = true;
+        });
+      }
+
+      if (scannerAutoDetectEnabled) {
+        if (pulseDot) pulseDot.className = 'scanner-status-pulse-dot';
+        if (modalDot) modalDot.className = 'scanner-status-pulse-dot';
+        if (btnText) btnText.textContent = 'โหมดยิงสแกน: พร้อมทำงาน';
+        if (headerBtn) {
+          headerBtn.className = 'btn btn-outline-success btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm d-flex align-items-center gap-2';
+        }
+      } else {
+        if (pulseDot) pulseDot.className = 'scanner-status-pulse-dot inactive';
+        if (modalDot) modalDot.className = 'scanner-status-pulse-dot inactive';
+        if (btnText) btnText.textContent = 'โหมดยิงสแกน: ปิดอยู่';
+        if (headerBtn) {
+          headerBtn.className = 'btn btn-outline-secondary btn-sm rounded-pill px-3 py-1.5 fw-semibold shadow-sm d-flex align-items-center gap-2';
+        }
+      }
+    }
+
+    window.playHardwareScanSuccessSound = function() {
+      if (!scannerSoundEnabled) return;
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = ctx.currentTime;
+
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+
+        osc1.frequency.setValueAtTime(1046.5, now);
+        osc1.frequency.exponentialRampToValueAtTime(1318.5, now + 0.08);
+
+        osc2.frequency.setValueAtTime(1567.98, now);
+        osc2.frequency.exponentialRampToValueAtTime(2093.0, now + 0.08);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.22);
+        osc2.stop(now + 0.22);
+      } catch(e){}
+    };
+
+    function playScanBeep() {
+      window.playHardwareScanSuccessSound();
+    }
+
+    window.playHardwareScanErrorSound = function() {
+      if (!scannerSoundEnabled) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = ctx.currentTime;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.linearRampToValueAtTime(220, now + 0.25);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } catch (e) {}
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } catch(e){}
+    };
+
+    window.testHardwareScannerSound = function() {
+      playHardwareScanSuccessSound();
+    };
+
+    window.openHardwareScannerSettingsModal = function() {
+      loadScannerSettings();
+      renderScannerHistoryTable();
+      clearScannerTestLog();
+
+      const modalElem = document.getElementById('hardwareScannerSettingsModal');
+      if (modalElem) {
+        const modalInst = new bootstrap.Modal(modalElem);
+        modalInst.show();
+        setTimeout(() => {
+          const testInput = document.getElementById('scannerTestInput');
+          if (testInput) testInput.focus();
+        }, 400);
+      }
+    };
+
+    window.toggleScannerAutoDetectState = function(enabled) {
+      scannerAutoDetectEnabled = enabled;
+      saveScannerSettings();
+      showToast(enabled ? "🟢 เปิดโหมดยิงสแกน QR Code / บาร์โค้ดอัตโนมัติแล้ว" : "🔴 ปิดโหมดยิงสแกนอัตโนมัติแล้ว");
+    };
+
+    window.toggleScannerSoundState = function(enabled) {
+      scannerSoundEnabled = enabled;
+      saveScannerSettings();
+      if (enabled) playHardwareScanSuccessSound();
+    };
+
+    window.changeScannerAutoActionMode = function(mode) {
+      scannerAutoActionMode = mode;
+      saveScannerSettings();
+      showToast(`⚡ ปรับรูปแบบการทำงานเป็น: ${mode === 'SMART_CONTEXT' ? 'ฉลาดตามหน้าจอ' : mode === 'AUTO_CLOCK_IN' ? 'ลงเวลาเข้างานอัตโนมัติ' : mode === 'AUTO_SELECT_FORM' ? 'ใส่ฟอร์มเบิก-ยืม' : 'เปิดหน้าต่างข้อมูล'}`);
+    };
+
+    // Clean and Resolve Scanned Code
+    window.resolveScannedCodeEntity = function(rawInput) {
+      if (!rawInput) return { type: 'UNKNOWN', entity: null, cleanCode: '', rawCode: '' };
+      let clean = String(rawInput).trim();
+
+      // Check if it's formatted as URL with query param
+      if (clean.includes('?') && clean.includes('=')) {
+        try {
+          const url = new URL(clean, window.location.origin);
+          const dataParam = url.searchParams.get('data') || url.searchParams.get('qr') || url.searchParams.get('code');
+          if (dataParam) clean = decodeURIComponent(dataParam).trim();
+        } catch(e){}
+      }
+
+      let explicitType = null;
+      if (clean.startsWith('EMPLOYEE:')) {
+        explicitType = 'EMPLOYEE';
+        clean = clean.replace('EMPLOYEE:', '').trim();
+      } else if (clean.startsWith('EQUIPMENT:')) {
+        explicitType = 'EQUIPMENT';
+        clean = clean.replace('EQUIPMENT:', '').trim();
+      }
+
+      const lower = clean.toLowerCase();
+
+      // 1. Match Employee
+      if (explicitType === 'EMPLOYEE' || !explicitType) {
+        const emp = (employeeList || []).find(e => 
+          (e.id && e.id.toLowerCase() === lower) ||
+          (e.code && e.code.toLowerCase() === lower) ||
+          (e.name && e.name.toLowerCase() === lower) ||
+          (e.phone && e.phone.replace(/[^0-9]/g, '') === clean.replace(/[^0-9]/g, '') && clean.length >= 9)
+        );
+        if (emp) {
+          return {
+            type: 'EMPLOYEE',
+            entity: emp,
+            cleanCode: clean,
+            rawCode: rawInput,
+            title: typeof formatEmpName === 'function' ? formatEmpName(emp) : emp.name,
+            subtitle: `${emp.department || 'ทั่วไป'} • [${emp.id}]`,
+            imageUrl: emp.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+            badgeText: emp.role === 'STAFF' ? 'เจ้าหน้าที่สำนักงาน (Staff)' : 'พนักงานทำเกษตร (Worker)',
+            badgeClass: emp.role === 'STAFF' ? 'bg-primary' : 'bg-success'
+          };
+        }
+      }
+
+      // 2. Match Equipment
+      if (explicitType === 'EQUIPMENT' || !explicitType) {
+        const item = (equipmentList || []).find(x => 
+          (x.code && x.code.toLowerCase() === lower) ||
+          (x.id && x.id.toLowerCase() === lower) ||
+          (x.name && x.name.toLowerCase() === lower)
+        );
+        if (item) {
+          return {
+            type: 'EQUIPMENT',
+            entity: item,
+            cleanCode: clean,
+            rawCode: rawInput,
+            title: item.name,
+            subtitle: `${item.category || 'อุปกรณ์'} • รหัส ${item.code}`,
+            imageUrl: item.imageUrl || DEFAULT_EQUIPMENT_IMAGE,
+            badgeText: `คงเหลือ: ${item.quantity} ${item.unit}`,
+            badgeClass: item.quantity <= 5 ? 'bg-danger' : 'bg-success'
+          };
+        }
+      }
+
+      // 3. Unknown Code
+      return {
+        type: 'UNKNOWN',
+        entity: null,
+        cleanCode: clean,
+        rawCode: rawInput,
+        title: clean,
+        subtitle: 'ไม่พบในฐานข้อมูล (รหัสใหม่)',
+        imageUrl: '',
+        badgeText: 'รหัสไม่รู้จัก',
+        badgeClass: 'bg-secondary'
+      };
+    };
+
+    // Process detected code
+    window.processAutoDetectedScannedCode = function(rawCode, isHardware = true, avgInterval = 0) {
+      if (!rawCode || !rawCode.trim()) return;
+      const now = Date.now();
+      const clean = rawCode.trim();
+
+      // Debounce identical scans within 800ms
+      if (clean === scannerLastProcessedCode && (now - scannerLastProcessedTime) < 800) {
+        return;
+      }
+      scannerLastProcessedCode = clean;
+      scannerLastProcessedTime = now;
+
+      const res = resolveScannedCodeEntity(clean);
+
+      // Update diagnostic if modal or test box is open
+      updateDiagnosticReadout(res, isHardware, avgInterval);
+
+      // Play Sound
+      if (res.type !== 'UNKNOWN') {
+        playHardwareScanSuccessSound();
+      } else {
+        playHardwareScanErrorSound();
+      }
+
+      // Determine active screen context
+      const activeTabPane = document.querySelector('.tab-pane.active');
+      const activeTabId = activeTabPane ? activeTabPane.id : '';
+      let actionTaken = 'แสดงข้อมูล';
+
+      // Contextual execution
+      if (res.type === 'EMPLOYEE') {
+        const emp = res.entity;
+        if (scannerAutoActionMode === 'AUTO_CLOCK_IN' || (scannerAutoActionMode === 'SMART_CONTEXT' && activeTabId === 'attendance-pane')) {
+          recordAttendanceDirectly(emp, 'ยิงสแกนบัตรพนักงานอัตโนมัติ (Scanner Auto-detect)');
+          actionTaken = 'บันทึกเข้างานทันที 🟢';
+        } else if (scannerAutoActionMode === 'AUTO_SELECT_FORM' || (scannerAutoActionMode === 'SMART_CONTEXT' && (activeTabId === 'transaction-pane' || activeTabId === 'borrow-cart-pane'))) {
+          selectEmployeeToFormDirectly(emp);
+          actionTaken = 'เลือกใส่ฟอร์มเบิก-ยืม 📝';
+        } else if (scannerAutoActionMode === 'SHOW_POPUP_MODAL') {
+          openScanEmpBadgeModal();
+          setTimeout(() => handleScannedEmpQrCode(clean), 350);
+          actionTaken = 'เปิดหน้าต่างสแกนพนักงาน 👁️';
+        } else {
+          // Default SMART_CONTEXT on other screens: show HUD
+          actionTaken = 'แสดงแถบข้อมูลพนักงาน';
+        }
+      } else if (res.type === 'EQUIPMENT') {
+        const item = res.entity;
+        if (scannerAutoActionMode === 'AUTO_SELECT_FORM' || (scannerAutoActionMode === 'SMART_CONTEXT' && (activeTabId === 'transaction-pane' || activeTabId === 'borrow-cart-pane'))) {
+          selectEquipmentToFormDirectly(item);
+          actionTaken = 'เลือกใส่อุปกรณ์ลงฟอร์ม 📝';
+        } else if (scannerAutoActionMode === 'SHOW_POPUP_MODAL') {
+          openBarcodeQrScannerModal();
+          setTimeout(() => handleScannedBarcodeCode(clean), 350);
+          actionTaken = 'เปิดหน้าต่างสแกนอุปกรณ์ 👁️';
+        } else {
+          actionTaken = 'แสดงแถบข้อมูลอุปกรณ์';
+        }
+      } else {
+        // UNKNOWN
+        actionTaken = 'ไม่พบในระบบ';
+        showToast(`⚠️ ยิงสแกนพบรหัส: "${clean}" (ยังไม่มีในระบบ)`);
+      }
+
+      // Log to history
+      const historyItem = {
+        id: 'scan-' + Date.now(),
+        timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        type: res.type,
+        rawCode: clean,
+        title: res.title,
+        entity: res.entity,
+        actionTaken: actionTaken
+      };
+      scannerHistoryList.unshift(historyItem);
+      if (scannerHistoryList.length > 50) scannerHistoryList.pop();
+      saveScannerSettings();
+      renderScannerHistoryTable();
+
+      // Show Floating HUD
+      showScannerAutoDetectHUD(res, actionTaken);
+    };
+
+    // Direct Attendance Record
+    window.recordAttendanceDirectly = function(emp, noteText = 'ยิงสแกนบัตรพนักงานอัตโนมัติ') {
+      if (!emp) return;
+      const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+      const todayStr = new Date().toLocaleDateString('th-TH');
+
+      const log = {
+        id: 'att-' + Date.now(),
+        employeeId: emp.id,
+        employeeName: emp.name,
+        status: 'เข้างาน',
+        time: timeStr,
+        date: todayStr,
+        note: noteText
+      };
+
+      attendanceLogs.unshift(log);
+      saveToLocalStorage();
+
+      if (isFirebaseReady && db) {
+        addDoc(collection(db, "attendance"), log).catch(()=>{});
+      }
+
+      showToast(`🟢 บันทึกเข้างานสำเร็จ! [${emp.id}] คุณ${emp.name} ลงเวลาแล้ว (${timeStr})`);
+      renderAttendanceTable();
+      updateStats();
+    };
+
+    // Direct Form Selection
+    window.selectEmployeeToFormDirectly = function(emp) {
+      if (!emp) return;
+      const searchInput = document.getElementById('transEmpSearchInput');
+      if (searchInput) {
+        searchInput.value = emp.name;
+        if (typeof filterTransEmployeeSelect === 'function') filterTransEmployeeSelect(emp.name);
+      }
+      const select = document.getElementById('empSelect');
+      if (select) select.value = emp.id;
+
+      const attSearch = document.getElementById('attEmpSearchInput');
+      if (attSearch) {
+        attSearch.value = emp.name;
+        if (typeof filterAttendanceEmployeeSelect === 'function') filterAttendanceEmployeeSelect(emp.name);
+      }
+      const attSelect = document.getElementById('attEmpSelect');
+      if (attSelect) attSelect.value = emp.id;
+
+      showToast(`📝 เลือกคุณ ${emp.name} [${emp.id}] ใส่ลงในฟอร์มเรียบร้อย`);
+    };
+
+    window.selectEquipmentToFormDirectly = function(item) {
+      if (!item) return;
+      if (typeof quickSelectTransaction === 'function') {
+        quickSelectTransaction(item.id);
+      }
+      showToast(`📦 เลือกอุปกรณ์ "${item.name}" [${item.code}] ใส่ฟอร์มเรียบร้อย`);
+    };
+
+    // Floating Scanner HUD
+    window.showScannerAutoDetectHUD = function(res, actionTaken = '') {
+      const container = document.getElementById('scannerAutoDetectHudContainer');
+      if (!container) return;
+
+      if (scannerHudDismissTimer) {
+        clearTimeout(scannerHudDismissTimer);
+        scannerHudDismissTimer = null;
+      }
+
+      let actionButtonsHtml = '';
+      if (res.type === 'EMPLOYEE') {
+        const emp = res.entity;
+        actionButtonsHtml = `
+          <div class="d-flex gap-1.5 mt-2 flex-wrap">
+            <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold flex-grow-1 fs-8 py-1" onclick="recordAttendanceDirectly(employeeList.find(x=>x.id==='${emp.id}')); hideScannerAutoDetectHUD();">
+              <i class="bi bi-check-circle-fill me-1"></i> ลงเวลาเข้างาน 🟢
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill fw-semibold fs-8 py-1" onclick="selectEmployeeToFormDirectly(employeeList.find(x=>x.id==='${emp.id}')); switchNavTab('transaction-tab'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-file-earmark-plus me-1"></i> ใส่ฟอร์มเบิก 📝
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill fs-8 py-1" onclick="openEmployeeBorrowHistoryModalFromScanner('${emp.id}'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-clock-history me-1"></i> ประวัติ
+            </button>
+          </div>
+        `;
+      } else if (res.type === 'EQUIPMENT') {
+        const item = res.entity;
+        actionButtonsHtml = `
+          <div class="d-flex gap-1.5 mt-2 flex-wrap">
+            <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold flex-grow-1 fs-8 py-1" onclick="selectEquipmentToFormDirectly(equipmentList.find(x=>x.id==='${item.id}')); switchNavTab('transaction-tab'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-cart-plus-fill me-1"></i> เลือกใส่ฟอร์ม 📝
+            </button>
+            <button type="button" class="btn btn-outline-success btn-sm rounded-pill fw-bold fs-8 py-1" onclick="quickUpdateStockFromHud('${item.id}', 1)">
+              +1 เติมสต็อก
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill fw-bold fs-8 py-1" onclick="quickUpdateStockFromHud('${item.id}', -1)">
+              -1 ตัดสต็อก
+            </button>
+            <button type="button" class="btn btn-outline-dark btn-sm rounded-pill fs-8 py-1" onclick="openPrintLabelModal('${item.id}'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-printer me-1"></i> ฉลาก
+            </button>
+          </div>
+        `;
+      } else {
+        // UNKNOWN
+        actionButtonsHtml = `
+          <div class="d-flex gap-1.5 mt-2">
+            <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold w-100 fs-8 py-1" onclick="openAddModalWithScannedCode('${res.cleanCode}'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-box-seam me-1"></i> เพิ่มเป็นอุปกรณ์ใหม่
+            </button>
+            <button type="button" class="btn btn-outline-success btn-sm rounded-pill fw-bold w-100 fs-8 py-1" onclick="openAddEmployeeModalWithScannedCode('${res.cleanCode}'); hideScannerAutoDetectHUD();">
+              <i class="bi bi-person-plus-fill me-1"></i> เพิ่มเป็นพนักงานใหม่
+            </button>
+          </div>
+        `;
+      }
+
+      container.innerHTML = `
+        <div class="scanner-hud-card p-3 shadow-lg">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-1.5">
+              <span class="scanner-status-pulse-dot"></span>
+              <span class="badge bg-dark bg-opacity-75 text-warning fs-8 font-monospace">
+                <i class="bi bi-upc-scan me-1 text-success"></i> ยิงสแกนอัตโนมัติ (Auto-detect)
+              </span>
+            </div>
+            <button type="button" class="btn-close btn-close-sm" style="font-size: 0.65rem;" onclick="hideScannerAutoDetectHUD()"></button>
+          </div>
+          <div class="scanner-laser-line mb-2"></div>
+
+          <div class="d-flex align-items-center gap-2.5">
+            ${res.imageUrl ? `
+              <img src="${res.imageUrl}" class="rounded-circle border border-2 border-success shadow-sm flex-shrink-0" style="width: 50px; height: 50px; object-fit: cover;" onerror="this.src='${DEFAULT_EQUIPMENT_IMAGE}'" />
+            ` : `
+              <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 50px; height: 50px;">
+                <i class="bi bi-qr-code fs-4 text-warning"></i>
+              </div>
+            `}
+            <div class="overflow-hidden flex-grow-1">
+              <div class="d-flex align-items-center gap-1">
+                <span class="badge ${res.badgeClass || 'bg-success'} fs-8" style="font-size: 0.7rem;">${res.badgeText || ''}</span>
+                ${actionTaken ? `<span class="badge bg-light text-dark border fs-8 text-truncate" style="font-size: 0.68rem;">${actionTaken}</span>` : ''}
+              </div>
+              <h6 class="fw-bold text-dark mb-0 text-truncate fs-7 mt-0.5">${res.title}</h6>
+              <div class="text-muted fs-8 text-truncate">${res.subtitle || res.cleanCode}</div>
+            </div>
+          </div>
+
+          ${actionButtonsHtml}
+        </div>
+      `;
+
+      container.classList.remove('d-none');
+
+      scannerHudDismissTimer = setTimeout(() => {
+        hideScannerAutoDetectHUD();
+      }, 6000);
+    };
+
+    window.hideScannerAutoDetectHUD = function() {
+      const container = document.getElementById('scannerAutoDetectHudContainer');
+      if (container) container.classList.add('d-none');
+    };
+
+    window.quickUpdateStockFromHud = async function(equipId, delta) {
+      const item = (equipmentList || []).find(x => x.id === equipId);
+      if (!item) return;
+      await window.quickUpdateStockDirectly(item, delta);
+      showScannerAutoDetectHUD(resolveScannedCodeEntity(item.code), `ปรับสต็อก (${delta > 0 ? '+' : ''}${delta}) เรียบร้อย`);
+    };
+
+    window.quickUpdateStockDirectly = async function(item, delta) {
+      if (!item) return;
+      const newQty = (item.quantity || 0) + delta;
+      if (newQty < 0) {
+        alert("ไม่สามารถปรับสต็อกให้ต่ำกว่า 0 ได้");
+        return;
+      }
+      item.quantity = newQty;
+      saveToLocalStorage();
+
+      if (isFirebaseReady && db) {
+        try {
+          await setDoc(doc(db, "equipment", item.id), item, { merge: true });
+        } catch(e){}
+      }
+
+      const txType = delta > 0 ? "เติมสต็อกด่วน" : "เบิกตัดสต็อกด่วน";
+      const newTx = {
+        id: 'tx-' + String(Date.now()).slice(-6),
+        type: txType,
+        employeeId: currentAuthUser ? currentAuthUser.uid : 'SCANNER',
+        employeeName: currentAuthUser ? (currentAuthUser.displayName || 'ผู้ใช้สแกนเนอร์') : 'เครื่องยิงสแกนอัตโนมัติ',
+        equipmentId: item.id,
+        equipmentName: `${item.name} [${item.code}]`,
+        quantity: Math.abs(delta),
+        unit: item.unit,
+        location: item.location || 'คลังกลาง',
+        note: `ยิงสแกนบาร์โค้ดปรับปรุงสต็อก (${delta > 0 ? '+' : ''}${delta})`,
+        rawTimestamp: Date.now(),
+        timestamp: new Date().toLocaleString('th-TH')
+      };
+
+      transactionHistory.unshift(newTx);
+      saveToLocalStorage();
+      if (isFirebaseReady && db) {
+        addDoc(collection(db, "transactions"), newTx).catch(()=>{});
+      }
+
+      playHardwareScanSuccessSound();
+      showToast(`⚡ ปรับสต็อก "${item.name}" เรียบร้อย! คงเหลือ: ${item.quantity} ${item.unit}`);
+      renderCatalogGrid();
+      renderStaffTable();
+      updateStats();
+    };
+
+    window.openAddEquipmentWithScannedCode = function(code) {
+      openAddModal();
+      if (code) {
+        setTimeout(() => {
+          const codeInput = document.getElementById('equipCodeInput');
+          if (codeInput) codeInput.value = code;
+        }, 300);
+      }
+    };
+    window.openAddModalWithScannedCode = window.openAddEquipmentWithScannedCode;
+
+    window.openAddEmployeeModalWithScannedCode = function(code) {
+      openAddEmployeeModal();
+      if (code) {
+        setTimeout(() => {
+          const idInput = document.getElementById('empIdInput');
+          if (idInput) idInput.value = code;
+        }, 300);
+      }
+    };
+
+    window.openEmployeeBorrowHistoryModalFromScanner = function(empId) {
+      const emp = (employeeList || []).find(x => x.id === empId);
+      if (!emp) return;
+      if (typeof switchNavTab === 'function') switchNavTab('history-tab');
+      const searchInput = document.getElementById('historySearchInput');
+      if (searchInput) {
+        searchInput.value = emp.name;
+        if (typeof renderHistoryTable === 'function') renderHistoryTable();
+      }
+      showToast(`📋 ค้นหาประวัติการเบิก-ยืมของคุณ ${emp.name}`);
+    };
+
+    // Diagnostic & History Log Renderers
+    function updateDiagnosticReadout(res, isHardware, avgInterval) {
+      const typeElem = document.getElementById('diagDetectedType');
+      const speedElem = document.getElementById('diagSpeed');
+      const resElem = document.getElementById('diagResultTitle');
+      const testInput = document.getElementById('scannerTestInput');
+
+      if (testInput) {
+        testInput.value = res.cleanCode;
+      }
+      if (typeElem) {
+        if (res.type === 'EMPLOYEE') {
+          typeElem.className = 'badge bg-success fs-8 mt-1';
+          typeElem.innerHTML = '🪪 บัตรพนักงาน (Employee)';
+        } else if (res.type === 'EQUIPMENT') {
+          typeElem.className = 'badge bg-primary fs-8 mt-1';
+          typeElem.innerHTML = '📦 อุปกรณ์ (Equipment)';
+        } else {
+          typeElem.className = 'badge bg-danger fs-8 mt-1';
+          typeElem.innerHTML = '⚠️ ไม่พบในระบบ (Unknown)';
+        }
+      }
+
+      if (speedElem) {
+        if (isHardware && avgInterval > 0) {
+          speedElem.innerHTML = `<span class="text-success">${Math.round(avgInterval)} ms/ตัว</span> <small class="text-muted fs-8">(เครื่องยิงความเร็วสูง ⚡)</small>`;
+        } else {
+          speedElem.innerHTML = `<span class="text-primary">แป้นพิมพ์ / โค้ด</span>`;
+        }
+      }
+
+      if (resElem) {
+        resElem.textContent = `${res.title} ${res.subtitle ? `(${res.subtitle})` : ''}`;
+      }
+    }
+
+    function renderScannerHistoryTable() {
+      const tbody = document.getElementById('scannerHistoryTableBody');
+      if (!tbody) return;
+      if (!scannerHistoryList || scannerHistoryList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">ยังไม่มีประวัติการยิงสแกนในรอบนี้</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = scannerHistoryList.map(h => {
+        const typeBadge = h.type === 'EMPLOYEE' 
+          ? '<span class="badge bg-success">พนักงาน</span>' 
+          : h.type === 'EQUIPMENT' 
+            ? '<span class="badge bg-primary">อุปกรณ์</span>' 
+            : '<span class="badge bg-secondary">ไม่พบ</span>';
+
+        return `
+          <tr>
+            <td class="font-monospace text-muted">${h.timestamp}</td>
+            <td>${typeBadge}</td>
+            <td class="font-monospace fw-bold text-dark text-truncate" style="max-width: 130px;">${h.rawCode}</td>
+            <td class="text-truncate" style="max-width: 180px;"><b>${h.title}</b></td>
+            <td class="text-end">
+              <span class="badge bg-light text-dark border fs-8">${h.actionTaken || 'สำเร็จ'}</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.clearScannerHistory = function() {
+      scannerHistoryList = [];
+      saveScannerSettings();
+      renderScannerHistoryTable();
+      showToast("ล้างประวัติการยิงสแกนเรียบร้อยแล้ว");
+    };
+
+    window.clearScannerTestLog = function() {
+      const testInput = document.getElementById('scannerTestInput');
+      const typeElem = document.getElementById('diagDetectedType');
+      const speedElem = document.getElementById('diagSpeed');
+      const resElem = document.getElementById('diagResultTitle');
+
+      if (testInput) testInput.value = '';
+      if (typeElem) {
+        typeElem.className = 'badge bg-secondary fs-8 mt-1';
+        typeElem.textContent = '- รอสัญญาณ -';
+      }
+      if (speedElem) speedElem.textContent = '- ms';
+      if (resElem) resElem.textContent = '-';
+    };
+
+    // Global Hardware Scanner Keystroke Listener
+    function initGlobalScannerAutoDetectEngine() {
+      loadScannerSettings();
+
+      // Listen for Live Scanner Test Input box typing or scanner direct focus
+      const testInput = document.getElementById('scannerTestInput');
+      if (testInput) {
+        testInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = testInput.value.trim();
+            if (val) {
+              processAutoDetectedScannedCode(val, true, 20);
+            }
+          }
+        });
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (!scannerAutoDetectEnabled) return;
+
+        // Skip non-character control keys except Enter
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+          return;
+        }
+
+        const now = Date.now();
+        const activeElem = document.activeElement;
+        const isEditable = activeElem && (
+          activeElem.tagName === 'INPUT' || 
+          activeElem.tagName === 'TEXTAREA' || 
+          activeElem.isContentEditable
+        );
+        const isTestInput = activeElem && activeElem.id === 'scannerTestInput';
+
+        if (scannerBufferResetTimer) {
+          clearTimeout(scannerBufferResetTimer);
+        }
+
+        if (e.key === 'Enter') {
+          if (scannerKeyBuffer.length >= 2) {
+            const intervals = [];
+            for (let i = 1; i < scannerKeyTimestamps.length; i++) {
+              intervals.push(scannerKeyTimestamps[i] - scannerKeyTimestamps[i - 1]);
+            }
+            const avgInterval = intervals.length > 0 ? (intervals.reduce((a, b) => a + b, 0) / intervals.length) : 0;
+            const hasQrPrefix = scannerKeyBuffer.startsWith('EMPLOYEE:') || scannerKeyBuffer.startsWith('EQUIPMENT:') || scannerKeyBuffer.startsWith('EQ-') || scannerKeyBuffer.startsWith('WK-') || scannerKeyBuffer.startsWith('ST-');
+            const isRapidScan = avgInterval < 75 || hasQrPrefix || isTestInput || !isEditable;
+
+            if (isRapidScan) {
+              e.preventDefault();
+              e.stopPropagation();
+
+              const codeToProcess = scannerKeyBuffer;
+              scannerKeyBuffer = '';
+              scannerKeyTimestamps = [];
+
+              // If user was typing in regular input field and scanner dumped chars into it, clean up
+              if (isEditable && !isTestInput) {
+                if (activeElem.value && activeElem.value.endsWith(codeToProcess)) {
+                  activeElem.value = activeElem.value.slice(0, -codeToProcess.length);
+                }
+              }
+
+              processAutoDetectedScannedCode(codeToProcess, true, avgInterval);
+              return;
+            }
+          }
+          scannerKeyBuffer = '';
+          scannerKeyTimestamps = [];
+          return;
+        }
+
+        // Printable characters
+        if (e.key.length === 1) {
+          scannerKeyBuffer += e.key;
+          scannerKeyTimestamps.push(now);
+
+          // Reset buffer if idle for more than 280ms
+          scannerBufferResetTimer = setTimeout(() => {
+            scannerKeyBuffer = '';
+            scannerKeyTimestamps = [];
+          }, 280);
+        }
+      }, true);
     }
 
     let html5QrScannerInstance = null;

@@ -2958,6 +2958,223 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: HARDWARE SCANNER GUN SETTINGS & TEST CONSOLE ==================== -->
+  <div class="modal fade" id="hardwareScannerSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+        <!-- Modal Header -->
+        <div class="modal-header bg-flora-green text-white py-3 border-0">
+          <div class="d-flex align-items-center gap-2">
+            <div class="bg-white bg-opacity-20 p-2 rounded-circle text-warning">
+              <i class="bi bi-upc-scan fs-4"></i>
+            </div>
+            <div>
+              <h5 class="modal-title fw-bold mb-0">โหมดยิงสแกน QR Code / บาร์โค้ดอัตโนมัติ (Scanner Auto-detect)</h5>
+              <small class="text-white-50 fs-8">รองรับเครื่องยิงสแกน USB, Wireless 2.4G และ Bluetooth ยิงได้ทันทีจากทุกหน้าจอ</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-3 p-md-4 bg-light">
+          <!-- Top Status Bar & Toggles -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+            <div class="row g-3 align-items-center">
+              <div class="col-12 col-md-6 border-end-md">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="scanner-status-pulse-dot" id="modalScannerPulseDot"></span>
+                    <div>
+                      <div class="fw-bold text-dark fs-7">ตรวจจับเครื่องยิงอัตโนมัติ (Global Auto-detect)</div>
+                      <small class="text-muted fs-8">ดักจับการยิงสแกนจากเครื่องยิงทั่วทั้งระบบ</small>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch fs-5 mb-0">
+                    <input class="form-check-input bg-success border-success cursor-pointer" type="checkbox" id="chkScannerAutoDetectEnabled" checked onchange="toggleScannerAutoDetectState(this.checked)" role="switch">
+                  </div>
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-volume-up-fill text-success fs-5"></i>
+                    <div>
+                      <div class="fw-bold text-dark fs-7">เสียงสัญญาณ Beep (Audio Feedback)</div>
+                      <small class="text-muted fs-8">ส่งเสียงแจ้งเตือนเมื่อยิงสแกนสำเร็จ</small>
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-2 py-0.5 fs-8" onclick="testHardwareScannerSound()" title="ทดสอบเสียง">
+                      <i class="bi bi-play-fill me-0.5"></i> ฟังเสียง
+                    </button>
+                    <div class="form-check form-switch fs-5 mb-0">
+                      <input class="form-check-input bg-success border-success cursor-pointer" type="checkbox" id="chkScannerSoundEnabled" checked onchange="toggleScannerSoundState(this.checked)" role="switch">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto-Action Behavior Settings -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+            <h6 class="fw-bold text-success mb-2 pb-2 border-bottom d-flex align-items-center gap-2">
+              <i class="bi bi-lightning-charge-fill text-warning"></i>
+              <span>การตอบสนองเมื่อยิงสแกน (Auto-Action Behavior)</span>
+            </h6>
+            <div class="row g-2">
+              <div class="col-12 col-md-6">
+                <label class="p-2.5 border rounded-3 d-flex align-items-start gap-2 cursor-pointer h-100 bg-light hover-bg-white transition-all">
+                  <input type="radio" name="scannerAutoActionRadio" value="SMART_CONTEXT" class="form-check-input mt-1" checked onchange="changeScannerAutoActionMode(this.value)">
+                  <div>
+                    <div class="fw-bold text-dark fs-7">🌟 ฉลาดตามหน้าจอ (Smart Context - แนะนำ)</div>
+                    <small class="text-muted fs-8 d-block">
+                      • อยู่หน้า <b>ลงเวลา</b>: ลงเวลาเข้างานทันที 🟢<br>
+                      • อยู่หน้า <b>เบิก-จ่าย</b>: เลือกพนักงาน/อุปกรณ์ลงฟอร์ม 📝<br>
+                      • อยู่หน้า <b>คลัง/ทั่วไป</b>: แสดงแถบข้อมูลและตัวเลือกด่วน ⚡
+                    </small>
+                  </div>
+                </label>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="p-2.5 border rounded-3 d-flex align-items-start gap-2 cursor-pointer h-100 bg-light hover-bg-white transition-all">
+                  <input type="radio" name="scannerAutoActionRadio" value="AUTO_CLOCK_IN" class="form-check-input mt-1" onchange="changeScannerAutoActionMode(this.value)">
+                  <div>
+                    <div class="fw-bold text-dark fs-7">🟢 เน้นลงเวลาเข้างาน (Always Clock-In)</div>
+                    <small class="text-muted fs-8 d-block">เมื่อยิงบัตรพนักงานจะทำการบันทึกเข้างาน (Clock In) ให้อัตโนมัติทันทีเสมอ</small>
+                  </div>
+                </label>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="p-2.5 border rounded-3 d-flex align-items-start gap-2 cursor-pointer h-100 bg-light hover-bg-white transition-all">
+                  <input type="radio" name="scannerAutoActionRadio" value="AUTO_SELECT_FORM" class="form-check-input mt-1" onchange="changeScannerAutoActionMode(this.value)">
+                  <div>
+                    <div class="fw-bold text-dark fs-7">📝 เน้นใส่ฟอร์มเบิก-ยืม (Auto Fill Form)</div>
+                    <small class="text-muted fs-8 d-block">เลือกพนักงานหรืออุปกรณ์ใส่ลงในฟอร์มทำรายการเบิก-ยืมให้อัตโนมัติ</small>
+                  </div>
+                </label>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="p-2.5 border rounded-3 d-flex align-items-start gap-2 cursor-pointer h-100 bg-light hover-bg-white transition-all">
+                  <input type="radio" name="scannerAutoActionRadio" value="SHOW_POPUP_MODAL" class="form-check-input mt-1" onchange="changeScannerAutoActionMode(this.value)">
+                  <div>
+                    <div class="fw-bold text-dark fs-7">👁️ เปิดหน้าต่างข้อมูลเต็ม (Popup Modal)</div>
+                    <small class="text-muted fs-8 d-block">เปิดหน้าต่างสแกนพร้อมรายละเอียดเต็มเพื่อตรวจสอบก่อนกดยืนยัน</small>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Scanner Test Target Console -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-1.5">
+                <i class="bi bi-bullseye text-danger"></i>
+                <span>สนามทดสอบยิงสแกน (Live Test Target)</span>
+              </h6>
+              <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-2.5 py-0.5 fs-8" onclick="clearScannerTestLog()">
+                <i class="bi bi-trash me-1"></i> ล้างการทดสอบ
+              </button>
+            </div>
+            
+            <div class="scanner-test-target p-3 text-center mb-2">
+              <div class="scanner-target-reticle"></div>
+              <div class="text-info fs-8 fw-semibold mb-1">
+                <i class="bi bi-crosshair me-1"></i> นำเครื่องยิงสแกน QR Code หรือ บาร์โค้ด ยิงมาที่ช่องนี้เพื่อทดสอบ
+              </div>
+              <input type="text" id="scannerTestInput" class="form-control form-control-lg bg-transparent text-white border-0 text-center font-monospace fw-bold fs-5 shadow-none" placeholder="[ พร้อมรับสัญญาณยิงสแกน... ]" autocomplete="off" />
+              <div class="scanner-laser-line mt-2"></div>
+            </div>
+
+            <!-- Diagnostic Live Readout -->
+            <div class="row g-2 text-center" id="scannerDiagnosticReadout">
+              <div class="col-4">
+                <div class="p-2 rounded-3 bg-light border">
+                  <div class="fs-8 text-muted">ประเภทที่ตรวจพบ:</div>
+                  <span id="diagDetectedType" class="badge bg-secondary fs-8 mt-1">- รอสัญญาณ -</span>
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="p-2 rounded-3 bg-light border">
+                  <div class="fs-8 text-muted">ความเร็วรับสัญญาณ:</div>
+                  <span id="diagSpeed" class="fw-bold font-monospace fs-7 text-dark">- ms</span>
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="p-2 rounded-3 bg-light border">
+                  <div class="fs-8 text-muted">ผลการค้นหา:</div>
+                  <span id="diagResultTitle" class="fw-bold fs-8 text-truncate d-block text-success">-</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Scans History Log -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-1.5">
+                <i class="bi bi-clock-history text-primary"></i>
+                <span>ประวัติการยิงสแกนล่าสุด (Recent Scan Log)</span>
+              </h6>
+              <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0.5 fs-8" onclick="clearScannerHistory()">
+                <i class="bi bi-eraser-fill me-1"></i> ล้างประวัติ
+              </button>
+            </div>
+            <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+              <table class="table table-sm table-hover align-middle mb-0 fs-8">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th style="width: 75px;">เวลา</th>
+                    <th style="width: 65px;">ประเภท</th>
+                    <th>รหัส / ข้อมูลที่ยิงได้</th>
+                    <th>ชื่อรายการ / ผลลัพธ์</th>
+                    <th class="text-end" style="width: 90px;">การทำงาน</th>
+                  </tr>
+                </thead>
+                <tbody id="scannerHistoryTableBody">
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">ยังไม่มีประวัติการยิงสแกนในรอบนี้</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Hardware Scanner Setup Tips Accordion -->
+          <div class="accordion" id="scannerSetupTipsAccordion">
+            <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 px-3 fs-8 fw-bold bg-white text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#scannerTipsCollapse">
+                  <i class="bi bi-info-circle-fill text-info me-2"></i> คำแนะนำและวิธีตั้งค่าเครื่องยิงสแกน (USB / Bluetooth / Wireless 2.4G)
+                </button>
+              </h2>
+              <div id="scannerTipsCollapse" class="accordion-collapse collapse" data-bs-parent="#scannerSetupTipsAccordion">
+                <div class="accordion-body bg-light fs-8 text-secondary p-3">
+                  <ol class="mb-2 ps-3">
+                    <li class="mb-1"><b>เสียบใช้งานได้ทันที:</b> เครื่องยิงแบบ USB หรือ 2.4G Wireless เสียบเข้าคอมพิวเตอร์แล้วใช้งานได้ทันทีเหมือนแป้นพิมพ์ (HID Keyboard Mode) ไม่ต้องลงไดรเวอร์</li>
+                    <li class="mb-1"><b>ตั้งค่าท้ายรหัส (Suffix):</b> ตรวจสอบให้แน่ใจว่าเครื่องยิงตั้งค่าให้ส่ง <code>Enter (CR / LF)</code> ต่อท้ายทุกครั้งหลังยิงเสร็จ (เป็นค่ามาตรฐานของเครื่องยิงส่วนใหญ่)</li>
+                    <li class="mb-1"><b>แป้นพิมพ์:</b> หากยิงแล้วภาษาผิดเพี้ยน ให้สลับแป้นพิมพ์คอมพิวเตอร์เป็นภาษาอังกฤษ (EN) หรือใช้โหมด Virtual Keyboard ของเครื่องยิง</li>
+                    <li class="mb-1"><b>ไม่ต้องกดเปิดหน้าต่าง:</b> ด้วยโหมด <b>Scanner Auto-detect</b> คุณสามารถหยิบเครื่องยิงมายิง QR Code บัตรพนักงานหรืออุปกรณ์ได้เลยจากทุกหน้าจอ ระบบจะค้นหาและทำงานให้อัตโนมัติ</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer bg-white border-top p-3 d-flex justify-content-between">
+          <span class="fs-8 text-muted"><i class="bi bi-shield-check text-success me-1"></i> โหมดยิงสแกนทำงานแบบเรียลไทม์</span>
+          <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" data-bs-dismiss="modal">
+            <i class="bi bi-check-lg me-1"></i> เรียบร้อย
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container">
     <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
