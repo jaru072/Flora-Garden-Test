@@ -155,10 +155,16 @@
     </a>
 
     <!-- ปุ่ม แผนผังบุคลากร อยู่กึ่งกลางระหว่าง ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย กับ ปุ่มย้อนกลับ -->
-    <a href="org_chart.html" target="_blank" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5 mx-auto my-1 text-decoration-none" title="เปิดหน้าต่างแผนผังโครงสร้างบุคลากร (Org Chart Flowchart)">
-      <i class="bi bi-diagram-3-fill fs-6 text-dark"></i>
-      <span>แผนผังบุคลากร</span>
-    </a>
+    <div class="d-flex align-items-center gap-1.5 mx-auto my-1">
+      <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" onclick="openOrgChartPdfModal()" title="เปิดดูผังบุคลากรแบบ HD / PDF (มีตำแหน่งนักวิชาการ)">
+        <i class="bi bi-file-earmark-pdf-fill fs-6 text-danger"></i>
+        <span>ผังบุคลากรใหม่ (HD/PDF)</span>
+      </button>
+      <a href="org_chart.html" target="_blank" class="btn btn-outline-light btn-sm rounded-pill px-2.5 py-1.5 fw-semibold shadow-sm d-flex align-items-center gap-1" title="เปิดหน้าต่างแผนผังโครงสร้างเดิม">
+        <i class="bi bi-diagram-3 fs-7"></i>
+        <span class="fs-8">ผังแบบเดิม</span>
+      </a>
+    </div>
 
     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
       <!-- Back / Forward Navigation Buttons (◀ ย้อนกลับ  ▶ ถัดไป) -->
@@ -381,6 +387,15 @@
                   <div>
                     <div class="lh-1 text-dark fw-bold">แผนผังบุคลากร (Org Chart)</div>
                     <small class="text-muted fs-8 fw-normal">ผังโครงสร้างสายงานและพนักงาน</small>
+                  </div>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold text-primary" href="org_chart_pdf.html" target="_blank">
+                  <i class="bi bi-file-earmark-pdf-fill text-danger fs-6"></i>
+                  <div>
+                    <div class="lh-1 text-dark fw-bold">ผังบุคลากรแบบพิมพ์ PDF / รูปภาพ HD</div>
+                    <small class="text-muted fs-8 fw-normal">โครงสร้างครบ 4 สายงาน + นักวิชาการ (A4/A3)</small>
                   </div>
                 </a>
               </li>
@@ -5240,10 +5255,30 @@
             <div id="bulkEmpPosContainer" class="ps-4 d-none">
               <select id="bulkEmpPosSelect" class="form-select rounded-3 fs-7">
                 <option value="">-- กรุณาเลือกตำแหน่ง --</option>
-                <option value="พระภิกษุ">พระภิกษุ</option>
-                <option value="เจ้าหน้าที่ธุรการ">เจ้าหน้าที่ธุรการ</option>
-                <option value="นักวิชาการ">นักวิชาการ</option>
-                <option value="พนักงาน">พนักงาน</option>
+                <optgroup label="ระดับบริหารและประสานงาน">
+                  <option value="ประธานโครงการ">1. ประธานโครงการ</option>
+                  <option value="ที่ปรึกษาโครงการ">2. ที่ปรึกษาโครงการ</option>
+                  <option value="ผู้ประสานงานโครงการ">3. ผู้ประสานงานโครงการ</option>
+                </optgroup>
+                <optgroup label="ระดับหัวหน้างานฝ่ายหลัก (ลำดับที่ 4)">
+                  <option value="หัวหน้างานส่วนกลาง">4.1 หัวหน้างานส่วนกลาง</option>
+                  <option value="หัวหน้างานกุหลาบ/งานทดลอง">4.2 หัวหน้างานกุหลาบ/งานทดลอง</option>
+                  <option value="หัวหน้างานรัตนบุปผา">4.3 หัวหน้างานรัตนบุปผา</option>
+                  <option value="หัวหน้างานธรรมยาตรา">4.4 หัวหน้างานธรรมยาตรา</option>
+                </optgroup>
+                <optgroup label="สายวิชาการและกำกับมาตรฐาน (ดูแลสาย 4.2, 4.3, 4.4)">
+                  <option value="นักวิชาการ">🌟 นักวิชาการ</option>
+                </optgroup>
+                <optgroup label="ระดับหัวหน้าแผนก (ลำดับที่ 5)">
+                  <option value="หัวหน้าแผนกธุรการ">5.1 หัวหน้าแผนกธุรการ</option>
+                  <option value="หัวหน้าแผนกงานทดลอง">5.2 หัวหน้าแผนกงานทดลอง</option>
+                  <option value="หัวหน้าแผนก">หัวหน้าแผนก (ทั่วไป)</option>
+                </optgroup>
+                <optgroup label="เจ้าหน้าที่และพนักงานปฏิบัติการ">
+                  <option value="เจ้าหน้าที่ธุรการ">เจ้าหน้าที่ธุรการ</option>
+                  <option value="พระภิกษุ">พระภิกษุ</option>
+                  <option value="พนักงาน">พนักงานปฏิบัติการ</option>
+                </optgroup>
               </select>
             </div>
           </div>

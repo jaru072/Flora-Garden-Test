@@ -1564,7 +1564,19 @@
 
     // initApp will be invoked at the end of the script after all functions are loaded
 
-    // ==================== NAVIGATION HISTORY STACK (BACK / FORWARD) ====================
+    window.openOrgChartPdfModal = function() {
+      const modalElem = document.getElementById('orgChartPdfModal');
+      if (modalElem) {
+        const bsModal = bootstrap.Modal.getOrCreateInstance(modalElem);
+        const iframe = document.getElementById('orgChartPdfIframe');
+        if (iframe && !iframe.src.includes('org_chart_pdf.html')) {
+          iframe.src = 'org_chart_pdf.html';
+        }
+        bsModal.show();
+      } else {
+        window.open('org_chart_pdf.html', '_blank');
+      }
+    };
     let navHistoryStack = ['catalog-tab'];
     let navHistoryIndex = 0;
     let isNavigatingHistory = false;

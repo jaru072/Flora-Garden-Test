@@ -158,6 +158,7 @@ export default defineConfig(() => {
         input: {
           main: path.resolve(__dirname, 'index.html'),
           org_chart: path.resolve(__dirname, 'org_chart.html'),
+          org_chart_pdf: path.resolve(__dirname, 'org_chart_pdf.html'),
         },
       },
     },

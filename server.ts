@@ -516,6 +516,9 @@ async function main() {
     app.get(['/org_chart.html', '/org_chart'], (req, res) => {
       res.sendFile(path.join(distPath, 'org_chart.html'));
     });
+    app.get(['/org_chart_pdf.html', '/org_chart_pdf'], (req, res) => {
+      res.sendFile(path.join(distPath, 'org_chart_pdf.html'));
+    });
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
