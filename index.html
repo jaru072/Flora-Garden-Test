@@ -154,15 +154,11 @@
       </div>
     </a>
 
-    <!-- ปุ่ม แผนผังบุคลากร อยู่กึ่งกลางระหว่าง ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย กับ ปุ่มย้อนกลับ -->
+    <!-- ปุ่ม ผังโครงสร้างบุคลากร อยู่กึ่งกลางระหว่าง โลโก้ กับ ปุ่มย้อนกลับ -->
     <div class="d-flex align-items-center gap-1.5 mx-auto my-1">
-      <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" onclick="openOrgChartPdfModal()" title="เปิดดูผังบุคลากรแบบ HD / PDF (มีตำแหน่งนักวิชาการ)">
-        <i class="bi bi-file-earmark-pdf-fill fs-6 text-danger"></i>
-        <span>ผังบุคลากรใหม่ (HD/PDF)</span>
-      </button>
-      <a href="org_chart.html" target="_blank" class="btn btn-outline-light btn-sm rounded-pill px-2.5 py-1.5 fw-semibold shadow-sm d-flex align-items-center gap-1" title="เปิดหน้าต่างแผนผังโครงสร้างเดิม">
-        <i class="bi bi-diagram-3 fs-7"></i>
-        <span class="fs-8">ผังแบบเดิม</span>
+      <a href="org_chart.html" target="_blank" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" title="เปิดศูนย์ผังโครงสร้างและจัดการบุคลากร (Org Chart)">
+        <i class="bi bi-diagram-3-fill fs-6 text-primary"></i>
+        <span>ผังโครงสร้างบุคลากร (Org Chart)</span>
       </a>
     </div>
 
@@ -385,17 +381,8 @@
                 <a class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold" href="org_chart.html" target="_blank">
                   <i class="bi bi-diagram-3-fill text-success fs-6"></i>
                   <div>
-                    <div class="lh-1 text-dark fw-bold">แผนผังบุคลากร (Org Chart)</div>
-                    <small class="text-muted fs-8 fw-normal">ผังโครงสร้างสายงานและพนักงาน</small>
-                  </div>
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold text-primary" href="org_chart_pdf.html" target="_blank">
-                  <i class="bi bi-file-earmark-pdf-fill text-danger fs-6"></i>
-                  <div>
-                    <div class="lh-1 text-dark fw-bold">ผังบุคลากรแบบพิมพ์ PDF / รูปภาพ HD</div>
-                    <small class="text-muted fs-8 fw-normal">โครงสร้างครบ 4 สายงาน + นักวิชาการ (A4/A3)</small>
+                    <div class="lh-1 text-dark fw-bold">ศูนย์ผังโครงสร้างและจัดการบุคลากร (Org Chart)</div>
+                    <small class="text-muted fs-8 fw-normal">เพิ่ม แก้ไข ย้ายสายงาน และพิมพ์ผังความละเอียดสูง</small>
                   </div>
                 </a>
               </li>
@@ -965,15 +952,25 @@
                 <i class="bi bi-printer-fill me-1"></i> สั่งพิมพ์บัตร
               </button>
 
-              <a href="org_chart.html" target="_blank" class="btn btn-warning btn-sm rounded-pill px-3 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" title="เปิดหน้าต่างแผนผังโครงสร้างบุคลากร (Org Chart Flowchart)">
-                <i class="bi bi-diagram-3-fill fs-6"></i>
-                <span>แผนผังบุคลากร</span>
+              <a href="org_chart.html" target="_blank" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow-sm d-flex align-items-center gap-1.5" title="เปิดศูนย์ผังโครงสร้างบุคลากรและจัดการ เพิ่ม-แก้ไข-ย้ายสายงาน (Org Chart)">
+                <i class="bi bi-diagram-3-fill fs-6 text-warning"></i>
+                <span>จัดการบุคลากร & ผังองค์กร</span>
               </a>
-
-              <button class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm" onclick="openAddEmployeeModal()">
-                <i class="bi bi-person-plus-fill me-1"></i> เพิ่มพนักงาน
-              </button>
             </div>
+          </div>
+
+          <!-- Organizational Info Notice Banner -->
+          <div class="alert alert-info border-0 rounded-3 py-2 px-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2 shadow-2xs">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+              <span class="fs-7 text-dark">
+                <strong>ศูนย์ข้อมูลบุคลากร:</strong> การเพิ่มรายชื่อใหม่, แก้ไขข้อมูล, ย้ายสังกัดแปลง และจัดระดับสายงาน ดำเนินการผ่าน 
+                <a href="org_chart.html" target="_blank" class="fw-bold text-decoration-none text-primary">ผังโครงสร้างบุคลากร (Org Chart) <i class="bi bi-box-arrow-up-right fs-8"></i></a>
+              </span>
+            </div>
+            <a href="org_chart.html" target="_blank" class="btn btn-primary btn-xs rounded-pill px-3 py-1 fw-bold">
+              <i class="bi bi-diagram-3 me-1"></i> เปิดหน้าจัดการผัง
+            </a>
           </div>
 
           <!-- Bulk Action Bar for Selected Employees -->
@@ -1730,9 +1727,10 @@
                   <div class="col-12 col-sm-6 col-md-4">
                     <select id="userRoleFilterSelect" class="form-select form-select-sm rounded-pill fs-7 fw-semibold" onchange="renderUsersTable()">
                       <option value="ALL">🔍 บทบาททั้งหมด</option>
-                      <option value="ADMIN">🔴 ผู้ดูแลระบบ</option>
-                      <option value="MANAGER">🔵 เจ้าหน้าที่</option>
-                      <option value="WORKER">🟢 พนักงาน</option>
+                      <option value="ADMIN">🔴 ผู้ดูแลระบบ (ADMIN)</option>
+                      <option value="MANAGER">🔵 ผู้จัดการ/บริหาร (MANAGER)</option>
+                      <option value="STAFF">🟣 เจ้าหน้าที่ (STAFF)</option>
+                      <option value="WORKER">🟢 พนักงาน (WORKER)</option>
                     </select>
                   </div>
                   <div class="col-12 col-sm-6 col-md-2 text-end">
@@ -1762,7 +1760,7 @@
 
               <!-- Permission Table Overview -->
               <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <h6 class="fw-bold text-success mb-2"><i class="bi bi-info-circle me-1"></i> คำอธิบายสิทธิ์แต่ละบทบาท (Role Hierarchy)</h6>
+                <h6 class="fw-bold text-success mb-2"><i class="bi bi-info-circle me-1"></i> คำอธิบายสิทธิ์แต่ละบทบาท (Role Hierarchy 4 ระดับ)</h6>
                 <div class="table-responsive">
                   <table class="table table-sm table-bordered fs-8 mb-0">
                     <thead class="table-light">
@@ -1770,27 +1768,34 @@
                         <th>บทบาท (Role)</th>
                         <th>คลังอุปกรณ์</th>
                         <th>การเบิก-ยืม-คืน</th>
-                        <th>จัดการบุคลากร</th>
+                        <th>จัดการบุคลากร/ผัง</th>
                         <th>เปลี่ยนสิทธิ์ผู้ใช้</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td class="fw-bold text-danger"><i class="bi bi-shield-lock-fill me-1"></i> ผู้ดูแลระบบ</td>
+                        <td class="fw-bold text-danger"><i class="bi bi-shield-lock-fill me-1"></i> ADMIN (ผู้ดูแลระบบ)</td>
                         <td><span class="badge bg-success">เต็มรูปแบบ</span></td>
                         <td><span class="badge bg-success">อนุมัติ/บันทึก</span></td>
                         <td><span class="badge bg-success">เพิ่ม/แก้ไข/ลบ</span></td>
                         <td><span class="badge bg-success">สิทธิ์เปลี่ยนผู้ใช้อื่น</span></td>
                       </tr>
                       <tr>
-                        <td class="fw-bold text-primary"><i class="bi bi-briefcase-fill me-1"></i> เจ้าหน้าที่</td>
+                        <td class="fw-bold text-primary"><i class="bi bi-person-workspace me-1"></i> MANAGER (ผู้จัดการ/บริหาร)</td>
                         <td><span class="badge bg-success">เต็มรูปแบบ</span></td>
                         <td><span class="badge bg-success">อนุมัติ/บันทึก</span></td>
-                        <td><span class="badge bg-info text-dark">ดูรายชื่อ</span></td>
+                        <td><span class="badge bg-success">จัดการบุคลากร</span></td>
                         <td><span class="badge bg-secondary">ไม่มีสิทธิ์</span></td>
                       </tr>
                       <tr>
-                        <td class="fw-bold text-success"><i class="bi bi-person-fill me-1"></i> พนักงาน</td>
+                        <td class="fw-bold" style="color: #6f42c1;"><i class="bi bi-briefcase-fill me-1"></i> STAFF (เจ้าหน้าที่)</td>
+                        <td><span class="badge bg-success">เต็มรูปแบบ</span></td>
+                        <td><span class="badge bg-success">อนุมัติ/บันทึก</span></td>
+                        <td><span class="badge bg-info text-dark">ดูรายชื่อ/ผัง</span></td>
+                        <td><span class="badge bg-secondary">ไม่มีสิทธิ์</span></td>
+                      </tr>
+                      <tr>
+                        <td class="fw-bold text-success"><i class="bi bi-person-fill me-1"></i> WORKER (พนักงาน)</td>
                         <td><span class="badge bg-secondary">ดูอย่างเดียว</span></td>
                         <td><span class="badge bg-primary">ส่งคำขอเบิก/ยืม</span></td>
                         <td><span class="badge bg-secondary">ไม่มีสิทธิ์</span></td>
@@ -2077,16 +2082,23 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label fw-bold" for="empPositionSelect">
-                <i class="bi bi-person-badge text-success me-1"></i> ตำแหน่ง
-              </label>
-              <select id="empPositionSelect" class="form-select">
-                <option value="">-- กรุณาเลือกตำแหน่ง --</option>
-                <option value="พระภิกษุ">พระภิกษุ</option>
-                <option value="เจ้าหน้าที่ธุรการ">เจ้าหน้าที่ธุรการ</option>
-                <option value="นักวิชาการ">นักวิชาการ</option>
-                <option value="พนักงาน">พนักงาน</option>
-              </select>
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <label class="form-label fw-bold mb-0" for="empPositionSelect">
+                  <i class="bi bi-person-badge text-success me-1"></i> ตำแหน่ง
+                </label>
+                <button type="button" class="btn btn-link btn-sm p-0 fs-8 text-success text-decoration-none fw-semibold" onclick="openManagePositionsModal()">
+                  <i class="bi bi-gear-fill me-1"></i> จัดการรายชื่อ (เพิ่ม/แก้ไข/ลบ)
+                </button>
+              </div>
+              <div class="input-group">
+                <select id="empPositionSelect" class="form-select rounded-start-3">
+                  <option value="">-- กรุณาเลือกตำแหน่ง --</option>
+                </select>
+                <button type="button" class="btn btn-outline-success fw-semibold px-3" onclick="openManagePositionsModal()" title="จัดการรายชื่อตำแหน่ง (เพิ่ม/แก้ไข/ลบ)">
+                  <i class="bi bi-pencil-square me-1"></i> เพิ่ม/จัดการ
+                </button>
+              </div>
+              <div class="form-text fs-8 text-muted">เลือกจากรายการ หรือกดปุ่ม 'เพิ่ม/จัดการ' เพื่อ เพิ่ม, แก้ไข หรือ ลบ ตำแหน่งงาน</div>
             </div>
 
             <div class="mb-3">
@@ -2263,6 +2275,61 @@
             </div>
             
             <div id="departmentsListContainer" class="list-group list-group-flush overflow-auto" style="max-height: 280px;">
+              <!-- Dynamically rendered list items -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-white border-top">
+          <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: MANAGE POSITIONS ==================== -->
+  <div class="modal fade" id="managePositionsModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold mb-0">
+            <i class="bi bi-person-gear me-2 text-warning"></i>จัดการรายชื่อตำแหน่งงาน
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4 bg-light">
+          <!-- Add New Position Form -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+            <h6 class="fw-bold text-primary mb-2 fs-7"><i class="bi bi-plus-circle-fill me-1"></i> เพิ่มตำแหน่งงานใหม่</h6>
+            <div class="row g-2">
+              <div class="col-12 col-md-7">
+                <input type="text" id="newPosNameInput" class="form-control form-control-sm rounded-3" placeholder="เช่น หัวหน้าแผนกทีมกุหลาบ, ช่างซ่อมบำรุง" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewPositionFromModal();}" />
+              </div>
+              <div class="col-12 col-md-5">
+                <select id="newPosGroupSelect" class="form-select form-select-sm rounded-3">
+                  <option value="ระดับบริหารและประสานงาน">ระดับบริหารและประสานงาน</option>
+                  <option value="ระดับหัวหน้างานฝ่ายหลัก">ระดับหัวหน้างานฝ่ายหลัก</option>
+                  <option value="สายวิชาการและกำกับมาตรฐาน">สายวิชาการ</option>
+                  <option value="ระดับหัวหน้าแผนก" selected>ระดับหัวหน้าแผนก/ทีม</option>
+                  <option value="เจ้าหน้าที่และพนักงานปฏิบัติการ">เจ้าหน้าที่และพนักงาน</option>
+                  <option value="ตำแหน่งทั่วไป">ตำแหน่งทั่วไป</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <button type="button" class="btn btn-primary btn-sm w-100 rounded-3 fw-bold py-1.5" onclick="addNewPositionFromModal()">
+                  <i class="bi bi-plus-lg me-1"></i> บันทึกเพิ่มตำแหน่งใหม่
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Positions List -->
+          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+              <h6 class="fw-bold text-dark mb-0 fs-7"><i class="bi bi-list-ul me-1 text-primary"></i> รายชื่อตำแหน่งงานทั้งหมดในระบบ</h6>
+              <span id="posCountBadge" class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fs-8"></span>
+            </div>
+            
+            <div id="positionsListContainer" class="list-group list-group-flush overflow-auto" style="max-height: 320px;">
               <!-- Dynamically rendered list items -->
             </div>
           </div>

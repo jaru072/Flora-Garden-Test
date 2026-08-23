@@ -111,13 +111,40 @@ function getComprehensiveLocationsList() {
   return Array.from(set).filter(Boolean);
 }
 
+function getComprehensivePositionsList() {
+  const seen = new Set();
+  const list = [];
+  const addPos = (item) => {
+    if (!item) return;
+    const name = (typeof item === 'object' ? (item.name || item.id || '') : String(item)).trim();
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      if (typeof item === 'object' && item.name) {
+        list.push(item);
+      } else {
+        list.push({ id: `POS-${String(list.length + 1).padStart(3, '0')}`, code: `POS-${String(list.length + 1).padStart(3, '0')}`, name: name, group: 'ตำแหน่งทั่วไป' });
+      }
+    }
+  };
+  if (Array.isArray(window.positionsList) && window.positionsList.length > 0) {
+    window.positionsList.forEach(addPos);
+  } else if (Array.isArray(window.employeeList)) {
+    window.employeeList.forEach(emp => {
+      if (emp && emp.position) {
+        addPos(emp.position);
+      }
+    });
+  }
+  return list;
+}
+
 // Helper to refresh live database stats inside Backup/Restore modal
 window.refreshBackupModalLiveStats = function() {
   const equipCount = (window.equipmentList || []).length;
   const empCount = (window.employeeList || []).length;
   const txCount = (window.transactionHistory || []).length;
   const attCount = (window.attendanceLogs || []).length;
-  const metaCount = (window.categoriesList || []).length + (window.departmentsList || []).length;
+  const metaCount = (window.categoriesList || []).length + (window.departmentsList || []).length + (window.positionsList || []).length;
 
   let imageCount = 0;
   (window.equipmentList || []).forEach(item => { if (item && item.imageUrl) imageCount++; });
@@ -695,6 +722,7 @@ window.exportBackupToSelectedFolder = async function() {
       auditLogs: window.auditLogs || [],
       categoriesList: window.categoriesList || [],
       departmentsList: getComprehensiveDepartmentsList(),
+      positionsList: getComprehensivePositionsList(),
       locationsList: getComprehensiveLocationsList(),
       imagesBase64Map: imagesBase64Map
     };
@@ -779,6 +807,7 @@ window.downloadBackupAsZipPackage = async function() {
     auditLogs: window.auditLogs || [],
     categoriesList: window.categoriesList || [],
     departmentsList: getComprehensiveDepartmentsList(),
+    positionsList: getComprehensivePositionsList(),
     locationsList: getComprehensiveLocationsList(),
     imagesBase64Map: {}
   };
@@ -841,6 +870,7 @@ window.downloadDatabaseBackup = async function() {
       auditLogs: window.auditLogs || [],
       categoriesList: window.categoriesList || [],
       departmentsList: getComprehensiveDepartmentsList(),
+      positionsList: getComprehensivePositionsList(),
       locationsList: getComprehensiveLocationsList(),
       imagesBase64Map: {}
     };
@@ -1459,6 +1489,25 @@ window.displayRestoreSummary = function(parsed, fileName) {
     }
     const locC = cleanLocs.length;
 
+    const posSet = new Set();
+    const cleanPositions = [];
+    const addPreviewPos = (p) => {
+      if (!p) return;
+      const name = (typeof p === 'object' ? (p.name || p.id || '') : String(p)).trim();
+      if (name && !posSet.has(name.toLowerCase())) {
+        posSet.add(name.toLowerCase());
+        cleanPositions.push(name);
+      }
+    };
+    if (Array.isArray(parsed.positionsList)) {
+      parsed.positionsList.forEach(addPreviewPos);
+    } else if (Array.isArray(parsed.employeeList)) {
+      parsed.employeeList.forEach(e => {
+        if (e && e.position) addPreviewPos(e.position);
+      });
+    }
+    const posC = cleanPositions.length;
+
     let imgC = 0;
     if (parsed.imagesBase64Map && Object.keys(parsed.imagesBase64Map).length > 0) {
       imgC = Object.keys(parsed.imagesBase64Map).length;
@@ -1475,8 +1524,9 @@ window.displayRestoreSummary = function(parsed, fileName) {
       <div class="col-6 col-md-4">• บันทึกเวลาเข้า-ออก: <strong class="text-info">${attC}</strong> รายการ</div>
       <div class="col-6 col-md-4">• หมวดหมู่อุปกรณ์: <strong class="text-secondary">${catC}</strong> หมวด</div>
       <div class="col-6 col-md-4">• แผนก / สวน: <strong class="text-dark">${depC}</strong> แผนก</div>
+      <div class="col-6 col-md-4">• ตำแหน่งงาน: <strong class="text-success fw-bold">${posC}</strong> ตำแหน่ง</div>
       <div class="col-6 col-md-4">• สถานที่จัดเก็บ: <strong class="text-secondary">${locC}</strong> แห่ง</div>
-      <div class="col-12 text-success fw-semibold mt-1"><i class="bi bi-check-circle-fill me-1"></i> ระบบจะกู้คืนข้อมูลพร้อมตรวจสอบความถูกต้องและตัดชื่อแผนกที่ซ้ำซ้อนออกอัตโนมัติ</div>
+      <div class="col-12 text-success fw-semibold mt-1"><i class="bi bi-check-circle-fill me-1"></i> ระบบจะกู้คืนข้อมูลพร้อมตรวจสอบความถูกต้องของแผนกและตำแหน่งอัตโนมัติ</div>
     `;
   }
 
@@ -1527,6 +1577,7 @@ window.executeRestoreDatabase = async function() {
     let auditLogs = window.auditLogs || [];
     let categoriesList = window.categoriesList || [];
     let departmentsList = window.departmentsList || [];
+    let positionsList = window.positionsList || [];
     let locationsList = window.locationsList || [];
 
     // Extract strictly unique departments from backup file (must equal departmentsList in .json)
@@ -1545,6 +1596,28 @@ window.executeRestoreDatabase = async function() {
     } else if (Array.isArray(tempParsedRestoreData.employeeList)) {
       tempParsedRestoreData.employeeList.forEach(emp => {
         if (emp && emp.department) addRestoredDept(emp.department);
+      });
+    }
+
+    const seenRestoredPos = new Set();
+    const restoredPositions = [];
+    const addRestoredPos = (p) => {
+      if (!p) return;
+      const name = (typeof p === 'object' ? (p.name || p.id || '') : String(p)).trim();
+      if (name && !seenRestoredPos.has(name.toLowerCase())) {
+        seenRestoredPos.add(name.toLowerCase());
+        if (typeof p === 'object' && p.name) {
+          restoredPositions.push(p);
+        } else {
+          restoredPositions.push({ id: `POS-${String(restoredPositions.length + 1).padStart(3, '0')}`, code: `POS-${String(restoredPositions.length + 1).padStart(3, '0')}`, name: name, group: 'ตำแหน่งทั่วไป' });
+        }
+      }
+    };
+    if (Array.isArray(tempParsedRestoreData.positionsList)) {
+      tempParsedRestoreData.positionsList.forEach(addRestoredPos);
+    } else if (Array.isArray(tempParsedRestoreData.employeeList)) {
+      tempParsedRestoreData.employeeList.forEach(emp => {
+        if (emp && emp.position) addRestoredPos(emp.position);
       });
     }
 
@@ -1574,6 +1647,7 @@ window.executeRestoreDatabase = async function() {
       auditLogs = tempParsedRestoreData.auditLogs || [];
       if (tempParsedRestoreData.categoriesList) categoriesList = tempParsedRestoreData.categoriesList;
       departmentsList = restoredDepts;
+      positionsList = restoredPositions;
       locationsList = restoredLocs;
     } else {
       const newEquip = tempParsedRestoreData.equipmentList || [];
@@ -1653,6 +1727,22 @@ window.executeRestoreDatabase = async function() {
       locationsList.forEach(addMergeLoc);
       restoredLocs.forEach(addMergeLoc);
       locationsList = Array.from(mergeLocMap.values());
+
+      const mergePosMap = new Map();
+      const addMergePos = (item) => {
+        if (!item) return;
+        const name = (typeof item === 'object' ? (item.name || item.id || '') : String(item)).trim();
+        if (name && !mergePosMap.has(name.toLowerCase())) {
+          if (typeof item === 'object' && item.name) {
+            mergePosMap.set(name.toLowerCase(), item);
+          } else {
+            mergePosMap.set(name.toLowerCase(), { id: `POS-${String(mergePosMap.size + 1).padStart(3, '0')}`, code: `POS-${String(mergePosMap.size + 1).padStart(3, '0')}`, name: name, group: 'ตำแหน่งทั่วไป' });
+          }
+        }
+      };
+      positionsList.forEach(addMergePos);
+      restoredPositions.forEach(addMergePos);
+      positionsList = Array.from(mergePosMap.values());
     }
 
     equipmentList.forEach(item => {
@@ -1680,6 +1770,7 @@ window.executeRestoreDatabase = async function() {
     window.auditLogs = auditLogs;
     window.categoriesList = categoriesList;
     window.departmentsList = departmentsList;
+    window.positionsList = positionsList;
     window.locationsList = locationsList;
 
     window.updateBackupProgress(70, "กำลังบันทึกข้อมูลลงเครื่อง...", "บันทึกใน LocalStorage", true, "bg-warning");
@@ -1688,6 +1779,7 @@ window.executeRestoreDatabase = async function() {
     }
     try {
       localStorage.setItem('flora_departments', JSON.stringify(departmentsList));
+      localStorage.setItem('flora_positions', JSON.stringify(positionsList));
       localStorage.setItem('flora_locations', JSON.stringify(locationsList));
     } catch(e) {}
 
@@ -1707,6 +1799,11 @@ window.executeRestoreDatabase = async function() {
           const code = `LOC-${String(i + 1).padStart(3, '0')}`;
           return { id: code, code: code, name: lName };
         });
+        const posDocs = (positionsList || []).map((p, i) => {
+          const pName = typeof p === 'object' ? (p.name || p.id) : String(p).trim();
+          const code = p.code || (p.id && p.id.startsWith('POS-') ? p.id : `POS-${String(i + 1).padStart(3, '0')}`);
+          return { ...p, id: code, code: code, name: pName };
+        });
         const catDocs = (categoriesList || []).map((c, i) => {
           const code = c.code || (c.id && c.id.startsWith('CAT-') ? c.id : `CAT-${String(i + 1).padStart(3, '0')}`);
           return { ...c, id: code, code: code };
@@ -1720,6 +1817,7 @@ window.executeRestoreDatabase = async function() {
           await replaceCollectionInFirestore("categories", catDocs);
           await replaceCollectionInFirestore("audit_logs", auditLogs);
           await replaceCollectionInFirestore("departments", deptDocs);
+          await replaceCollectionInFirestore("positions", posDocs);
           await replaceCollectionInFirestore("locations", locDocs);
         } else {
           for (const eq of eqDocs) {
@@ -1739,6 +1837,9 @@ window.executeRestoreDatabase = async function() {
           }
           for (const dept of deptDocs) {
             if (dept && dept.id) await setDoc(doc(window.db, "departments", dept.id), dept);
+          }
+          for (const pos of posDocs) {
+            if (pos && pos.id) await setDoc(doc(window.db, "positions", pos.id), pos);
           }
           for (const loc of locDocs) {
             if (loc && loc.id) await setDoc(doc(window.db, "locations", loc.id), loc);
@@ -1777,6 +1878,8 @@ window.executeRestoreDatabase = async function() {
     // Refresh application views & tables
     if (typeof window.renderCategoryDropdowns === 'function') window.renderCategoryDropdowns();
     if (typeof window.populateDepartmentDropdowns === 'function') window.populateDepartmentDropdowns();
+    if (typeof window.populatePositionDropdowns === 'function') window.populatePositionDropdowns();
+    if (typeof window.renderPositionsListModal === 'function') window.renderPositionsListModal();
     if (typeof window.populateEmployeeDropdowns === 'function') window.populateEmployeeDropdowns();
     if (typeof window.populateEquipmentDropdown === 'function') window.populateEquipmentDropdown();
     if (typeof window.populateQuickScanDropdown === 'function') window.populateQuickScanDropdown();

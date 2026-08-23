@@ -67,6 +67,7 @@
     let attendanceLogs = [];
     let categoriesList = [];
     let departmentsList = [];
+    let positionsList = [];
     let locationsList = [];
     let auditLogs = [];
     let userLoginLogs = [];
@@ -89,6 +90,7 @@
     Object.defineProperty(window, 'attendanceLogs', { get: () => attendanceLogs, set: (v) => { attendanceLogs = v; }, configurable: true });
     Object.defineProperty(window, 'categoriesList', { get: () => categoriesList, set: (v) => { categoriesList = v; }, configurable: true });
     Object.defineProperty(window, 'departmentsList', { get: () => departmentsList, set: (v) => { departmentsList = v; }, configurable: true });
+    Object.defineProperty(window, 'positionsList', { get: () => positionsList, set: (v) => { positionsList = v; }, configurable: true });
     Object.defineProperty(window, 'locationsList', { get: () => locationsList, set: (v) => { locationsList = v; }, configurable: true });
     Object.defineProperty(window, 'auditLogs', { get: () => auditLogs, set: (v) => { auditLogs = v; }, configurable: true });
     Object.defineProperty(window, 'userLoginLogs', { get: () => userLoginLogs, set: (v) => { userLoginLogs = v; }, configurable: true });
@@ -118,6 +120,33 @@
       "ทั่วไป",
       "ทีมตัดหญ้า",
       "ทีมวิหารหลวงปู่"
+    ];
+
+    const defaultPositionsList = [
+      { id: "POS-001", code: "POS-001", name: "ประธานโครงการ", group: "ระดับบริหารและประสานงาน", order: 1 },
+      { id: "POS-002", code: "POS-002", name: "ที่ปรึกษาโครงการ", group: "ระดับบริหารและประสานงาน", order: 2 },
+      { id: "POS-003", code: "POS-003", name: "ผู้ประสานงานโครงการ", group: "ระดับบริหารและประสานงาน", order: 3 },
+      { id: "POS-004", code: "POS-004", name: "หัวหน้างานส่วนกลาง (4.1)", group: "ระดับหัวหน้างานฝ่ายหลัก", order: 4 },
+      { id: "POS-005", code: "POS-005", name: "หัวหน้างานกุหลาบ/งานทดลอง (4.2)", group: "ระดับหัวหน้างานฝ่ายหลัก", order: 5 },
+      { id: "POS-006", code: "POS-006", name: "หัวหน้างานรัตนบุปผา (4.3)", group: "ระดับหัวหน้างานฝ่ายหลัก", order: 6 },
+      { id: "POS-007", code: "POS-007", name: "หัวหน้างานธรรมยาตรา (4.4)", group: "ระดับหัวหน้างานฝ่ายหลัก", order: 7 },
+      { id: "POS-008", code: "POS-008", name: "นักวิชาการ", group: "สายวิชาการและกำกับมาตรฐาน", order: 8 },
+      { id: "POS-009", code: "POS-009", name: "หัวหน้างานธุรการ / บุคคล (5.1)", group: "ระดับหัวหน้าแผนก", order: 9 },
+      { id: "POS-010", code: "POS-010", name: "หัวหน้างานสวัสดิการ (5.2)", group: "ระดับหัวหน้าแผนก", order: 10 },
+      { id: "POS-011", code: "POS-011", name: "หัวหน้างานสนับสนุน (ระบบน้ำ/ตัดหญ้า) (5.3)", group: "ระดับหัวหน้าแผนก", order: 11 },
+      { id: "POS-012", code: "POS-012", name: "หัวหน้างานทดลอง (5.4)", group: "ระดับหัวหน้าแผนก", order: 12 },
+      { id: "POS-013", code: "POS-013", name: "หัวหน้างานกุหลาบ (5.5)", group: "ระดับหัวหน้าแผนก", order: 13 },
+      { id: "POS-014", code: "POS-014", name: "หัวหน้างานเจดีย์ (5.6)", group: "ระดับหัวหน้าแผนก", order: 14 },
+      { id: "POS-015", code: "POS-015", name: "หัวหน้างานวิหารหลวงปู่ (5.7)", group: "ระดับหัวหน้าแผนก", order: 15 },
+      { id: "POS-016", code: "POS-016", name: "หัวหน้างานถนนธรรมชัย / เฟื่องฟ้า (5.8)", group: "ระดับหัวหน้าแผนก", order: 16 },
+      { id: "POS-017", code: "POS-017", name: "หัวหน้างานผสมแกลบ / โต๊ะกลาง (5.9)", group: "ระดับหัวหน้าแผนก", order: 17 },
+      { id: "POS-018", code: "POS-018", name: "หัวหน้างานแปลง A / B (5.10)", group: "ระดับหัวหน้าแผนก", order: 18 },
+      { id: "POS-019", code: "POS-019", name: "หัวหน้างานแปลง E / P11 (5.11)", group: "ระดับหัวหน้าแผนก", order: 19 },
+      { id: "POS-020", code: "POS-020", name: "หัวหน้างานไม้กระถางหลังวิหารคด (5.12)", group: "ระดับหัวหน้าแผนก", order: 20 },
+      { id: "POS-021", code: "POS-021", name: "หัวหน้าแผนก / หัวหน้าแปลง (Team Leader)", group: "ระดับหัวหน้าแผนก", order: 21 },
+      { id: "POS-022", code: "POS-022", name: "เจ้าหน้าที่ธุรการ", group: "เจ้าหน้าที่และพนักงานปฏิบัติการ", order: 22 },
+      { id: "POS-023", code: "POS-023", name: "พระภิกษุ", group: "เจ้าหน้าที่และพนักงานปฏิบัติการ", order: 23 },
+      { id: "POS-024", code: "POS-024", name: "พนักงานปฏิบัติการ", group: "เจ้าหน้าที่และพนักงานปฏิบัติการ", order: 24 }
     ];
 
     const defaultLocationsList = [
@@ -995,9 +1024,10 @@
             </td>
             <td class="text-center">
               <select id="userRoleSelect_${u.id}" class="form-select form-select-sm fw-semibold">
-                <option value="ADMIN" ${uRole === 'ADMIN' ? 'selected' : ''}>🔴 ผู้ดูแลระบบ</option>
-                <option value="MANAGER" ${uRole === 'MANAGER' ? 'selected' : ''}>🔵 เจ้าหน้าที่</option>
-                <option value="WORKER" ${uRole === 'WORKER' ? 'selected' : ''}>🟢 พนักงาน</option>
+                <option value="ADMIN" ${uRole === 'ADMIN' ? 'selected' : ''}>🔴 ผู้ดูแลระบบ (ADMIN)</option>
+                <option value="MANAGER" ${uRole === 'MANAGER' ? 'selected' : ''}>🔵 ผู้จัดการ/บริหาร (MANAGER)</option>
+                <option value="STAFF" ${uRole === 'STAFF' ? 'selected' : ''}>🟣 เจ้าหน้าที่ (STAFF)</option>
+                <option value="WORKER" ${uRole === 'WORKER' ? 'selected' : ''}>🟢 พนักงาน (WORKER)</option>
               </select>
             </td>
             <td class="text-end pe-3">
@@ -1409,6 +1439,9 @@
         if (departmentsList && Array.isArray(departmentsList) && departmentsList.length > 0) {
           localStorage.setItem('flora_departments', JSON.stringify(departmentsList));
         }
+        if (positionsList && Array.isArray(positionsList) && positionsList.length > 0) {
+          localStorage.setItem('flora_positions', JSON.stringify(positionsList));
+        }
         if (locationsList && Array.isArray(locationsList) && locationsList.length > 0) {
           localStorage.setItem('flora_locations', JSON.stringify(locationsList));
         }
@@ -1475,6 +1508,37 @@
           departmentsList = [...defaultDepartmentsList];
         }
 
+        const savedPositions = localStorage.getItem('flora_positions');
+        if (savedPositions) {
+          try {
+            const parsed = JSON.parse(savedPositions);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const posMap = new Map();
+              defaultPositionsList.forEach(p => posMap.set(p.name.toLowerCase(), p));
+              parsed.forEach(p => {
+                const name = typeof p === 'object' ? (p.name || p.id || '') : String(p);
+                if (name && name.trim()) {
+                  posMap.set(name.trim().toLowerCase(), typeof p === 'object' ? p : { id: `POS-${String(posMap.size+1).padStart(3, '0')}`, code: `POS-${String(posMap.size+1).padStart(3, '0')}`, name: name.trim(), group: 'ตำแหน่งทั่วไป' });
+                }
+              });
+              const merged = Array.from(posMap.values());
+              merged.sort((a, b) => {
+                const numA = parseInt(((a.code || a.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+                const numB = parseInt(((b.code || b.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+                if (numA !== numB) return numA - numB;
+                return (a.order || 0) - (b.order || 0);
+              });
+              positionsList = merged;
+            } else {
+              positionsList = [...defaultPositionsList];
+            }
+          } catch(e) {
+            positionsList = [...defaultPositionsList];
+          }
+        } else {
+          positionsList = [...defaultPositionsList];
+        }
+
         const savedLocs = localStorage.getItem('flora_locations');
         if (savedLocs) {
           try {
@@ -1525,6 +1589,7 @@
 
       renderCategoryDropdowns();
       populateDepartmentDropdowns();
+      populatePositionDropdowns();
       populateLocationDropdowns();
       populateEmployeeDropdowns();
       populateEquipmentDropdown();
@@ -1807,31 +1872,32 @@
       const roleConfig = {
         'ADMIN': {
           badgeClass: "badge bg-danger fs-7 px-3 py-2 rounded-pill shadow-sm",
-          badgeHtml: '<i class="bi bi-shield-lock-fill me-1"></i> ผู้ดูแลระบบ',
-          desc: "(สิทธิ์เต็มรูปแบบ: จัดการอุปกรณ์ พนักงาน หมวดหมู่ และสิทธิ์ผู้ใช้ทั้งหมด)",
-          navText: `ผู้ดูแลระบบ`,
+          badgeHtml: '<i class="bi bi-shield-lock-fill me-1"></i> ผู้ดูแลระบบ (ADMIN)',
+          desc: "(สิทธิ์สูงสุด: จัดการอุปกรณ์ บุคลากร ผังองค์กร และกำหนดสิทธิ์ผู้ใช้ทั้งหมด)",
+          navText: `ADMIN`,
           navIcon: "bi bi-shield-lock-fill me-2 text-danger"
         },
         'MANAGER': {
           badgeClass: "badge bg-primary fs-7 px-3 py-2 rounded-pill shadow-sm",
-          badgeHtml: '<i class="bi bi-briefcase-fill me-1"></i> เจ้าหน้าที่',
-          desc: "(สิทธิ์ระดับบริหาร: จัดการอุปกรณ์ หมวดหมู่ อนุมัติการเบิก-ยืม และดูรายงาน)",
-          navText: `เจ้าหน้าที่`,
+          badgeHtml: '<i class="bi bi-person-workspace me-1"></i> ผู้จัดการ/บริหาร (MANAGER)',
+          desc: "(สิทธิ์ระดับบริหาร: จัดการอุปกรณ์ บุคลากร ผังองค์กร อนุมัติการเบิก-ยืม และรายงาน)",
+          navText: `MANAGER`,
+          navIcon: "bi bi-person-workspace me-2 text-primary"
+        },
+        'STAFF': {
+          badgeClass: "badge fs-7 px-3 py-2 rounded-pill shadow-sm text-white",
+          style: "background-color: #6f42c1;",
+          badgeHtml: '<i class="bi bi-briefcase-fill me-1"></i> เจ้าหน้าที่ (STAFF)',
+          desc: "(สิทธิ์เจ้าหน้าที่: จัดการคลังอุปกรณ์ เบิก-ยืม-คืน-รับเข้า และดูผังบุคลากร)",
+          navText: `STAFF`,
           navIcon: "bi bi-briefcase-fill me-2 text-primary"
         },
         'WORKER': {
           badgeClass: "badge bg-success fs-7 px-3 py-2 rounded-pill shadow-sm",
-          badgeHtml: '<i class="bi bi-person-fill me-1"></i> พนักงานทำเกษตร',
-          desc: "(สิทธิ์เบิก-จ่าย-ยืม-คืน, สแกน QR, ลงเวลาทำงาน และดูคลังอุปกรณ์)",
-          navText: `พนักงาน`,
+          badgeHtml: '<i class="bi bi-person-fill me-1"></i> พนักงาน (WORKER)',
+          desc: "(สิทธิ์ปฏิบัติการ: ยืม-คืน ส่งคำขอ สแกน QR ลงเวลา และดูคลังอุปกรณ์)",
+          navText: `WORKER`,
           navIcon: "bi bi-person-badge me-2 text-success"
-        },
-        'STAFF': {
-          badgeClass: "badge bg-primary fs-7 px-3 py-2 rounded-pill shadow-sm",
-          badgeHtml: '<i class="bi bi-briefcase-fill me-1"></i> เจ้าหน้าที่สำนักงาน',
-          desc: "(สิทธิ์จัดการคลังอุปกรณ์ พนักงาน และดูประวัติทำรายการ)",
-          navText: `เจ้าหน้าที่`,
-          navIcon: "bi bi-briefcase-fill me-2 text-primary"
         }
       };
 
@@ -12906,6 +12972,7 @@
       if (document.getElementById('empDetailsInput')) document.getElementById('empDetailsInput').value = '';
       document.getElementById('empModalTitle').innerHTML = '<i class="bi bi-person-plus-fill me-2"></i>เพิ่มข้อมูลพนักงานใหม่';
       populateDepartmentDropdowns();
+      populatePositionDropdowns();
       const box = document.getElementById('empPhotoPreviewBox');
       if (box) box.classList.add('d-none');
       const modal = new bootstrap.Modal(document.getElementById('addEmployeeModal'));
@@ -12930,7 +12997,7 @@
       document.getElementById('empCodeInput').value = emp.code || emp.id;
       if (document.getElementById('empRoleSelect')) document.getElementById('empRoleSelect').value = emp.role;
       populateDepartmentDropdowns(emp.department);
-      if (document.getElementById('empPositionSelect')) document.getElementById('empPositionSelect').value = emp.position || '';
+      populatePositionDropdowns(emp.position);
       if (document.getElementById('empDetailsInput')) document.getElementById('empDetailsInput').value = emp.details || '';
       document.getElementById('empPhoneInput').value = emp.phone;
       document.getElementById('empPhotoUrlInput').value = emp.photoUrl || '';
@@ -13414,6 +13481,335 @@
       }
 
       showToast(`ลบแผนก/สวน "${deptName}" ออกจากระบบเรียบร้อยแล้ว`);
+    };
+
+    // ==================== POSITIONS LIST MANAGEMENT ====================
+    function populatePositionDropdowns(selectedValue = null) {
+      const select = document.getElementById('empPositionSelect');
+      if (!select) return;
+
+      const currentVal = selectedValue !== null && selectedValue !== undefined ? selectedValue : select.value;
+      select.innerHTML = '<option value="">-- กรุณาเลือกตำแหน่ง --</option>';
+
+      let hasSelected = false;
+      const normalizedPositions = (positionsList || []).map(p => {
+        if (typeof p === 'string') {
+          return { id: p, code: p, name: p, group: 'ตำแหน่งทั่วไป' };
+        }
+        return p;
+      });
+
+      // Group positions by group
+      const groups = {};
+      normalizedPositions.forEach(p => {
+        const grp = p.group || 'ตำแหน่งทั่วไป';
+        if (!groups[grp]) groups[grp] = [];
+        groups[grp].push(p);
+      });
+
+      const groupOrder = [
+        'ระดับบริหารและประสานงาน',
+        'ระดับหัวหน้างานฝ่ายหลัก',
+        'สายวิชาการและกำกับมาตรฐาน',
+        'ระดับหัวหน้าแผนก',
+        'เจ้าหน้าที่และพนักงานปฏิบัติการ',
+        'ตำแหน่งทั่วไป'
+      ];
+
+      const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+        const idxA = groupOrder.indexOf(a);
+        const idxB = groupOrder.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b, 'th');
+      });
+
+      sortedGroupKeys.forEach(grpName => {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = grpName;
+
+        groups[grpName].forEach(pos => {
+          const opt = document.createElement('option');
+          opt.value = pos.name;
+          opt.textContent = pos.name;
+          if (pos.name === currentVal) {
+            opt.selected = true;
+            hasSelected = true;
+          }
+          optGroup.appendChild(opt);
+        });
+
+        select.appendChild(optGroup);
+      });
+
+      if (currentVal && !hasSelected) {
+        const opt = document.createElement('option');
+        opt.value = currentVal;
+        opt.textContent = `${currentVal} (ตำแหน่งเดิม)`;
+        opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+    window.populatePositionDropdowns = populatePositionDropdowns;
+
+    window.openManagePositionsModal = function() {
+      renderPositionsListModal();
+      const input = document.getElementById('newPosNameInput');
+      if (input) input.value = '';
+      const modalElem = document.getElementById('managePositionsModal');
+      if (modalElem) {
+        const modal = bootstrap.Modal.getInstance(modalElem) || new bootstrap.Modal(modalElem);
+        modal.show();
+      }
+    };
+
+    window.renderPositionsListModal = function() {
+      const container = document.getElementById('positionsListContainer');
+      const badge = document.getElementById('posCountBadge');
+      if (!container) return;
+
+      const normalizedPositions = (positionsList || []).map((p, idx) => {
+        if (typeof p === 'string') {
+          return { id: `POS-${String(idx + 1).padStart(3, '0')}`, code: `POS-${String(idx + 1).padStart(3, '0')}`, name: p, group: 'ตำแหน่งทั่วไป', order: idx + 1 };
+        }
+        return p;
+      });
+
+      if (badge) badge.textContent = `ทั้งหมด ${normalizedPositions.length} รายการ`;
+
+      if (normalizedPositions.length === 0) {
+        container.innerHTML = `<div class="text-center py-4 text-muted fs-7"><i class="bi bi-inbox display-6 d-block mb-2 text-secondary"></i>ยังไม่มีรายการตำแหน่งในระบบ</div>`;
+        return;
+      }
+
+      let html = '';
+      normalizedPositions.forEach((pos, idx) => {
+        const posName = pos.name || pos.id;
+        const posCode = pos.code || pos.id || `POS-${String(idx + 1).padStart(3, '0')}`;
+        const posGroup = pos.group || 'ตำแหน่งทั่วไป';
+        const empCount = employeeList.filter(e => e.position === posName).length;
+
+        let groupBadgeColor = 'bg-secondary';
+        if (posGroup.includes('บริหาร') || posGroup.includes('ประสานงาน')) groupBadgeColor = 'bg-danger';
+        else if (posGroup.includes('หัวหน้างานฝ่ายหลัก')) groupBadgeColor = 'bg-warning text-dark';
+        else if (posGroup.includes('วิชาการ')) groupBadgeColor = 'bg-info text-dark';
+        else if (posGroup.includes('หัวหน้าแผนก')) groupBadgeColor = 'bg-primary';
+        else if (posGroup.includes('เจ้าหน้าที่') || posGroup.includes('พนักงาน')) groupBadgeColor = 'bg-success';
+
+        html += `
+          <div class="list-group-item d-flex align-items-center justify-content-between p-2.5 border-bottom gap-2">
+            <div class="d-flex align-items-center gap-2 overflow-hidden">
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace fs-8 px-2 py-1">${posCode}</span>
+              <div>
+                <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                  <span class="fw-bold text-dark fs-7" title="${posName}">${posName}</span>
+                  <span class="badge ${groupBadgeColor} fs-8 px-1.5 py-0.5">${posGroup}</span>
+                </div>
+                <div class="fs-8 text-muted"><i class="bi bi-person-check me-1"></i> มีพนักงานดำรงตำแหน่งนี้: <span class="fw-semibold text-primary">${empCount} คน</span></div>
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-1 flex-shrink-0">
+              <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-2 py-1 fs-8 fw-semibold" onclick="editPositionName('${encodeURIComponent(pos.id || posName)}')">
+                <i class="bi bi-pencil me-1"></i> แก้ไข
+              </button>
+              <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-1 fs-8 fw-semibold" onclick="deletePositionName('${encodeURIComponent(pos.id || posName)}')">
+                <i class="bi bi-trash me-1"></i> ลบ
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    };
+
+    window.addNewPositionFromModal = async function() {
+      const input = document.getElementById('newPosNameInput');
+      const groupSelect = document.getElementById('newPosGroupSelect');
+      if (!input) return;
+
+      const newName = input.value.trim();
+      const newGroup = groupSelect ? groupSelect.value : 'ตำแหน่งทั่วไป';
+
+      if (!newName) {
+        alert("กรุณาระบุชื่อตำแหน่งงานใหม่");
+        return;
+      }
+
+      const exists = (positionsList || []).some(p => {
+        const name = typeof p === 'string' ? p : p.name;
+        return name === newName;
+      });
+
+      if (exists) {
+        alert(`มีตำแหน่งชื่อ "${newName}" อยู่ในระบบแล้ว`);
+        return;
+      }
+
+      let maxNum = 0;
+      (positionsList || []).forEach(p => {
+        const id = typeof p === 'string' ? '' : (p.id || p.code || '');
+        const match = id.match(/^POS-(\d+)$/i);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      });
+
+      const nextIndex = maxNum > 0 ? maxNum + 1 : (positionsList.length + 1);
+      const posId = `POS-${String(nextIndex).padStart(3, '0')}`;
+      const newPosObj = {
+        id: posId,
+        code: posId,
+        name: newName,
+        group: newGroup,
+        order: nextIndex
+      };
+
+      positionsList.push(newPosObj);
+      saveToLocalStorage();
+
+      if (isFirebaseReady && db) {
+        try {
+          await setDoc(doc(db, "positions", posId), newPosObj);
+        } catch (err) {
+          console.warn("Firestore add position notice:", err);
+        }
+      }
+
+      input.value = '';
+      renderPositionsListModal();
+      populatePositionDropdowns(newName);
+
+      if (typeof logAuditAction === 'function') {
+        logAuditAction('ตำแหน่ง', 'เพิ่ม', `เพิ่มตำแหน่ง "${newName}" (${newGroup}) เข้าสู่ระบบ`, newName);
+      }
+
+      showToast(`เพิ่มตำแหน่ง "${newName}" เข้าสู่ระบบเรียบร้อยแล้ว`);
+    };
+
+    window.editPositionName = async function(encodedKey) {
+      const key = decodeURIComponent(encodedKey);
+      const posIndex = (positionsList || []).findIndex(p => {
+        if (typeof p === 'string') return p === key;
+        return p.id === key || p.name === key;
+      });
+
+      if (posIndex === -1) return;
+
+      const currentPos = positionsList[posIndex];
+      const oldName = typeof currentPos === 'string' ? currentPos : (currentPos.name || currentPos.id);
+      const oldGroup = typeof currentPos === 'string' ? 'ตำแหน่งทั่วไป' : (currentPos.group || 'ตำแหน่งทั่วไป');
+      const posId = typeof currentPos === 'string' ? `POS-${String(posIndex + 1).padStart(3, '0')}` : (currentPos.id || `POS-${String(posIndex + 1).padStart(3, '0')}`);
+
+      const newName = prompt(`แก้ไขชื่อตำแหน่งงาน:`, oldName);
+      if (newName === null) return;
+      const trimmed = newName.trim();
+
+      if (!trimmed) {
+        alert("ชื่อตำแหน่งงานต้องไม่เป็นค่าว่าง");
+        return;
+      }
+
+      const duplicate = (positionsList || []).some((p, i) => {
+        if (i === posIndex) return false;
+        const n = typeof p === 'string' ? p : p.name;
+        return n === trimmed;
+      });
+
+      if (duplicate) {
+        alert(`ชื่อตำแหน่ง "${trimmed}" มีอยู่ในระบบแล้ว`);
+        return;
+      }
+
+      const updatedPosObj = {
+        id: posId,
+        code: posId,
+        name: trimmed,
+        group: oldGroup,
+        order: typeof currentPos === 'object' && currentPos.order ? currentPos.order : posIndex + 1
+      };
+
+      positionsList[posIndex] = updatedPosObj;
+
+      let updatedCount = 0;
+      (employeeList || []).forEach(emp => {
+        if (emp.position === oldName) {
+          emp.position = trimmed;
+          updatedCount++;
+
+          if (isFirebaseReady && db) {
+            try {
+              updateDoc(doc(db, "employees", emp.id), { position: trimmed });
+            } catch(e){}
+          }
+        }
+      });
+
+      saveToLocalStorage();
+
+      if (isFirebaseReady && db) {
+        try {
+          await setDoc(doc(db, "positions", posId), updatedPosObj, { merge: true });
+        } catch(err) {
+          console.warn("Firestore edit position notice:", err);
+        }
+      }
+
+      renderPositionsListModal();
+      populatePositionDropdowns(trimmed);
+      renderEmployeeDirectory();
+
+      showToast(`อัปเดตชื่อตำแหน่งเป็น "${trimmed}" เรียบร้อยแล้ว (อัปเดตพนักงาน ${updatedCount} คน)`);
+    };
+
+    window.deletePositionName = async function(encodedKey) {
+      const key = decodeURIComponent(encodedKey);
+      const posIndex = (positionsList || []).findIndex(p => {
+        if (typeof p === 'string') return p === key;
+        return p.id === key || p.name === key;
+      });
+
+      if (posIndex === -1) return;
+
+      const currentPos = positionsList[posIndex];
+      const posName = typeof currentPos === 'string' ? currentPos : (currentPos.name || currentPos.id);
+      const posId = typeof currentPos === 'string' ? `POS-${String(posIndex + 1).padStart(3, '0')}` : (currentPos.id || posName);
+
+      const empCount = (employeeList || []).filter(e => e.position === posName).length;
+      const confirmMsg = empCount > 0 
+        ? `มีพนักงานดำรงตำแหน่งนี้ ${empCount} คน ต้องการลบตำแหน่ง "${posName}" ออกจากระบบหรือไม่?` 
+        : `ต้องการลบตำแหน่ง "${posName}" ออกจากระบบหรือไม่?`;
+
+      const ok = await window.showConfirmDialog({
+        title: "ลบตำแหน่งงาน",
+        message: confirmMsg,
+        type: "danger",
+        confirmText: "ลบตำแหน่ง"
+      });
+      if (!ok) return;
+
+      positionsList.splice(posIndex, 1);
+      saveToLocalStorage();
+
+      if (isFirebaseReady && db) {
+        try {
+          await deleteDoc(doc(db, "positions", posId));
+        } catch(err) {
+          console.warn("Firestore delete position notice:", err);
+        }
+      }
+
+      renderPositionsListModal();
+      populatePositionDropdowns();
+
+      if (typeof logAuditAction === 'function') {
+        logAuditAction('ตำแหน่ง', 'ลบ', `ลบตำแหน่ง "${posName}" ออกจากระบบ`, posName);
+      }
+
+      showToast(`ลบตำแหน่ง "${posName}" ออกจากระบบเรียบร้อยแล้ว`);
     };
 
     // ==================== LOCATIONS LIST MANAGEMENT ====================
@@ -15130,14 +15526,15 @@
     async function fetchInitialFirestoreData(isRetry = false) {
       if (!isFirebaseReady || !db) return;
       try {
-        const [empSnap, attSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap] = await Promise.allSettled([
+        const [empSnap, attSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap, posSnap] = await Promise.allSettled([
           getDocs(collection(db, "employees")),
           getDocs(collection(db, "attendance")),
           getDocs(collection(db, "categories")),
           getDocs(collection(db, "equipment")),
           getDocs(collection(db, "transactions")),
           getDocs(collection(db, "departments")),
-          getDocs(collection(db, "locations"))
+          getDocs(collection(db, "locations")),
+          getDocs(collection(db, "positions"))
         ]);
 
         let hasData = false;
@@ -15286,6 +15683,48 @@
           locationsList = locDocs.map(d => (d.name || d.id)).filter(Boolean);
           populateLocationDropdowns();
           hasData = true;
+        }
+
+        if (posSnap.status === 'fulfilled') {
+          if (!posSnap.value.empty) {
+            const posMap = new Map();
+            defaultPositionsList.forEach(p => posMap.set(p.name.toLowerCase(), p));
+            for (const dSnap of posSnap.value.docs) {
+              const data = dSnap.data() || {};
+              const name = (data.name || dSnap.id || '').trim();
+              const officialCode = (data.code || data.id || dSnap.id || '').trim();
+              const group = data.group || 'ตำแหน่งทั่วไป';
+              const order = data.order || 999;
+              if (name) {
+                const key = name.toLowerCase();
+                posMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name, group, order });
+              }
+            }
+            const posDocs = Array.from(posMap.values());
+            posDocs.sort((a, b) => {
+              const numA = parseInt(((a.code || a.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+              const numB = parseInt(((b.code || b.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+              if (numA !== numB) return numA - numB;
+              return (a.order || 0) - (b.order || 0);
+            });
+            positionsList = posDocs;
+            populatePositionDropdowns();
+            hasData = true;
+          } else if (defaultPositionsList && defaultPositionsList.length > 0) {
+            // Auto seed default positions to Firestore if empty
+            positionsList = [...defaultPositionsList];
+            populatePositionDropdowns();
+            if (isFirebaseReady && db) {
+              try {
+                for (const p of defaultPositionsList) {
+                  await setDoc(doc(db, "positions", p.id), p);
+                }
+              } catch(seedErr) {
+                console.warn("Auto seed positions to Firestore notice:", seedErr);
+              }
+            }
+            hasData = true;
+          }
         }
 
         if (hasData) {
@@ -15587,6 +16026,60 @@
           }
         }, (err) => {
           console.warn("Firestore locations sync notice:", err.message);
+        });
+
+        onSnapshot(collection(db, "positions"), async (snapshot) => {
+          let fsPositions = [];
+          if (!snapshot.empty) {
+            const posMap = new Map();
+            for (const dSnap of snapshot.docs) {
+              const data = dSnap.data() || {};
+              const name = (data.name || dSnap.id || '').trim();
+              const officialCode = (data.code || data.id || dSnap.id || '').trim();
+              const group = data.group || 'ตำแหน่งทั่วไป';
+              const order = data.order || 999;
+
+              if (name) {
+                // Auto-migrate if document ID !== position code
+                if (isFirebaseReady && db && officialCode && dSnap.id !== officialCode) {
+                  try {
+                    await setDoc(doc(db, "positions", officialCode), { id: officialCode, code: officialCode, name, group, order }, { merge: true });
+                    await deleteDoc(dSnap.ref);
+                  } catch(migErr) {
+                    console.warn("Auto migrate position docId notice:", migErr);
+                  }
+                }
+
+                const key = name.toLowerCase();
+                if (!posMap.has(key)) {
+                  posMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name, group, order });
+                } else if (dSnap.id !== officialCode) {
+                  try { await deleteDoc(dSnap.ref); } catch(e){}
+                }
+              }
+            }
+
+            const posDocs = Array.from(posMap.values());
+            posDocs.sort((a, b) => {
+              const numA = parseInt(((a.code || a.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+              const numB = parseInt(((b.code || b.id || '').match(/^POS-(\d+)$/i) || [0, 999999])[1], 10);
+              if (numA !== numB) return numA - numB;
+              return (a.order || 0) - (b.order || 0);
+            });
+
+            fsPositions = posDocs;
+            positionsList = fsPositions;
+          } else {
+            positionsList = [];
+          }
+
+          saveToLocalStorage();
+          populatePositionDropdowns();
+          if (typeof renderPositionsListModal === 'function') {
+            renderPositionsListModal();
+          }
+        }, (err) => {
+          console.warn("Firestore positions sync notice:", err.message);
         });
 
         onSnapshot(collection(db, "audit_logs"), (snapshot) => {

@@ -70,24 +70,44 @@
       padding: 8px 20px;
     }
 
-    /* Outer Wrapper */
+    /* Outer Viewport Wrapper (Pan & Zoom Container) */
     .canvas-viewport-wrapper {
-      padding: 24px 20px 90px 20px;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      min-height: calc(100vh - 130px);
+      padding: 20px 20px 80px 20px;
+      overflow: auto;
+      width: 100%;
+      min-height: calc(100vh - 125px);
       background-color: #0f172a;
       background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
       background-size: 24px 24px;
+      cursor: grab;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+
+    .canvas-viewport-wrapper.is-panning {
+      cursor: grabbing !important;
+      user-select: none;
+    }
+
+    /* Inner Sizing Stage: Prevents Left Clipping / Negative Coordinate Overflow */
+    .zoom-stage {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-width: 100%;
+      width: max-content;
+      margin: 0 auto;
+      padding: 10px 40px;
+      box-sizing: border-box;
     }
 
     .chart-zoom-layer {
       transform-origin: top center;
-      transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+      transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
       display: flex;
       flex-direction: column;
       align-items: center;
+      width: max-content;
     }
 
     /* Exact Poster Design (1560px width aspect ratio) */
@@ -466,6 +486,52 @@
       text-align: center;
     }
 
+    /* Sub-Section Team Leader (5.1 - 5.12) Box Styles */
+    .team-leader-slot {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .team-leader-slot:hover {
+      border-color: #0d2258;
+      background: #f8fafc;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+    .team-leader-slot.is-empty {
+      border-style: dashed;
+      background: #f8fafc;
+      border-color: #94a3b8;
+    }
+    .team-leader-slot.is-empty:hover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .team-leader-tag {
+      position: absolute;
+      top: -7px;
+      right: 6px;
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+    .tag-l-blue { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+    .tag-l-pink { background: #fce4ec; color: #c2185b; border: 1px solid #f8bbd0; }
+    .tag-l-orange { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+    .tag-l-green { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+
     /* Floating Popup Context Menu for Employee Click */
     #empContextMenu {
       position: fixed;
@@ -677,6 +743,11 @@
         <span>โยกย้ายโครงสร้าง</span>
       </button>
 
+      <button type="button" class="btn btn-secondary btn-sm rounded-pill px-3 py-1.5 fw-bold text-white shadow-sm d-flex align-items-center gap-1.5" onclick="openPositionsManagerModal()" title="จัดการตำแหน่งและแผนกงานทั้งหมด">
+        <i class="bi bi-sliders fs-6"></i>
+        <span>จัดการตำแหน่ง/แผนก</span>
+      </button>
+
       <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold text-dark shadow-sm d-flex align-items-center gap-1.5" onclick="openAddModal()">
         <i class="bi bi-person-plus-fill fs-6"></i>
         <span>เพิ่มบุคลากร</span>
@@ -692,10 +763,10 @@
         <span>บันทึกรูปภาพ HD</span>
       </button>
 
-      <a href="org_chart_pdf.html" target="_blank" class="btn btn-outline-light btn-sm rounded-pill px-2.5 py-1.5 fw-semibold d-flex align-items-center gap-1" title="เปิดหน้าผังพิมพ์สำหรับตัดกระดาษ / สแตนดี้">
+      <button type="button" class="btn btn-outline-light btn-sm rounded-pill px-2.5 py-1.5 fw-semibold d-flex align-items-center gap-1" onclick="window.print()" title="พิมพ์ผังโครงสร้าง">
         <i class="bi bi-printer"></i>
-        <span>หน้าแบบพิมพ์</span>
-      </a>
+        <span>พิมพ์ผัง</span>
+      </button>
     </div>
   </header>
 
@@ -745,12 +816,14 @@
 
   <!-- ==================== MAIN VIEWPORT & POSTER CANVAS ==================== -->
   <main class="canvas-viewport-wrapper" id="canvasWrapper">
-    <div class="chart-zoom-layer" id="zoomLayer">
-      <div id="chartContent" class="d-flex flex-column align-items-center">
-        <!-- Flowchart Content Dynamically Injected -->
-        <div class="text-center py-5 text-white">
-          <div class="spinner-border text-warning mb-3" role="status"></div>
-          <p class="fw-semibold">กำลังเชื่อมต่อข้อมูลโครงสร้างบุคลากร...</p>
+    <div class="zoom-stage" id="zoomStage">
+      <div class="chart-zoom-layer" id="zoomLayer">
+        <div id="chartContent" class="d-flex flex-column align-items-center">
+          <!-- Flowchart Content Dynamically Injected -->
+          <div class="text-center py-5 text-white">
+            <div class="spinner-border text-warning mb-3" role="status"></div>
+            <p class="fw-semibold">กำลังเชื่อมต่อข้อมูลโครงสร้างบุคลากร...</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1097,6 +1170,145 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: POSITIONS & DEPARTMENTS MANAGER (จัดการตำแหน่ง & แผนก) ==================== -->
+  <div class="modal fade" id="positionsModal" tabindex="-1" aria-labelledby="positionsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+        
+        <div class="modal-header bg-dark text-white py-3 px-4" style="background: #111827;">
+          <div class="d-flex align-items-center gap-2">
+            <div class="bg-primary text-white p-2 rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+              <i class="bi bi-sliders fs-5"></i>
+            </div>
+            <div>
+              <h5 class="modal-title fw-bold mb-0 text-white" id="positionsModalTitle">ศูนย์จัดการโครงสร้างตำแหน่งและฝ่ายงาน</h5>
+              <small class="text-white-50 fs-8">กำหนดตำแหน่งงาน ลำดับสายบังคับบัญชา และแผนกงาน เพื่อให้ผังและฟอร์มทำงานแบบอัตโนมัติ</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs nav-fill bg-light px-3 pt-2 border-bottom" id="positionsModalTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold text-dark d-flex align-items-center justify-content-center gap-2 py-2.5" id="tab-positions-btn" data-bs-toggle="tab" data-bs-target="#tab-positions-pane" type="button" role="tab">
+              <i class="bi bi-diagram-2 text-primary fs-6"></i>
+              <span>1. 📋 จัดการตำแหน่งงานในโครงสร้าง (Positions)</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link fw-semibold text-muted d-flex align-items-center justify-content-center gap-2 py-2.5" id="tab-departments-btn" data-bs-toggle="tab" data-bs-target="#tab-departments-pane" type="button" role="tab">
+              <i class="bi bi-building text-success fs-6"></i>
+              <span>2. 🏢 จัดการฝ่ายและแผนกงาน (Departments)</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="positionsModalContent">
+          
+          <!-- TAB 1: POSITIONS -->
+          <div class="tab-pane fade show active p-4 bg-light" id="tab-positions-pane" role="tabpanel">
+            <!-- Add New Position Card -->
+            <div class="card border-0 shadow-sm rounded-3 mb-3 p-3 bg-white">
+              <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                <i class="bi bi-plus-circle-fill text-primary"></i>
+                <span>เพิ่มตำแหน่งงานใหม่ในโครงสร้าง</span>
+              </h6>
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-5">
+                  <label class="form-label fs-8 fw-bold text-muted mb-1">ชื่อตำแหน่งงาน <span class="text-danger">*</span></label>
+                  <input type="text" id="newPosNameInput" class="form-control form-control-sm fs-7 fw-semibold" placeholder="เช่น 5.1 หัวหน้างานธุรการ / พนักงานขับรถ" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label fs-8 fw-bold text-muted mb-1">กลุ่มโครงสร้าง / ลำดับชั้น</label>
+                  <select id="newPosCategorySelect" class="form-select form-select-sm fs-8 fw-semibold">
+                    <option value="executive">ระดับบริหาร (ประธาน/ที่ปรึกษา/ประสานงาน)</option>
+                    <option value="section_head">ระดับ 4: หัวหน้างานส่วนหลัก (4.1 - 4.4)</option>
+                    <option value="academic">ระดับ 4.5: สายวิชาการ</option>
+                    <option value="team_leader" selected>ระดับ 5: หัวหน้าทีม/แผนก (5.1 - 5.12)</option>
+                    <option value="staff">ระดับ 6: เจ้าหน้าที่ / พระภิกษุ</option>
+                    <option value="worker">ระดับ 6: พนักงานปฏิบัติการ / ประจำแปลง</option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-3 d-grid">
+                  <button type="button" class="btn btn-primary btn-sm rounded-pill fw-bold py-1.5 shadow-sm" onclick="handleAddNewPosition()">
+                    <i class="bi bi-check-circle-fill me-1"></i> บันทึกตำแหน่ง
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Positions Table -->
+            <div class="table-responsive bg-white rounded-3 border shadow-sm" style="max-height: 380px;">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light sticky-top fs-8 text-uppercase">
+                  <tr>
+                    <th class="ps-3 py-3" style="width: 60px;">#</th>
+                    <th style="min-width: 220px;">ชื่อตำแหน่งงาน</th>
+                    <th style="min-width: 170px;">กลุ่มโครงสร้าง</th>
+                    <th class="text-center" style="width: 120px;">ผู้ดำรงตำแหน่ง</th>
+                    <th class="text-center pe-3" style="width: 90px;">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="positionsTableBody">
+                  <!-- Injected via JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- TAB 2: DEPARTMENTS -->
+          <div class="tab-pane fade p-4 bg-light" id="tab-departments-pane" role="tabpanel">
+            <!-- Add New Department Card -->
+            <div class="card border-0 shadow-sm rounded-3 mb-3 p-3 bg-white">
+              <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                <i class="bi bi-plus-circle-fill text-success"></i>
+                <span>เพิ่มฝ่าย / แผนกงานใหม่</span>
+              </h6>
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-9">
+                  <label class="form-label fs-8 fw-bold text-muted mb-1">ชื่อฝ่าย / แผนก <span class="text-danger">*</span></label>
+                  <input type="text" id="newDeptNameInput" class="form-control form-control-sm fs-7 fw-semibold" placeholder="เช่น 4.4 แปลงพิเศษ / งานคลังปุ๋ย" />
+                </div>
+                <div class="col-12 col-md-3 d-grid">
+                  <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold py-1.5 shadow-sm text-white" onclick="handleAddNewDepartment()">
+                    <i class="bi bi-check-circle-fill me-1"></i> บันทึกแผนกใหม่
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Departments Table -->
+            <div class="table-responsive bg-white rounded-3 border shadow-sm" style="max-height: 380px;">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light sticky-top fs-8 text-uppercase">
+                  <tr>
+                    <th class="ps-3 py-3" style="width: 60px;">#</th>
+                    <th style="min-width: 250px;">ชื่อฝ่าย / แผนกงาน</th>
+                    <th class="text-center" style="width: 140px;">จำนวนบุคลากร</th>
+                    <th class="text-center pe-3" style="width: 100px;">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="departmentsTableBody">
+                  <!-- Injected via JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer bg-white py-3 px-4 d-flex justify-content-between">
+          <div class="text-muted fs-8">
+            <i class="bi bi-cloud-check-fill text-success me-1"></i> ข้อมูลตำแหน่งและแผนกจะถูกซิงค์ไปยังระบบสารบบและ Firestore อัตโนมัติ
+          </div>
+          <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Employee Popup Context Menu (1-Click Action) -->
   <div id="empContextMenu">
     <div class="context-menu-header">
@@ -1148,6 +1360,65 @@
     window.activeFilterDept = 'ALL';
     window.searchKeyword = '';
     window.db = null;
+
+    // Default Positions Structure (ระดับ 1 - 6 ครบ 13 สายงาน)
+    window.defaultPositions = [
+      { id: "pos-1", name: "1. ประธานโครงการ", category: "executive", order: 1 },
+      { id: "pos-2", name: "2. ที่ปรึกษาโครงการ", category: "executive", order: 2 },
+      { id: "pos-3", name: "3. ผู้ประสานงานโครงการ", category: "executive", order: 3 },
+      { id: "pos-4-1", name: "4.1 หัวหน้างานส่วนกลาง", category: "section_head", order: 4 },
+      { id: "pos-4-2", name: "4.2 หัวหน้างานกุหลาบ/งานทดลอง", category: "section_head", order: 5 },
+      { id: "pos-4-3", name: "4.3 หัวหน้างานรัตนบุปผา", category: "section_head", order: 6 },
+      { id: "pos-4-4", name: "4.4 หัวหน้างานธรรมยาตรา", category: "section_head", order: 7 },
+      { id: "pos-4-5", name: "นักวิชาการ", category: "academic", order: 8 },
+      { id: "pos-5-1", name: "5.1 หัวหน้างานธุรการ / งานบุคคล", category: "team_leader", order: 9 },
+      { id: "pos-5-2", name: "5.2 หัวหน้างานสวัสดิการ", category: "team_leader", order: 10 },
+      { id: "pos-5-3", name: "5.3 หัวหน้างานระบบน้ำ", category: "team_leader", order: 11 },
+      { id: "pos-5-3-1", name: "5.3.1 หัวหน้างานตัดหญ้า", category: "team_leader", order: 12 },
+      { id: "pos-5-4", name: "5.4 หัวหน้างานทดลอง", category: "team_leader", order: 13 },
+      { id: "pos-5-5", name: "5.5 หัวหน้างานกุหลาบ", category: "team_leader", order: 14 },
+      { id: "pos-5-6", name: "5.6 หัวหน้างานเจดีย์", category: "team_leader", order: 15 },
+      { id: "pos-5-7", name: "5.7 หัวหน้างานวิหารหลวงปู่", category: "team_leader", order: 16 },
+      { id: "pos-5-8", name: "5.8 หัวหน้างานถนนธรรมชัย / เฟื่องฟ้า", category: "team_leader", order: 17 },
+      { id: "pos-5-9", name: "5.9 หัวหน้างานผสมแกลบ / โต๊ะกลาง", category: "team_leader", order: 18 },
+      { id: "pos-5-10", name: "5.10 หัวหน้างานแปลง A / B", category: "team_leader", order: 19 },
+      { id: "pos-5-11", name: "5.11 หัวหน้างานแปลง E / P11", category: "team_leader", order: 20 },
+      { id: "pos-5-12", name: "5.12 หัวหน้างานไม้กระถางหลังวิหารคด 13-20", category: "team_leader", order: 21 },
+      { id: "pos-6-1", name: "เจ้าหน้าที่ธุรการ", category: "staff", order: 22 },
+      { id: "pos-6-2", name: "พนักงานสวัสดิการ", category: "worker", order: 23 },
+      { id: "pos-6-3", name: "พนักงานดูแลระบบน้ำ", category: "worker", order: 24 },
+      { id: "pos-6-4", name: "พนักงานตัดหญ้า", category: "worker", order: 25 },
+      { id: "pos-6-5", name: "พนักงานงานทดลอง", category: "worker", order: 26 },
+      { id: "pos-6-6", name: "พนักงานดูแลกุหลาบ", category: "worker", order: 27 },
+      { id: "pos-6-7", name: "พนักงานงานเจดีย์", category: "worker", order: 28 },
+      { id: "pos-6-8", name: "พนักงานงานวิหารหลวงปู่", category: "worker", order: 29 },
+      { id: "pos-6-9", name: "พนักงานดูแลถนนธรรมชัย", category: "worker", order: 30 },
+      { id: "pos-6-10", name: "พนักงานผสมแกลบ", category: "worker", order: 31 },
+      { id: "pos-6-11", name: "พนักงานดูแลแปลง A/B", category: "worker", order: 32 },
+      { id: "pos-6-12", name: "พนักงานดูแลแปลง E/P11", category: "worker", order: 33 },
+      { id: "pos-6-13", name: "พนักงานดูแลไม้กระถาง", category: "worker", order: 34 },
+      { id: "pos-6-14", name: "พนักงานปฏิบัติการ", category: "worker", order: 35 }
+    ];
+
+    window.defaultDepartments = [
+      "1.1 งานธุรการ / งานบุคคล",
+      "1.2 งานสวัสดิการ",
+      "1.3 งานสนับสนุน (ระบบน้ำ/ตัดหญ้า)",
+      "2.1 งานทดลอง",
+      "2.2 งานกุหลาบ",
+      "3.1 งานเจดีย์",
+      "3.2 งานวิหารหลวงปู่",
+      "3.3 งานถนนธรรมชัย / เฟื่องฟ้า",
+      "3.4 งานผสมแกลบ / งานโต๊ะกลาง",
+      "4.1 แปลง A / B",
+      "4.2 แปลง E / P11",
+      "4.3 งานไม้กระถางหลังวิหารคด 13-20",
+      "งานวิชาการ",
+      "ฝ่ายบริหารและอำนวยการ"
+    ];
+
+    window.positionsList = [...window.defaultPositions];
+    window.departmentsList = [...window.defaultDepartments];
 
     // Initialize Firebase
     async function initFirebase() {
@@ -1217,6 +1488,34 @@
           console.warn("Firestore snapshot notice:", error);
           loadFromLocalStorageOrSeed();
         });
+
+        // Real-time listener for positions
+        onSnapshot(collection(window.db, "positions"), (snapshot) => {
+          if (!snapshot.empty) {
+            let list = [];
+            snapshot.forEach((docSnap) => {
+              list.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            list.sort((a, b) => (a.order || 99) - (b.order || 99));
+            window.positionsList = list;
+            updatePositionDropdownOptions();
+            renderPositionsTable();
+          }
+        }, (err) => console.warn("Positions listener notice:", err));
+
+        // Real-time listener for departments
+        onSnapshot(collection(window.db, "departments"), (snapshot) => {
+          if (!snapshot.empty) {
+            let list = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              list.push(data.name || docSnap.id);
+            });
+            window.departmentsList = list;
+            updateDepartmentDropdownOptions();
+            renderDepartmentsTable();
+          }
+        }, (err) => console.warn("Departments listener notice:", err));
 
       } catch (err) {
         console.error("Firebase init error in Org Chart:", err);
@@ -1341,6 +1640,9 @@
       } else {
         renderFullGrid(filteredList, container);
       }
+
+      // Automatically recalculate stage size
+      setTimeout(applyZoom, 50);
     };
 
     function updateStats() {
@@ -1496,6 +1798,92 @@
         return html;
       }
 
+      function renderSubSectionCard({
+        theme = 'blue',
+        title = '',
+        deptName = '',
+        leaderCode = '',
+        leaderTitle = '',
+        defaultMemberPos = 'พนักงาน',
+        keywords = [],
+        customIcon = ''
+      }) {
+        // Match leader specifically
+        const leader = list.find(e => {
+          const pos = e.position || '';
+          return pos === leaderTitle || pos.includes(leaderCode) || (pos.includes('หัวหน้า') && (e.department || '').includes(deptName) && !pos.includes('4.'));
+        }) || null;
+
+        // Get members excluding section heads and excluding this leader
+        const rawMembers = getEmpsForKeywords(keywords);
+        const members = rawMembers.filter(e => {
+          const eid = e.id || e.code;
+          if (leader && (leader.id || leader.code) === eid) return false;
+          if (headCentral && (headCentral.id || headCentral.code) === eid) return false;
+          if (headRoseExp && (headRoseExp.id || headRoseExp.code) === eid) return false;
+          if (headRattanabuppha && (headRattanabuppha.id || headRattanabuppha.code) === eid) return false;
+          if (headDhammayatra && (headDhammayatra.id || headDhammayatra.code) === eid) return false;
+          return true;
+        });
+
+        const cardBorderClass = `dept-card-${theme}`;
+        const badgeClass = `badge-${theme}`;
+        const tagClass = `tag-${theme}`;
+        const avatarBgClass = `avatar-bg-${theme}`;
+
+        let leaderHtml = '';
+        if (leader) {
+          const safeLeaderId = escapeHtml(leader.id || leader.code);
+          const safeLeaderName = escapeHtml(leader.name);
+          const safeLeaderPhoto = leader.photoUrl || leader.photo || '';
+          leaderHtml = `
+            <div class="team-leader-slot" 
+                 id="slot-lead-${safeLeaderId}"
+                 draggable="true"
+                 ondragstart="handleAvatarDragStart(event, '${safeLeaderId}')"
+                 ondragend="handleAvatarDragEnd(event)"
+                 onclick="handleAvatarClick(event, '${safeLeaderId}')"
+                 title="[หัวหน้าทีม ${leaderCode}] ${safeLeaderName} - คลิกเพื่อเลือกเมนู หรือลากเพื่อโยกย้าย">
+              <span class="leader-badge ${tagClass}">${leaderCode} หัวหน้าทีม</span>
+              <div class="leader-avatar-circle ${avatarBgClass}">
+                ${safeLeaderPhoto ? `<img src="${safeLeaderPhoto}" alt="${safeLeaderName}" />` : `<i class="bi bi-person-badge-fill"></i>`}
+              </div>
+              <div class="leader-info">
+                <div class="leader-name">${safeLeaderName}</div>
+                <div class="leader-title text-truncate">${escapeHtml(leaderTitle)}</div>
+              </div>
+            </div>
+          `;
+        } else {
+          leaderHtml = `
+            <div class="team-leader-slot leader-empty" 
+                 id="slot-lead-empty-${leaderCode.replace(/\./g, '_')}"
+                 ondragover="handleSlotDragOver(event)"
+                 ondragleave="handleSlotDragLeave(event)"
+                 ondrop="handleSlotDrop(event, '${escapeHtml(deptName)}', '${escapeHtml(leaderTitle)}')"
+                 onclick="openAddModalForSlot('${escapeHtml(deptName)}', '${escapeHtml(leaderTitle)}')"
+                 title="คลิกเพื่อกำหนดหัวหน้าทีม หรือลากบุคลากรมาวางที่นี่">
+              <span class="leader-badge ${tagClass}">${leaderCode} หัวหน้าทีม</span>
+              <div class="leader-avatar-circle ${avatarBgClass}" style="background: transparent; border: 1.5px dashed currentColor;">
+                <i class="bi bi-person-plus-fill"></i>
+              </div>
+              <div class="leader-info">
+                <div class="leader-name text-muted">+ กำหนดหัวหน้าทีม</div>
+                <div class="leader-title text-truncate text-muted">${escapeHtml(leaderTitle)}</div>
+              </div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="dept-card ${cardBorderClass} text-center">
+            <div class="dept-title-badge ${badgeClass}">${customIcon ? `<i class="bi ${customIcon} me-1"></i>` : ''}${escapeHtml(title)}</div>
+            ${leaderHtml}
+            ${renderAvatarMatrix(members, deptName, defaultMemberPos)}
+          </div>
+        `;
+      }
+
       const empsAdmin = getEmpsForKeywords(['ธุรการ', 'บุคคล']);
       const empsWelfare = getEmpsForKeywords(['สวัสดิการ']);
       const empsWater = getEmpsForKeywords(['ระบบน้ำ', 'น้ำ']);
@@ -1546,13 +1934,10 @@
             <!-- 2. Advisors down to Project Coordinator -->
             <line x1="770" y1="145" x2="770" y2="230" stroke="#0d2258" stroke-width="2" />
 
-            <!-- 3. Coordinator directly to 1. งานส่วนกลาง (Direct Line from Coordinator to Column 1) -->
-            <path d="M 770 260 L 175 260 L 175 425" fill="none" stroke="#1565c0" stroke-width="2.5" stroke-linejoin="round" />
-
-            <!-- 4. Coordinator to Academic Box -->
+            <!-- 3. Coordinator to Academic Box -->
             <line x1="770" y1="290" x2="770" y2="330" stroke="#6a1b9a" stroke-width="2" />
 
-            <!-- 5. Academic Box branching down to 3 Sections: 2. งานกุหลาบ/งานทดลอง, 3. งานรัตนบุปผา, 4. งานธรรมยาตรา -->
+            <!-- 4. Academic Box branching down to 3 Sections: 2. งานกุหลาบ/งานทดลอง, 3. งานรัตนบุปผา, 4. งานธรรมยาตรา -->
             <line x1="770" y1="390" x2="770" y2="410" stroke="#6a1b9a" stroke-width="2.5" />
             <line x1="515" y1="410" x2="1335" y2="410" stroke="#6a1b9a" stroke-width="2.5" />
 
@@ -1742,7 +2127,7 @@
                 <div>1. งานส่วนกลาง</div>
               </div>
 
-              <!-- 4.1 หัวหน้างานส่วนกลาง (กำหนดชื่อได้) -->
+              <!-- 4.1 หัวหน้างานส่วนกลาง (Section Head) -->
               <div class="section-head-box head-blue" 
                    id="slot-head-central"
                    ondragover="handleSlotDragOver(event)"
@@ -1761,32 +2146,53 @@
                 </div>
               </div>
 
-              <!-- 1.1 งานธุรการ / งานบุคคล -->
-              <div class="dept-card dept-card-blue text-center">
-                <div class="dept-title-badge badge-blue">1.1 งานธุรการ / งานบุคคล</div>
-                ${renderAvatarMatrix(empsAdmin, '1.1 งานธุรการ / งานบุคคล', 'เจ้าหน้าที่ธุรการ')}
-              </div>
+              <!-- 1.1 งานธุรการ / งานบุคคล -> 5.1 หัวหน้างานธุรการ / งานบุคคล -->
+              ${renderSubSectionCard({
+                theme: 'blue',
+                title: '1.1 งานธุรการ / งานบุคคล',
+                deptName: '1.1 งานธุรการ / งานบุคคล',
+                leaderCode: '5.1',
+                leaderTitle: '5.1 หัวหน้างานธุรการ / งานบุคคล',
+                defaultMemberPos: 'เจ้าหน้าที่ธุรการ',
+                keywords: ['ธุรการ', 'บุคคล'],
+                customIcon: 'bi-file-earmark-person-fill'
+              })}
 
-              <!-- 1.2 งานสวัสดิการ -->
-              <div class="dept-card dept-card-blue text-center">
-                <div class="dept-title-badge badge-blue">1.2 งานสวัสดิการ</div>
-                ${renderAvatarMatrix(empsWelfare, '1.2 งานสวัสดิการ', 'พนักงานสวัสดิการ')}
-              </div>
+              <!-- 1.2 งานสวัสดิการ -> 5.2 หัวหน้างานสวัสดิการ -->
+              ${renderSubSectionCard({
+                theme: 'blue',
+                title: '1.2 งานสวัสดิการ',
+                deptName: '1.2 งานสวัสดิการ',
+                leaderCode: '5.2',
+                leaderTitle: '5.2 หัวหน้างานสวัสดิการ',
+                defaultMemberPos: 'พนักงานสวัสดิการ',
+                keywords: ['สวัสดิการ'],
+                customIcon: 'bi-heart-pulse-fill'
+              })}
 
-              <!-- 1.3 งานสนับสนุน -->
-              <div class="dept-card dept-card-blue text-center flex-grow-1">
-                <div class="dept-title-badge badge-blue mb-2">1.3 งานสนับสนุน</div>
-                <div class="row g-1">
-                  <div class="col-6 border-end">
-                    <div class="fw-bold fs-8 text-dark mb-1">งานระบบน้ำ</div>
-                    ${renderAvatarMatrix(empsWater, '1.3 งานสนับสนุน (ระบบน้ำ)', 'พนักงานดูแลระบบน้ำ')}
-                  </div>
-                  <div class="col-6">
-                    <div class="fw-bold fs-8 text-dark mb-1">งานตัดหญ้า</div>
-                    ${renderAvatarMatrix(empsGrass, '1.3 งานสนับสนุน (ตัดหญ้า)', 'พนักงานตัดหญ้า')}
-                  </div>
-                </div>
-              </div>
+              <!-- 1.3 งานสนับสนุน (ระบบน้ำ) -> 5.3 หัวหน้างานระบบน้ำ -->
+              ${renderSubSectionCard({
+                theme: 'blue',
+                title: '1.3 งานสนับสนุน (ระบบน้ำ)',
+                deptName: '1.3 งานสนับสนุน (ระบบน้ำ/ตัดหญ้า)',
+                leaderCode: '5.3',
+                leaderTitle: '5.3 หัวหน้างานระบบน้ำ',
+                defaultMemberPos: 'พนักงานดูแลระบบน้ำ',
+                keywords: ['ระบบน้ำ', 'น้ำ'],
+                customIcon: 'bi-droplet-fill'
+              })}
+
+              <!-- 1.3 งานสนับสนุน (ตัดหญ้า) -> 5.3.1 หัวหน้างานตัดหญ้า -->
+              ${renderSubSectionCard({
+                theme: 'blue',
+                title: '1.3 งานสนับสนุน (ตัดหญ้า)',
+                deptName: '1.3 งานสนับสนุน (ระบบน้ำ/ตัดหญ้า)',
+                leaderCode: '5.3.1',
+                leaderTitle: '5.3.1 หัวหน้างานตัดหญ้า',
+                defaultMemberPos: 'พนักงานตัดหญ้า',
+                keywords: ['ตัดหญ้า', 'หญ้า', 'สนับสนุน'],
+                customIcon: 'bi-scissors'
+              })}
             </div>
 
             <!-- ==================== COLUMN 2: 2. งานกุหลาบ / งานทดลอง ==================== -->
@@ -1797,7 +2203,7 @@
                 <div class="fs-7">2. งานกุหลาบ / งานทดลอง</div>
               </div>
 
-              <!-- 4.2 หัวหน้างานกุหลาบ/งานทดลอง (กำหนดชื่อได้) -->
+              <!-- 4.2 หัวหน้างานกุหลาบ/งานทดลอง (Section Head) -->
               <div class="section-head-box head-pink" 
                    id="slot-head-rose-exp"
                    ondragover="handleSlotDragOver(event)"
@@ -1816,23 +2222,29 @@
                 </div>
               </div>
 
-              <!-- 2.1 งานทดลอง -->
-              <div class="dept-card dept-card-pink">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                  <div class="text-danger fs-5"><i class="bi bi-funnel-fill"></i></div>
-                  <div class="fw-bold text-danger fs-8">2.1 งานทดลอง</div>
-                </div>
-                ${renderAvatarMatrix(empsExp, '2.1 งานทดลอง', 'พนักงานงานทดลอง')}
-              </div>
+              <!-- 2.1 งานทดลอง -> 5.4 หัวหน้างานทดลอง -->
+              ${renderSubSectionCard({
+                theme: 'pink',
+                title: '2.1 งานทดลอง',
+                deptName: '2.1 งานทดลอง',
+                leaderCode: '5.4',
+                leaderTitle: '5.4 หัวหน้างานทดลอง',
+                defaultMemberPos: 'พนักงานงานทดลอง',
+                keywords: ['ทดลอง', 'วิจัย'],
+                customIcon: 'bi-funnel-fill'
+              })}
 
-              <!-- 2.2 งานกุหลาบ -->
-              <div class="dept-card dept-card-pink flex-grow-1">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                  <div class="text-danger fs-5"><i class="bi bi-flower3"></i></div>
-                  <div class="fw-bold text-danger fs-8">2.2 งานกุหลาบ</div>
-                </div>
-                ${renderAvatarMatrix(empsRose, '2.2 งานกุหลาบ', 'พนักงานดูแลกุหลาบ')}
-              </div>
+              <!-- 2.2 งานกุหลาบ -> 5.5 หัวหน้างานกุหลาบ -->
+              ${renderSubSectionCard({
+                theme: 'pink',
+                title: '2.2 งานกุหลาบ',
+                deptName: '2.2 งานกุหลาบ',
+                leaderCode: '5.5',
+                leaderTitle: '5.5 หัวหน้างานกุหลาบ',
+                defaultMemberPos: 'พนักงานดูแลกุหลาบ',
+                keywords: ['กุหลาบ'],
+                customIcon: 'bi-flower3'
+              })}
             </div>
 
             <!-- ==================== COLUMN 3: 3. งานรัตนบุปผา ==================== -->
@@ -1843,7 +2255,7 @@
                 <div>3. งานรัตนบุปผา</div>
               </div>
 
-              <!-- 4.3 หัวหน้างานรัตนบุปผา (กำหนดชื่อได้) -->
+              <!-- 4.3 หัวหน้างานรัตนบุปผา (Section Head) -->
               <div class="section-head-box head-orange" 
                    id="slot-head-rattanabuppha"
                    ondragover="handleSlotDragOver(event)"
@@ -1862,58 +2274,53 @@
                 </div>
               </div>
 
-              <!-- 3.1 งานเจดีย์ -->
-              <div class="dept-card dept-card-orange">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-warning-subtle text-warning">
-                    <i class="bi bi-bank2"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">3.1 งานเจดีย์</div>
-                    ${renderAvatarMatrix(empsChedi, '3.1 งานเจดีย์', 'พนักงานงานเจดีย์')}
-                  </div>
-                </div>
-              </div>
+              <!-- 3.1 งานเจดีย์ -> 5.6 หัวหน้างานเจดีย์ -->
+              ${renderSubSectionCard({
+                theme: 'orange',
+                title: '3.1 งานเจดีย์',
+                deptName: '3.1 งานเจดีย์',
+                leaderCode: '5.6',
+                leaderTitle: '5.6 หัวหน้างานเจดีย์',
+                defaultMemberPos: 'พนักงานงานเจดีย์',
+                keywords: ['เจดีย์', 'แปลง g'],
+                customIcon: 'bi-bank2'
+              })}
 
-              <!-- 3.2 งานวิหารหลวงปู่ -->
-              <div class="dept-card dept-card-orange">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-warning-subtle text-warning">
-                    <i class="bi bi-house-door-fill"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">3.2 งานวิหารหลวงปู่</div>
-                    ${renderAvatarMatrix(empsVihara, '3.2 งานวิหารหลวงปู่', 'พนักงานงานวิหารหลวงปู่')}
-                  </div>
-                </div>
-              </div>
+              <!-- 3.2 งานวิหารหลวงปู่ -> 5.7 หัวหน้างานวิหารหลวงปู่ -->
+              ${renderSubSectionCard({
+                theme: 'orange',
+                title: '3.2 งานวิหารหลวงปู่',
+                deptName: '3.2 งานวิหารหลวงปู่',
+                leaderCode: '5.7',
+                leaderTitle: '5.7 หัวหน้างานวิหารหลวงปู่',
+                defaultMemberPos: 'พนักงานงานวิหารหลวงปู่',
+                keywords: ['วิหารหลวงปู่', 'วิหาร'],
+                customIcon: 'bi-house-door-fill'
+              })}
 
-              <!-- 3.3 งานถนนธรรมชัย / เฟื่องฟ้า -->
-              <div class="dept-card dept-card-orange">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-warning-subtle text-warning">
-                    <i class="bi bi-tree-fill"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">3.3 งานถนนธรรมชัย / เฟื่องฟ้า</div>
-                    ${renderAvatarMatrix(empsRoad, '3.3 งานถนนธรรมชัย / เฟื่องฟ้า', 'พนักงานดูแลถนนธรรมชัย')}
-                  </div>
-                </div>
-              </div>
+              <!-- 3.3 งานถนนธรรมชัย / เฟื่องฟ้า -> 5.8 หัวหน้างานถนนธรรมชัย / เฟื่องฟ้า -->
+              ${renderSubSectionCard({
+                theme: 'orange',
+                title: '3.3 งานถนนธรรมชัย / เฟื่องฟ้า',
+                deptName: '3.3 งานถนนธรรมชัย / เฟื่องฟ้า',
+                leaderCode: '5.8',
+                leaderTitle: '5.8 หัวหน้างานถนนธรรมชัย / เฟื่องฟ้า',
+                defaultMemberPos: 'พนักงานดูแลถนนธรรมชัย',
+                keywords: ['ถนน', 'ธรรมชัย', 'เฟื่องฟ้า'],
+                customIcon: 'bi-tree-fill'
+              })}
 
-              <!-- 3.4 งานผสมแกลบ / งานโต๊ะกลาง -->
-              <div class="dept-card dept-card-orange flex-grow-1">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-warning-subtle text-warning">
-                    <i class="bi bi-boxes"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">3.4 งานผสมแกลบ / งานโต๊ะกลาง</div>
-                    ${renderAvatarMatrix(empsSoil, '3.4 งานผสมแกลบ / งานโต๊ะกลาง', 'พนักงานผสมแกลบ')}
-                  </div>
-                </div>
-              </div>
-
+              <!-- 3.4 งานผสมแกลบ / งานโต๊ะกลาง -> 5.9 หัวหน้างานผสมแกลบ / โต๊ะกลาง -->
+              ${renderSubSectionCard({
+                theme: 'orange',
+                title: '3.4 งานผสมแกลบ / งานโต๊ะกลาง',
+                deptName: '3.4 งานผสมแกลบ / งานโต๊ะกลาง',
+                leaderCode: '5.9',
+                leaderTitle: '5.9 หัวหน้างานผสมแกลบ / โต๊ะกลาง',
+                defaultMemberPos: 'พนักงานผสมแกลบ',
+                keywords: ['ผสมแกลบ', 'โต๊ะกลาง', 'ผสมดิน', 'แกลบ'],
+                customIcon: 'bi-boxes'
+              })}
             </div>
 
             <!-- ==================== COLUMN 4: 4. งานธรรมยาตรา ==================== -->
@@ -1924,13 +2331,13 @@
                 <div>4. งานธรรมยาตรา</div>
               </div>
 
-              <!-- 4.4 หัวหน้างานธรรมยาตรา (กำหนดชื่อได้) -->
+              <!-- 4.4 หัวหน้างานธรรมยาตรา (Section Head) -->
               <div class="section-head-box head-green" 
                    id="slot-head-dhammayatra"
                    ondragover="handleSlotDragOver(event)"
                    ondragleave="handleSlotDragLeave(event)"
                    ondrop="handleSlotDrop(event, '4. งานธรรมยาตรา', '4.4 หัวหน้างานธรรมยาตรา')"
-                   onclick="${headDhammayatra ? `handleAvatarClick(event, '${escapeHtml(headDhammayatra.id || headDhammayatra.code)}')` : `openAddModalForSlot('4. งานธรรมยาตรา', 'หัวหน้างานธรรมยาตรา')`}" 
+                   onclick="${headDhammayatra ? `handleAvatarClick(event, '${escapeHtml(headDhammayatra.id || headDhammayatra.code)}')` : `openAddModalForSlot('4. งานธรรมยาตรา', '4.4 หัวหน้างานธรรมยาตรา')`}" 
                    title="คลิกเพื่อเลือกเมนู / ลากคนมาวางเพื่อกำหนดเป็นหัวหน้างานธรรมยาตรา">
                 <span class="head-tag tag-green">4.4 หัวหน้างาน</span>
                 <div class="head-avatar avatar-bg-green"
@@ -1943,44 +2350,41 @@
                 </div>
               </div>
 
-              <!-- 4.1 แปลง A / B -->
-              <div class="dept-card dept-card-green">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-success-subtle text-success">
-                    <i class="bi bi-grid-3x3-gap-fill"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">4.1 แปลง A / B</div>
-                    ${renderAvatarMatrix(empsPlotsAB, '4.1 แปลง A / B', 'พนักงานดูแลแปลง A/B')}
-                  </div>
-                </div>
-              </div>
+              <!-- 4.1 แปลง A / B -> 5.10 หัวหน้างานแปลง A / B -->
+              ${renderSubSectionCard({
+                theme: 'green',
+                title: '4.1 แปลง A / B',
+                deptName: '4.1 แปลง A / B',
+                leaderCode: '5.10',
+                leaderTitle: '5.10 หัวหน้างานแปลง A / B',
+                defaultMemberPos: 'พนักงานดูแลแปลง A/B',
+                keywords: ['แปลง a', 'แปลง b', 'แปลง a-b', 'แปลง a / b'],
+                customIcon: 'bi-grid-3x3-gap-fill'
+              })}
 
-              <!-- 4.2 แปลง E / P11 -->
-              <div class="dept-card dept-card-green">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-success-subtle text-success">
-                    <i class="bi bi-flower2"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">4.2 แปลง E / P11</div>
-                    ${renderAvatarMatrix(empsPlotsEP11, '4.2 แปลง E / P11', 'พนักงานดูแลแปลง E/P11')}
-                  </div>
-                </div>
-              </div>
+              <!-- 4.2 แปลง E / P11 -> 5.11 หัวหน้างานแปลง E / P11 -->
+              ${renderSubSectionCard({
+                theme: 'green',
+                title: '4.2 แปลง E / P11',
+                deptName: '4.2 แปลง E / P11',
+                leaderCode: '5.11',
+                leaderTitle: '5.11 หัวหน้างานแปลง E / P11',
+                defaultMemberPos: 'พนักงานดูแลแปลง E/P11',
+                keywords: ['แปลง e', 'p11', 'แปลง e / p11'],
+                customIcon: 'bi-flower2'
+              })}
 
-              <!-- 4.3 งานไม้กระถางหลังวิหารคด 13-20 -->
-              <div class="dept-card dept-card-green flex-grow-1">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="thumb-left-box bg-success-subtle text-success">
-                    <i class="bi bi-archive-fill"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <div class="fw-bold text-dark fs-8 text-center mb-1">4.3 งานไม้กระถางหลังวิหารคด 13-20</div>
-                    ${renderAvatarMatrix(empsPotPlants, '4.3 งานไม้กระถางหลังวิหารคด 13-20', 'พนักงานดูแลไม้กระถาง')}
-                  </div>
-                </div>
-              </div>
+              <!-- 4.3 งานไม้กระถางหลังวิหารคด 13-20 -> 5.12 หัวหน้างานไม้กระถางหลังวิหารคด 13-20 -->
+              ${renderSubSectionCard({
+                theme: 'green',
+                title: '4.3 งานไม้กระถางหลังวิหารคด 13-20',
+                deptName: '4.3 งานไม้กระถางหลังวิหารคด 13-20',
+                leaderCode: '5.12',
+                leaderTitle: '5.12 หัวหน้างานไม้กระถางหลังวิหารคด 13-20',
+                defaultMemberPos: 'พนักงานดูแลไม้กระถาง',
+                keywords: ['วิหารคด', 'ไม้กระถาง', '13-20', 'ปอ'],
+                customIcon: 'bi-archive-fill'
+              })}
 
             </div>
 
@@ -2447,6 +2851,322 @@
       }
     };
 
+    function updatePositionDropdownOptions() {
+      const select = document.getElementById('formEmpPositionSelect');
+      if (!select) return;
+      
+      const currentVal = select.value;
+      const groups = {
+        executive: { label: 'ระดับผู้บริหาร (ระดับ 1, 2, 3)', items: [] },
+        section_head: { label: 'ระดับ 4: หัวหน้างานส่วนหลัก (4.1 - 4.4)', items: [] },
+        academic: { label: 'สายวิชาการ (Academic Specialist)', items: [] },
+        team_leader: { label: 'ระดับ 5: หัวหน้าทีม/แปลง (5.1 - 5.12)', items: [] },
+        staff: { label: 'ระดับ 6: เจ้าหน้าที่ / พระภิกษุ', items: [] },
+        worker: { label: 'ระดับ 6: พนักงานปฏิบัติการ', items: [] }
+      };
+
+      (window.positionsList || []).forEach(pos => {
+        const name = typeof pos === 'string' ? pos : pos.name;
+        const cat = typeof pos === 'object' && pos.category ? pos.category : 'worker';
+        if (groups[cat]) {
+          groups[cat].items.push(name);
+        } else {
+          groups.worker.items.push(name);
+        }
+      });
+
+      let html = '<option value="">-- เลือกจากตำแหน่งในโครงสร้าง --</option>';
+      for (const [key, grp] of Object.entries(groups)) {
+        if (grp.items.length > 0) {
+          html += `<optgroup label="${escapeHtml(grp.label)}">`;
+          grp.items.forEach(item => {
+            html += `<option value="${escapeHtml(item)}" ${item === currentVal ? 'selected' : ''}>${escapeHtml(item)}</option>`;
+          });
+          html += '</optgroup>';
+        }
+      }
+      select.innerHTML = html;
+    }
+
+    function updateDepartmentDropdownOptions() {
+      const select = document.getElementById('formEmpDept');
+      const filterSelect = document.getElementById('deptFilterSelect');
+      
+      const depts = (window.departmentsList || []).map(d => typeof d === 'string' ? d : d.name);
+
+      if (select) {
+        const currentVal = select.value;
+        select.innerHTML = depts.map(d => `<option value="${escapeHtml(d)}" ${d === currentVal ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
+      }
+
+      if (filterSelect) {
+        const currentFilter = filterSelect.value;
+        let filterHtml = '<option value="ALL">🏢 ทุกสายงานและแผนก</option>';
+        depts.forEach(d => {
+          filterHtml += `<option value="${escapeHtml(d)}" ${d === currentFilter ? 'selected' : ''}>${escapeHtml(d)}</option>`;
+        });
+        filterSelect.innerHTML = filterHtml;
+      }
+    }
+
+    // ==================== POSITIONS & DEPARTMENTS MANAGER LOGIC ====================
+    window.openPositionsManagerModal = function() {
+      renderPositionsTable();
+      renderDepartmentsTable();
+      const modalEl = document.getElementById('positionsModal');
+      if (modalEl) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+      }
+    };
+
+    window.renderPositionsTable = function() {
+      const tbody = document.getElementById('positionsTableBody');
+      if (!tbody) return;
+
+      if (!window.positionsList || window.positionsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">ไม่พบข้อมูลตำแหน่งงาน</td></tr>`;
+        return;
+      }
+
+      // Count employees per position
+      const posCounts = {};
+      (window.employees || []).forEach(emp => {
+        const p = emp.position || '';
+        if (p) posCounts[p] = (posCounts[p] || 0) + 1;
+      });
+
+      const categoryLabels = {
+        executive: '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">ระดับบริหาร</span>',
+        section_head: '<span class="badge bg-info bg-opacity-10 text-info border border-info-subtle">ระดับ 4: หัวหน้างานส่วนหลัก</span>',
+        academic: '<span class="badge bg-purple bg-opacity-10 text-purple border border-purple-subtle" style="color: #6a1b9a; border-color: #ce93d8;">ระดับ 4.5: สายวิชาการ</span>',
+        team_leader: '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning-subtle text-dark">ระดับ 5: หัวหน้าทีม/แผนก</span>',
+        staff: '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle">ระดับ 6: เจ้าหน้าที่</span>',
+        worker: '<span class="badge bg-light text-dark border">ระดับ 6: พนักงาน</span>'
+      };
+
+      tbody.innerHTML = window.positionsList.map((pos, idx) => {
+        const pName = typeof pos === 'string' ? pos : pos.name;
+        const pId = typeof pos === 'string' ? `pos-${idx}` : (pos.id || `pos-${idx}`);
+        const pCat = typeof pos === 'object' && pos.category ? pos.category : 'worker';
+        const count = posCounts[pName] || 0;
+
+        return `
+          <tr>
+            <td class="ps-3 text-muted fw-semibold">${idx + 1}</td>
+            <td>
+              <span class="fw-bold text-dark fs-7">${escapeHtml(pName)}</span>
+            </td>
+            <td>${categoryLabels[pCat] || '<span class="badge bg-light text-dark border">ทั่วไป</span>'}</td>
+            <td class="text-center">
+              <span class="badge ${count > 0 ? 'bg-primary' : 'bg-light text-muted border'} rounded-pill px-2.5">
+                ${count} คน
+              </span>
+            </td>
+            <td class="text-center pe-3">
+              <button type="button" class="btn btn-outline-danger btn-sm rounded-circle p-1" style="width: 28px; height: 28px;" onclick="handleDeletePosition('${escapeHtml(pId)}', '${escapeHtml(pName)}')" title="ลบตำแหน่งนี้">
+                <i class="bi bi-trash3-fill fs-9"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    window.renderDepartmentsTable = function() {
+      const tbody = document.getElementById('departmentsTableBody');
+      if (!tbody) return;
+
+      if (!window.departmentsList || window.departmentsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">ไม่พบข้อมูลฝ่าย/แผนกงาน</td></tr>`;
+        return;
+      }
+
+      // Count employees per department
+      const deptCounts = {};
+      (window.employees || []).forEach(emp => {
+        const d = emp.department || '';
+        if (d) deptCounts[d] = (deptCounts[d] || 0) + 1;
+      });
+
+      tbody.innerHTML = window.departmentsList.map((dept, idx) => {
+        const dName = typeof dept === 'string' ? dept : dept.name;
+        const dId = typeof dept === 'string' ? `dept-${idx}` : (dept.id || `dept-${idx}`);
+        const count = deptCounts[dName] || 0;
+
+        return `
+          <tr>
+            <td class="ps-3 text-muted fw-semibold">${idx + 1}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-folder2-open text-warning fs-6"></i>
+                <span class="fw-bold text-dark fs-7">${escapeHtml(dName)}</span>
+              </div>
+            </td>
+            <td class="text-center">
+              <span class="badge ${count > 0 ? 'bg-success' : 'bg-light text-muted border'} rounded-pill px-2.5">
+                ${count} คน
+              </span>
+            </td>
+            <td class="text-center pe-3">
+              <button type="button" class="btn btn-outline-danger btn-sm rounded-circle p-1" style="width: 28px; height: 28px;" onclick="handleDeleteDepartment('${escapeHtml(dId)}', '${escapeHtml(dName)}')" title="ลบแผนกนี้">
+                <i class="bi bi-trash3-fill fs-9"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    window.handleAddNewPosition = async function() {
+      const nameInput = document.getElementById('newPosNameInput');
+      const catSelect = document.getElementById('newPosCategorySelect');
+
+      if (!nameInput) return;
+      const name = nameInput.value.trim();
+      if (!name) {
+        alert("กรุณากรอกชื่อตำแหน่งงาน");
+        nameInput.focus();
+        return;
+      }
+
+      // Check duplicate
+      const exists = window.positionsList.some(p => (typeof p === 'string' ? p : p.name).toLowerCase() === name.toLowerCase());
+      if (exists) {
+        alert(`ตำแหน่ง "${name}" มีอยู่ในระบบแล้ว`);
+        return;
+      }
+
+      const newPosObj = {
+        id: `pos-${Date.now()}`,
+        name: name,
+        category: catSelect ? catSelect.value : 'worker',
+        order: window.positionsList.length + 1
+      };
+
+      window.positionsList.push(newPosObj);
+      nameInput.value = '';
+
+      // Sync to Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "positions", newPosObj.id);
+          await setDoc(docRef, newPosObj);
+        } catch (err) {
+          console.warn("Firestore position save notice:", err);
+        }
+      }
+      try {
+        localStorage.setItem('org_chart_positions', JSON.stringify(window.positionsList));
+      } catch (e) {}
+
+      updatePositionDropdownOptions();
+      renderPositionsTable();
+      renderOrgChart();
+      showToast(`✅ เพิ่มตำแหน่ง "${name}" สำเร็จ`);
+    };
+
+    window.handleDeletePosition = async function(posId, posName) {
+      if (!confirm(`คุณต้องการลบตำแหน่ง "${posName}" ออกจากระบบใช่หรือไม่?`)) return;
+
+      window.positionsList = window.positionsList.filter(p => {
+        const id = typeof p === 'string' ? p : p.id;
+        const name = typeof p === 'string' ? p : p.name;
+        return id !== posId && name !== posName;
+      });
+
+      // Sync delete to Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "positions", posId);
+          await deleteDoc(docRef);
+        } catch (err) {
+          console.warn("Firestore position delete notice:", err);
+        }
+      }
+      try {
+        localStorage.setItem('org_chart_positions', JSON.stringify(window.positionsList));
+      } catch (e) {}
+
+      updatePositionDropdownOptions();
+      renderPositionsTable();
+      renderOrgChart();
+      showToast(`🗑️ ลบตำแหน่ง "${posName}" เรียบร้อย`);
+    };
+
+    window.handleAddNewDepartment = async function() {
+      const nameInput = document.getElementById('newDeptNameInput');
+      if (!nameInput) return;
+      const name = nameInput.value.trim();
+      if (!name) {
+        alert("กรุณากรอกชื่อฝ่าย/แผนกงาน");
+        nameInput.focus();
+        return;
+      }
+
+      // Check duplicate
+      const exists = window.departmentsList.some(d => (typeof d === 'string' ? d : d.name).toLowerCase() === name.toLowerCase());
+      if (exists) {
+        alert(`ฝ่าย/แผนก "${name}" มีอยู่ในระบบแล้ว`);
+        return;
+      }
+
+      const newDeptObj = {
+        id: `dept-${Date.now()}`,
+        name: name,
+        order: window.departmentsList.length + 1
+      };
+
+      window.departmentsList.push(newDeptObj);
+      nameInput.value = '';
+
+      // Sync to Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "departments", newDeptObj.id);
+          await setDoc(docRef, newDeptObj);
+        } catch (err) {
+          console.warn("Firestore department save notice:", err);
+        }
+      }
+      try {
+        localStorage.setItem('org_chart_departments', JSON.stringify(window.departmentsList));
+      } catch (e) {}
+
+      updateDepartmentDropdownOptions();
+      renderDepartmentsTable();
+      renderOrgChart();
+      showToast(`✅ เพิ่มแผนก "${name}" สำเร็จ`);
+    };
+
+    window.handleDeleteDepartment = async function(deptId, deptName) {
+      if (!confirm(`คุณต้องการลบฝ่าย/แผนก "${deptName}" ออกจากระบบใช่หรือไม่?`)) return;
+
+      window.departmentsList = window.departmentsList.filter(d => {
+        const id = typeof d === 'string' ? d : d.id;
+        const name = typeof d === 'string' ? d : d.name;
+        return id !== deptId && name !== deptName;
+      });
+
+      // Sync delete to Firestore
+      if (window.db) {
+        try {
+          const docRef = doc(window.db, "departments", deptId);
+          await deleteDoc(docRef);
+        } catch (err) {
+          console.warn("Firestore department delete notice:", err);
+        }
+      }
+      try {
+        localStorage.setItem('org_chart_departments', JSON.stringify(window.departmentsList));
+      } catch (e) {}
+
+      updateDepartmentDropdownOptions();
+      renderDepartmentsTable();
+      renderOrgChart();
+      showToast(`🗑️ ลบแผนก "${deptName}" เรียบร้อย`);
+    };
+
     function updateSupervisorDropdown(currentEmpId = '') {
       const select = document.getElementById('formEmpReportsTo');
       if (!select) return;
@@ -2834,39 +3554,184 @@
       }
     };
 
-    // Zoom Controls
-    window.zoomIn = function() {
-      window.currentZoom = Math.min(window.currentZoom + 0.1, 2.0);
+    // Zoom Controls & Stage Dimensions Calculator
+    window.setZoom = function(newZoom, clientX, clientY) {
+      const wrapper = document.getElementById('canvasWrapper');
+      const prevZoom = window.currentZoom || 1.0;
+      newZoom = Math.min(Math.max(newZoom, 0.35), 2.2);
+      newZoom = Math.round(newZoom * 100) / 100;
+      if (newZoom === prevZoom) return;
+
+      let focusX = 0, focusY = 0;
+      if (wrapper) {
+        const rect = wrapper.getBoundingClientRect();
+        focusX = (clientX !== undefined) ? (clientX - rect.left) : (wrapper.clientWidth / 2);
+        focusY = (clientY !== undefined) ? (clientY - rect.top) : (wrapper.clientHeight / 2);
+      }
+
+      const contentX = wrapper ? (wrapper.scrollLeft + focusX) : 0;
+      const contentY = wrapper ? (wrapper.scrollTop + focusY) : 0;
+
+      window.currentZoom = newZoom;
       applyZoom();
+
+      if (wrapper && prevZoom > 0) {
+        const ratio = newZoom / prevZoom;
+        const newScrollLeft = (contentX * ratio) - focusX;
+        const newScrollTop = (contentY * ratio) - focusY;
+        wrapper.scrollLeft = Math.max(0, newScrollLeft);
+        wrapper.scrollTop = Math.max(0, newScrollTop);
+      }
+    };
+
+    window.zoomIn = function() {
+      window.setZoom((window.currentZoom || 1.0) + 0.15);
     };
 
     window.zoomOut = function() {
-      window.currentZoom = Math.max(window.currentZoom - 0.1, 0.4);
-      applyZoom();
+      window.setZoom((window.currentZoom || 1.0) - 0.15);
     };
 
     window.resetZoom = function() {
       window.currentZoom = 1.0;
       applyZoom();
+      setTimeout(() => {
+        const wrapper = document.getElementById('canvasWrapper');
+        const stage = document.getElementById('zoomStage');
+        if (wrapper && stage) {
+          wrapper.scrollLeft = Math.max(0, (stage.scrollWidth - wrapper.clientWidth) / 2);
+          wrapper.scrollTop = 0;
+        }
+      }, 40);
     };
 
     window.fitToWidth = function() {
-      const wrapperWidth = document.getElementById('canvasWrapper')?.clientWidth || window.innerWidth;
-      const targetWidth = 1580;
-      const calculatedZoom = Math.min(Math.max((wrapperWidth - 40) / targetWidth, 0.4), 1.2);
+      const wrapper = document.getElementById('canvasWrapper');
+      if (!wrapper) return;
+      const wrapperWidth = wrapper.clientWidth || window.innerWidth;
+      const targetWidth = 1580; // Poster width + safe padding
+      const calculatedZoom = Math.min(Math.max((wrapperWidth - 60) / targetWidth, 0.4), 1.25);
       window.currentZoom = Math.round(calculatedZoom * 100) / 100;
       applyZoom();
+      setTimeout(() => {
+        const stage = document.getElementById('zoomStage');
+        if (stage && wrapper) {
+          wrapper.scrollLeft = Math.max(0, (stage.scrollWidth - wrapper.clientWidth) / 2);
+          wrapper.scrollTop = 0;
+        }
+      }, 40);
     };
 
     function applyZoom() {
       const layer = document.getElementById('zoomLayer');
+      const stage = document.getElementById('zoomStage');
+      const wrapper = document.getElementById('canvasWrapper');
       const text = document.getElementById('zoomPercentText');
-      if (layer) {
-        layer.style.transform = `scale(${window.currentZoom})`;
+      if (!layer) return;
+
+      const poster = document.querySelector('.chart-poster') || document.getElementById('chartContent');
+      const baseWidth = (poster && poster.offsetWidth > 600) ? poster.offsetWidth : 1540;
+      const baseHeight = (poster && poster.offsetHeight > 300) ? poster.offsetHeight : 1100;
+
+      const scaledW = baseWidth * window.currentZoom;
+      const scaledH = baseHeight * window.currentZoom;
+
+      if (stage) {
+        const minStageWidth = Math.max(scaledW + 100, wrapper ? wrapper.clientWidth : 0);
+        stage.style.width = `${minStageWidth}px`;
+        stage.style.minWidth = `${minStageWidth}px`;
+        stage.style.height = `${scaledH + 120}px`;
       }
+
+      layer.style.transform = `scale(${window.currentZoom})`;
+
       if (text) {
         text.textContent = `${Math.round(window.currentZoom * 100)}%`;
       }
+    }
+
+    // Interactive Drag-to-Pan (Grab Canvas) & Touch Support
+    function setupPanAndGesture() {
+      const wrapper = document.getElementById('canvasWrapper');
+      if (!wrapper) return;
+
+      let isDown = false;
+      let startX = 0, startY = 0;
+      let scrollLeft = 0, scrollTop = 0;
+
+      wrapper.addEventListener('mousedown', (e) => {
+        // Ignore dragging if clicking interactive components
+        if (e.target.closest('button, input, select, textarea, a, .avatar-item, .exec-box, .section-head-box, .team-leader-slot, #empContextMenu, .modal, .dropdown-menu')) {
+          return;
+        }
+        isDown = true;
+        wrapper.classList.add('is-panning');
+        startX = e.pageX - wrapper.offsetLeft;
+        startY = e.pageY - wrapper.offsetTop;
+        scrollLeft = wrapper.scrollLeft;
+        scrollTop = wrapper.scrollTop;
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDown) {
+          isDown = false;
+          wrapper.classList.remove('is-panning');
+        }
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - wrapper.offsetLeft;
+        const y = e.pageY - wrapper.offsetTop;
+        const walkX = (x - startX);
+        const walkY = (y - startY);
+        wrapper.scrollLeft = scrollLeft - walkX;
+        wrapper.scrollTop = scrollTop - walkY;
+      });
+
+      // Mouse Wheel Zoom (Ctrl + Wheel or Cmd + Wheel)
+      wrapper.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 0.1 : -0.1;
+          window.setZoom(window.currentZoom + delta, e.clientX, e.clientY);
+        }
+      }, { passive: false });
+
+      // Touch Pinch-to-Zoom & Pan
+      let initialPinchDist = null;
+      let initialPinchZoom = 1.0;
+
+      wrapper.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          initialPinchDist = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+          );
+          initialPinchZoom = window.currentZoom;
+        }
+      }, { passive: true });
+
+      wrapper.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialPinchDist) {
+          const currentDist = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+          );
+          const pinchRatio = currentDist / initialPinchDist;
+          const targetZoom = initialPinchZoom * pinchRatio;
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          window.setZoom(targetZoom, midX, midY);
+        }
+      }, { passive: true });
+
+      wrapper.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          initialPinchDist = null;
+        }
+      }, { passive: true });
     }
 
     // ==================== EXPORT TO PDF & HD PNG ====================
@@ -3016,11 +3881,12 @@
     // Initialize on load
     window.addEventListener('DOMContentLoaded', () => {
       initFirebase();
+      setupPanAndGesture();
       setTimeout(fitToWidth, 300);
     });
 
     window.addEventListener('resize', () => {
-      // Auto adjust zoom on large screens if desired
+      applyZoom();
     });
   </script>
 </body>
