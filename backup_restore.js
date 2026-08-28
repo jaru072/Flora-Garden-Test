@@ -717,6 +717,7 @@ window.exportBackupToSelectedFolder = async function() {
       backupDateThai: now.toLocaleString('th-TH'),
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
@@ -802,6 +803,7 @@ window.downloadBackupAsZipPackage = async function() {
     backupDateThai: now.toLocaleString('th-TH'),
     equipmentList: clonedEquipment,
     employeeList: clonedEmployees,
+    deletedEmployees: safeJsonClone(window.deletedEmployees || []),
     transactionHistory: window.transactionHistory || [],
     attendanceLogs: window.attendanceLogs || [],
     auditLogs: window.auditLogs || [],
@@ -865,6 +867,7 @@ window.downloadDatabaseBackup = async function() {
       backupDateThai: thaiDateStr,
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
@@ -1572,6 +1575,7 @@ window.executeRestoreDatabase = async function() {
 
     let equipmentList = window.equipmentList || [];
     let employeeList = window.employeeList || [];
+    let deletedEmployees = window.deletedEmployees || [];
     let transactionHistory = window.transactionHistory || [];
     let attendanceLogs = window.attendanceLogs || [];
     let auditLogs = window.auditLogs || [];
@@ -1642,6 +1646,7 @@ window.executeRestoreDatabase = async function() {
     if (mode === 'REPLACE') {
       equipmentList = (tempParsedRestoreData.equipmentList || []).map(item => ({ ...item }));
       employeeList = (tempParsedRestoreData.employeeList || []).map(emp => ({ ...emp }));
+      deletedEmployees = (tempParsedRestoreData.deletedEmployees || []).map(emp => ({ ...emp }));
       transactionHistory = tempParsedRestoreData.transactionHistory || [];
       attendanceLogs = tempParsedRestoreData.attendanceLogs || [];
       auditLogs = tempParsedRestoreData.auditLogs || [];
@@ -1672,6 +1677,12 @@ window.executeRestoreDatabase = async function() {
         } else {
           employeeList.push({ ...emp });
         }
+      });
+      const newDeleted = tempParsedRestoreData.deletedEmployees || [];
+      newDeleted.forEach(emp => {
+        const idx = deletedEmployees.findIndex(e => (e.originalId || e.id || e.code) === (emp.originalId || emp.id || emp.code));
+        if (idx >= 0) deletedEmployees[idx] = { ...deletedEmployees[idx], ...emp };
+        else deletedEmployees.push({ ...emp });
       });
 
       const newTxs = tempParsedRestoreData.transactionHistory || [];
@@ -1765,6 +1776,7 @@ window.executeRestoreDatabase = async function() {
 
     window.equipmentList = equipmentList;
     window.employeeList = employeeList;
+    window.deletedEmployees = deletedEmployees;
     window.transactionHistory = transactionHistory;
     window.attendanceLogs = attendanceLogs;
     window.auditLogs = auditLogs;
@@ -1812,6 +1824,7 @@ window.executeRestoreDatabase = async function() {
         if (mode === 'REPLACE') {
           await replaceCollectionInFirestore("equipment", eqDocs);
           await replaceCollectionInFirestore("employees", employeeList);
+          await replaceCollectionInFirestore("deleted_employees", deletedEmployees.map(emp => ({ ...emp, id: emp.originalId || emp.id || emp.code })));
           await replaceCollectionInFirestore("transactions", transactionHistory);
           await replaceCollectionInFirestore("attendance", attendanceLogs);
           await replaceCollectionInFirestore("categories", catDocs);
@@ -1825,6 +1838,10 @@ window.executeRestoreDatabase = async function() {
           }
           for (const emp of employeeList) {
             if (emp && emp.id) await setDoc(doc(window.db, "employees", emp.id), emp);
+          }
+          for (const emp of deletedEmployees) {
+            const deletedId = emp && (emp.originalId || emp.id || emp.code);
+            if (deletedId) await setDoc(doc(window.db, "deleted_employees", deletedId), emp);
           }
           for (const tx of transactionHistory) {
             if (tx && tx.id) await setDoc(doc(window.db, "transactions", tx.id), tx);
@@ -2665,6 +2682,7 @@ window.startGoogleDriveBackup = async function() {
       storageType: "GOOGLE_DRIVE_UNCOMPRESSED",
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
@@ -2935,6 +2953,7 @@ window.executeLocalHybridBackup = function(dayInfo = window.getRotationDayInfo()
       adminTarget: "jaru072@gmail.com",
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],
@@ -3077,6 +3096,7 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
       storageType: "GOOGLE_DRIVE_ROTATION_UNCOMPRESSED",
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
       auditLogs: window.auditLogs || [],

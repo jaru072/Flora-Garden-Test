@@ -64,6 +64,7 @@
     let equipmentList = [];
     let transactionHistory = [];
     let employeeList = [];
+    let deletedEmployees = [];
     let attendanceLogs = [];
     let categoriesList = [];
     let departmentsList = [];
@@ -78,6 +79,25 @@
     let lastKnownUserForLogout = null;
     let activeModalEquipId = null;
 
+    // Personnel and organization data are read-only on index.html.
+    // The Interactive Org Chart is the only screen that may add/edit/delete
+    // employees, while the Tree tab is the only screen that may change structure.
+    const MAIN_PERSONNEL_READ_ONLY = true;
+    window.MAIN_PERSONNEL_READ_ONLY = MAIN_PERSONNEL_READ_ONLY;
+    // index.html is the inventory workspace. Attendance and personnel records
+    // are managed only from org_chart.html; the inventory may read employees
+    // solely to identify the borrower / recipient on stock transactions.
+    const MAIN_STOCK_ONLY_MODE = true;
+    window.MAIN_STOCK_ONLY_MODE = MAIN_STOCK_ONLY_MODE;
+
+    function blockMainPersonnelMutation(action = 'แก้ไขข้อมูลบุคลากร') {
+      const message = `หน้าหลักเป็นโหมดดูข้อมูลบุคลากรอย่างเดียว กรุณา${action}ที่ผังโครงสร้างบุคลากร`;
+      if (typeof showToast === 'function') showToast(`ℹ️ ${message}`);
+      else alert(message);
+      return false;
+    }
+    window.blockMainPersonnelMutation = blockMainPersonnelMutation;
+
     // Expose local state variables to window for modules (backup_restore.js)
     Object.defineProperty(window, 'currentRole', { get: () => currentRole, set: (v) => { currentRole = v; }, configurable: true });
     Object.defineProperty(window, 'db', { get: () => db, set: (v) => { db = v; }, configurable: true });
@@ -87,6 +107,7 @@
     Object.defineProperty(window, 'equipmentList', { get: () => equipmentList, set: (v) => { equipmentList = v; }, configurable: true });
     Object.defineProperty(window, 'transactionHistory', { get: () => transactionHistory, set: (v) => { transactionHistory = v; }, configurable: true });
     Object.defineProperty(window, 'employeeList', { get: () => employeeList, set: (v) => { employeeList = v; }, configurable: true });
+    Object.defineProperty(window, 'deletedEmployees', { get: () => deletedEmployees, set: (v) => { deletedEmployees = v; }, configurable: true });
     Object.defineProperty(window, 'attendanceLogs', { get: () => attendanceLogs, set: (v) => { attendanceLogs = v; }, configurable: true });
     Object.defineProperty(window, 'categoriesList', { get: () => categoriesList, set: (v) => { categoriesList = v; }, configurable: true });
     Object.defineProperty(window, 'departmentsList', { get: () => departmentsList, set: (v) => { departmentsList = v; }, configurable: true });
@@ -213,12 +234,25 @@
 
       try {
         storage = getStorage(app);
+        window.storage = storage;
+        window.storageRef = ref;
+        window.uploadBytes = uploadBytes;
+        window.getDownloadURL = getDownloadURL;
+        window.deleteObject = deleteObject;
       } catch (eSt) {
         console.warn("Storage init warning:", eSt);
       }
 
       isFirebaseReady = true;
       console.log("Firebase & Auth initialized successfully with project flora-gaden.");
+      window.floraFirebaseBridge = { 
+        db, doc, setDoc, onSnapshot, getDoc, getDocs, collection, deleteDoc,
+        storage, ref, uploadBytes, getDownloadURL, deleteObject, auth 
+      };
+      if (typeof window.floraLogo?.connectGlobalLogoFirestore === 'function' && db) {
+        window.floraLogo.connectGlobalLogoFirestore(window.floraFirebaseBridge);
+      }
+      window.dispatchEvent(new CustomEvent('flora-firebase-ready'));
     } catch (err) {
       console.warn("Firebase initialization warning:", err);
       isFirebaseReady = false;
@@ -654,6 +688,12 @@
       }
 
       setRole(currentRole);
+      sessionStorage.setItem('flora_personnel_access', JSON.stringify({
+        uid: currentUserProfile?.uid || '',
+        email: currentUserProfile?.email || '',
+        role: currentRole,
+        isAdmin: currentRole === 'ADMIN' && currentUserProfile?.email === 'jaru072@gmail.com'
+      }));
       if (typeof window.ensureAdminUserInUsersCollection === 'function') {
         window.ensureAdminUserInUsersCollection();
       }
@@ -674,6 +714,7 @@
       const emp = employeeList.find(x => x.id === empId);
       const targetRole = emp ? (emp.role || 'WORKER') : 'WORKER';
       setRole(targetRole);
+      sessionStorage.setItem('flora_personnel_access', JSON.stringify({ uid: emp?.id || empId, email: '', role: targetRole, isAdmin: false }));
       hideMandatoryLoginScreen();
       showToast(`🟢 ยินดีต้อนรับเข้าสู่ระบบ คุณ${emp ? emp.name : empId} [${targetRole}]`);
     };
@@ -1599,8 +1640,7 @@
       renderStaffTable();
       renderHistoryTable();
       if (typeof renderAuditLogsTable === 'function') renderAuditLogsTable();
-      renderEmployeeDirectory();
-      renderAttendanceTable();
+      // Personnel directory and attendance UI live in org_chart.html.
 
       updateStats();
       if (typeof window.handleQuickLogin === 'function') {
@@ -1677,7 +1717,7 @@
     };
 
     window.recordTabNavigation = function(tabId) {
-      const validTabs = ['catalog-tab', 'transaction-tab', 'attendance-tab', 'employees-tab', 'manage-tab', 'history-tab'];
+      const validTabs = ['catalog-tab', 'transaction-tab', 'manage-tab', 'history-tab'];
       if (!validTabs.includes(tabId)) return;
 
       if (!isNavigatingHistory) {
@@ -1715,7 +1755,11 @@
     };
 
     window.switchNavTab = function(tabId) {
-      if (currentRole === 'WORKER' && (tabId === 'employees-tab' || tabId === 'manage-tab' || tabId === 'history-tab')) {
+      if (MAIN_STOCK_ONLY_MODE && (tabId === 'employees-tab' || tabId === 'attendance-tab')) {
+        showToast("เมนูนี้ย้ายไปอยู่ที่ศูนย์ผังโครงสร้างและจัดการบุคลากรแล้ว");
+        return;
+      }
+      if (currentRole === 'WORKER' && (tabId === 'manage-tab' || tabId === 'history-tab')) {
         showToast("⚠️ พนักงาน (Worker) ไม่มีสิทธิ์เข้าถึงเมนูนี้");
         return;
       }
@@ -1730,8 +1774,6 @@
       const mapping = {
         'catalog-tab': { itemId: 'gear-item-catalog', label: 'คลังอุปกรณ์', icon: 'bi-grid-fill' },
         'transaction-tab': { itemId: 'gear-item-transaction', label: 'บันทึก เบิก-จ่าย-ยืม-คืน', icon: 'bi-pencil-square' },
-        'attendance-tab': { itemId: 'gear-item-attendance', label: 'ลงเวลาเข้า-ออก/การลา', icon: 'bi-clock-history' },
-        'employees-tab': { itemId: 'gear-item-employees', label: 'รายชื่อบุคลากร', icon: 'bi-person-lines-fill' },
         'manage-tab': { itemId: 'gear-item-manage', label: 'จัดการคลังอุปกรณ์', icon: 'bi-tools' },
         'history-tab': { itemId: 'gear-item-history', label: 'ประวัติทำรายการ', icon: 'bi-card-checklist' }
       };
@@ -3490,6 +3532,10 @@
     // Save Employee
     async function handleSaveEmployee(e) {
       e.preventDefault();
+      if (MAIN_PERSONNEL_READ_ONLY) {
+        blockMainPersonnelMutation('เพิ่มหรือแก้ไขข้อมูลบุคลากร');
+        return;
+      }
       const editId = document.getElementById('editEmpIdHidden').value;
       const name = document.getElementById('empNameInput').value.trim();
       const nickname = document.getElementById('empNicknameInput') ? document.getElementById('empNicknameInput').value.trim() : '';
@@ -3638,6 +3684,10 @@
     // Attendance Submission
     function handleAttendanceSubmit(e) {
       e.preventDefault();
+      if (MAIN_STOCK_ONLY_MODE) {
+        showToast("กรุณาบันทึกเวลาในศูนย์ผังโครงสร้างและจัดการบุคลากร");
+        return;
+      }
       const empId = document.getElementById('attEmpSelect')?.value;
       const status = document.querySelector('input[name="attStatus"]:checked')?.value || 'เข้างาน';
       const note = document.getElementById('attNote')?.value.trim() || '';
@@ -4905,12 +4955,6 @@
                     <button class="btn btn-outline-info btn-xs rounded-pill px-2 py-0.5 fs-8 fw-semibold" title="ดูประวัติการเบิก-ยืม" onclick="openEmployeeBorrowHistoryModal('${emp.id}')">
                       <i class="bi bi-clock-history"></i> ประวัติ
                     </button>
-                    <button class="btn btn-outline-primary btn-xs rounded-pill px-2 py-0.5 fs-8" title="แก้ไขข้อมูล" onclick="openEditEmployeeModal('${emp.id}')">
-                      <i class="bi bi-pencil-square"></i>
-                    </button>
-                    <button class="btn btn-outline-danger btn-xs rounded-pill px-2 py-0.5 fs-8" title="ลบ" onclick="deleteEmployee('${emp.id}')">
-                      <i class="bi bi-trash"></i>
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -4960,12 +5004,6 @@
                     <button class="btn btn-outline-info btn-sm rounded-pill fs-7 fw-semibold" title="ดูประวัติการเบิก-ยืม" onclick="openEmployeeBorrowHistoryModal('${emp.id}')">
                       <i class="bi bi-clock-history me-1"></i> ประวัติฯ
                     </button>
-                    <button class="btn btn-outline-primary btn-sm rounded-pill fs-7" title="แก้ไขข้อมูลพนักงาน" onclick="openEditEmployeeModal('${emp.id}')">
-                      <i class="bi bi-pencil-square me-1"></i> แก้ไข
-                    </button>
-                    <button class="btn btn-outline-danger btn-sm rounded-pill fs-7" title="ลบรายชื่อพนักงาน" onclick="deleteEmployee('${emp.id}')">
-                      <i class="bi bi-trash me-1"></i> ลบ
-                    </button>
                   </div>
                 </div>
               </div>
@@ -4981,6 +5019,7 @@
 
     // --- BULK UPDATE EMPLOYEES LOGIC ---
     window.openBulkUpdateEmpModal = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('แก้ไขแผนกหรือตำแหน่งบุคลากร');
       if (selectedEmpIds.size === 0) {
         showToast("⚠️ กรุณาเลือกบุคลากรอย่างน้อย 1 รายการเพื่อทำรายการแบบกลุ่ม");
         return;
@@ -5069,6 +5108,7 @@
     };
 
     window.executeBulkUpdateEmployees = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('แก้ไขแผนกหรือตำแหน่งบุคลากร');
       if (selectedEmpIds.size === 0) {
         showToast("⚠️ กรุณาเลือกบุคลากรอย่างน้อย 1 รายการ");
         return;
@@ -5170,6 +5210,7 @@
     };
 
     window.executeBulkDeleteEmployees = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('ลบข้อมูลบุคลากร');
       if (selectedEmpIds.size === 0) return;
 
       const ok = await window.showConfirmDialog({
@@ -7815,12 +7856,12 @@
       const totalItemsElem = document.getElementById('statTotalItems');
       const inStockElem = document.getElementById('statInStock');
       const borrowedElem = document.getElementById('statBorrowed');
-      const totalEmpElem = document.getElementById('statTotalEmp');
+      const lowStockElem = document.getElementById('statLowStock');
 
       if (totalItemsElem) totalItemsElem.textContent = total;
       if (inStockElem) inStockElem.textContent = inStock;
       if (borrowedElem) borrowedElem.textContent = borrowed;
-      if (totalEmpElem) totalEmpElem.textContent = employeeList.length;
+      if (lowStockElem) lowStockElem.textContent = lowStock;
 
       // Update Overdue Alerts
       if (typeof calculateOverdueBorrowings === 'function') {
@@ -11160,6 +11201,9 @@
 
         const savedMode = localStorage.getItem('flora_scanner_auto_action');
         if (savedMode) scannerAutoActionMode = savedMode;
+        if (MAIN_STOCK_ONLY_MODE && scannerAutoActionMode === 'AUTO_CLOCK_IN') {
+          scannerAutoActionMode = 'SMART_CONTEXT';
+        }
 
         const savedHistory = localStorage.getItem('flora_scanner_history');
         if (savedHistory) {
@@ -11310,6 +11354,12 @@
     };
 
     window.changeScannerAutoActionMode = function(mode) {
+      if (MAIN_STOCK_ONLY_MODE && mode === 'AUTO_CLOCK_IN') {
+        scannerAutoActionMode = 'SMART_CONTEXT';
+        saveScannerSettings();
+        showToast('การลงเวลาอยู่ที่ศูนย์ผังโครงสร้างและจัดการบุคลากร');
+        return;
+      }
       scannerAutoActionMode = mode;
       saveScannerSettings();
       showToast(`⚡ ปรับรูปแบบการทำงานเป็น: ${mode === 'SMART_CONTEXT' ? 'ฉลาดตามหน้าจอ' : mode === 'AUTO_CLOCK_IN' ? 'ลงเวลาเข้างานอัตโนมัติ' : mode === 'AUTO_SELECT_FORM' ? 'ใส่ฟอร์มเบิก-ยืม' : 'เปิดหน้าต่างข้อมูล'}`);
@@ -11432,7 +11482,7 @@
       // Contextual execution
       if (res.type === 'EMPLOYEE') {
         const emp = res.entity;
-        if (scannerAutoActionMode === 'AUTO_CLOCK_IN' || (scannerAutoActionMode === 'SMART_CONTEXT' && activeTabId === 'attendance-pane')) {
+        if (!MAIN_STOCK_ONLY_MODE && (scannerAutoActionMode === 'AUTO_CLOCK_IN' || (scannerAutoActionMode === 'SMART_CONTEXT' && activeTabId === 'attendance-pane'))) {
           recordAttendanceDirectly(emp, 'ยิงสแกนบัตรพนักงานอัตโนมัติ (Scanner Auto-detect)');
           actionTaken = 'บันทึกเข้างานทันที 🟢';
         } else if (scannerAutoActionMode === 'AUTO_SELECT_FORM' || (scannerAutoActionMode === 'SMART_CONTEXT' && (activeTabId === 'transaction-pane' || activeTabId === 'borrow-cart-pane'))) {
@@ -11486,6 +11536,10 @@
     // Direct Attendance Record
     window.recordAttendanceDirectly = function(emp, noteText = 'ยิงสแกนบัตรพนักงานอัตโนมัติ') {
       if (!emp) return;
+      if (MAIN_STOCK_ONLY_MODE) {
+        showToast("การลงเวลาถูกย้ายไปที่ศูนย์ผังโครงสร้างและจัดการบุคลากร");
+        return;
+      }
       const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
       const todayStr = new Date().toLocaleDateString('th-TH');
 
@@ -11591,9 +11645,6 @@
           <div class="d-flex gap-1.5 mt-2">
             <button type="button" class="btn btn-success btn-sm rounded-pill fw-bold w-100 fs-8 py-1" onclick="openAddModalWithScannedCode('${res.cleanCode}'); hideScannerAutoDetectHUD();">
               <i class="bi bi-box-seam me-1"></i> เพิ่มเป็นอุปกรณ์ใหม่
-            </button>
-            <button type="button" class="btn btn-outline-success btn-sm rounded-pill fw-bold w-100 fs-8 py-1" onclick="openAddEmployeeModalWithScannedCode('${res.cleanCode}'); hideScannerAutoDetectHUD();">
-              <i class="bi bi-person-plus-fill me-1"></i> เพิ่มเป็นพนักงานใหม่
             </button>
           </div>
         `;
@@ -11710,6 +11761,7 @@
     window.openAddModalWithScannedCode = window.openAddEquipmentWithScannedCode;
 
     window.openAddEmployeeModalWithScannedCode = function(code) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('เพิ่มข้อมูลบุคลากร');
       openAddEmployeeModal();
       if (code) {
         setTimeout(() => {
@@ -12871,6 +12923,10 @@
 
     window.handleDirectBadgeClockInFromResult = function() {
       if (!activeScannedEmpId) return;
+      if (MAIN_STOCK_ONLY_MODE) {
+        showToast("การลงเวลาถูกย้ายไปที่ศูนย์ผังโครงสร้างและจัดการบุคลากร");
+        return;
+      }
       const emp = employeeList.find(x => x.id === activeScannedEmpId);
       if (!emp) return;
 
@@ -12950,6 +13006,10 @@
     };
 
     window.openAddEmployeeModalFromScanner = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) {
+        stopEmpQrScanner();
+        return blockMainPersonnelMutation('เพิ่มข้อมูลบุคลากร');
+      }
       stopEmpQrScanner();
       const modalElem = document.getElementById('scanEmpBadgeModal');
       const modalInst = bootstrap.Modal.getInstance(modalElem);
@@ -12959,6 +13019,7 @@
     };
 
     window.openAddEmployeeModal = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('เพิ่มข้อมูลบุคลากร');
       const form = document.getElementById('addEmployeeForm');
       if (form) form.reset();
       document.getElementById('editEmpIdHidden').value = '';
@@ -12980,6 +13041,7 @@
     };
 
     window.openEditEmployeeModal = function(empId) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('แก้ไขข้อมูลบุคลากร');
       const emp = employeeList.find(x => x.id === empId);
       if (!emp) return;
 
@@ -13266,6 +13328,7 @@
     window.populateDepartmentDropdowns = populateDepartmentDropdowns;
 
     window.openManageDepartmentsModal = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('จัดการโครงสร้างหน่วยงาน');
       renderDepartmentsListModal();
       const input = document.getElementById('newDeptNameInput');
       if (input) input.value = '';
@@ -13316,6 +13379,7 @@
     };
 
     window.addNewDepartmentFromModal = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('เพิ่มหน่วยงานในแท็บจัดการโครงสร้าง');
       const input = document.getElementById('newDeptNameInput');
       if (!input) return;
 
@@ -13364,6 +13428,7 @@
     };
 
     window.editDepartmentName = async function(encodedOldName) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('แก้ไขหน่วยงานในแท็บจัดการโครงสร้าง');
       const oldName = decodeURIComponent(encodedOldName);
       const newName = prompt(`แก้ไขชื่อแผนก:`, oldName);
 
@@ -13442,6 +13507,7 @@
     };
 
     window.deleteDepartmentName = async function(encodedDeptName) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('ลบหน่วยงานในแท็บจัดการโครงสร้าง');
       const deptName = decodeURIComponent(encodedDeptName);
       const empCount = employeeList.filter(e => e.department === deptName).length;
 
@@ -13554,6 +13620,7 @@
     window.populatePositionDropdowns = populatePositionDropdowns;
 
     window.openManagePositionsModal = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('จัดการตำแหน่งในแท็บจัดการโครงสร้าง');
       renderPositionsListModal();
       const input = document.getElementById('newPosNameInput');
       if (input) input.value = '';
@@ -13626,6 +13693,7 @@
     };
 
     window.addNewPositionFromModal = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('เพิ่มตำแหน่งในแท็บจัดการโครงสร้าง');
       const input = document.getElementById('newPosNameInput');
       const groupSelect = document.getElementById('newPosGroupSelect');
       if (!input) return;
@@ -13691,6 +13759,7 @@
     };
 
     window.editPositionName = async function(encodedKey) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('แก้ไขตำแหน่งในแท็บจัดการโครงสร้าง');
       const key = decodeURIComponent(encodedKey);
       const posIndex = (positionsList || []).findIndex(p => {
         if (typeof p === 'string') return p === key;
@@ -13766,6 +13835,7 @@
     };
 
     window.deletePositionName = async function(encodedKey) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('ลบตำแหน่งในแท็บจัดการโครงสร้าง');
       const key = decodeURIComponent(encodedKey);
       const posIndex = (positionsList || []).findIndex(p => {
         if (typeof p === 'string') return p === key;
@@ -14060,6 +14130,7 @@
     };
 
     window.deleteEmployee = async function(empId) {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('ลบข้อมูลบุคลากร');
       const emp = employeeList.find(x => x.id === empId);
       if (!emp) return;
 
@@ -14234,41 +14305,6 @@
       if (typeof renderDbEditorTable === 'function') renderDbEditorTable();
     };
 
-    // Database Inspector Functions
-    window.openDatabaseInspector = function() {
-      document.getElementById('dbCountEmp').textContent = employeeList.length;
-      document.getElementById('dbCountEquip').textContent = equipmentList.length;
-      document.getElementById('dbCountTx').textContent = transactionHistory.length;
-      document.getElementById('dbCountAtt').textContent = attendanceLogs.length;
-
-      document.getElementById('dbEmpJsonCode').textContent = JSON.stringify(employeeList, null, 2);
-      document.getElementById('dbEquipJsonCode').textContent = JSON.stringify(equipmentList, null, 2);
-      document.getElementById('dbTxJsonCode').textContent = JSON.stringify(transactionHistory, null, 2);
-      document.getElementById('dbAttJsonCode').textContent = JSON.stringify(attendanceLogs, null, 2);
-    };
-
-    window.exportDatabaseJson = function() {
-      const fullBackup = {
-        exportedAt: new Date().toISOString(),
-        databaseName: "Flora Garden App Database",
-        collections: {
-          employees: employeeList,
-          equipment: equipmentList,
-          transactions: transactionHistory,
-          attendance: attendanceLogs
-        }
-      };
-      const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const timestampStr = typeof window.getThaiDateTimeFilenameString === 'function' ? window.getThaiDateTimeFilenameString() : new Date().toISOString().slice(0,10);
-      a.download = `flora_garden_database_${timestampStr}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("ส่งออกข้อมูล JSON ของฐานข้อมูลเรียบร้อยแล้ว");
-    };
-
     window.clearDatabaseCache = async function() {
       if (currentRole !== 'ADMIN') {
         showToast("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่มีสิทธิ์ล้างแคช");
@@ -14338,6 +14374,10 @@
 
     // Function to show the custom confirmation modal for database purge (PRESERVING Firebase Storage images)
     window.purgeEntireDatabaseAndStorage = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) {
+        if (typeof showToast === 'function') showToast('⛔ ปิดการลบฐานข้อมูลทั้งหมดจากหน้าหลัก เพื่อป้องกันข้อมูลบุคลากรและโครงสร้าง');
+        return;
+      }
       const modalEl = document.getElementById('confirmPurgeDbModal');
       const chk = document.getElementById('chkConfirmPurgeDb');
       const btn = document.getElementById('btnConfirmPurgeDbAction');
@@ -14378,6 +14418,10 @@
 
     // Execute the confirmed database purge
     window.executeConfirmedPurgeDatabase = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) {
+        if (typeof showToast === 'function') showToast('⛔ ยกเลิกการลบฐานข้อมูลทั้งหมดจากหน้าหลัก');
+        return;
+      }
       const modalEl = document.getElementById('confirmPurgeDbModal');
       const btn = document.getElementById('btnConfirmPurgeDbAction');
       if (btn) {
@@ -14460,7 +14504,6 @@
         updateStats();
 
         if (typeof renderDbEditorTable === 'function') renderDbEditorTable();
-        if (typeof openDatabaseInspector === 'function') openDatabaseInspector();
 
         // Hide confirmation modal
         if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -14966,6 +15009,11 @@
       currentDbCollection = coll;
       updateDbBadges();
 
+      const addRecordButton = document.getElementById('dbAddRecordButton');
+      if (addRecordButton) {
+        addRecordButton.classList.toggle('d-none', coll === 'employees');
+      }
+
       ['equipment', 'employees', 'transactions', 'attendance', 'categories'].forEach(c => {
         const pill = document.getElementById(`pill-${c}`);
         if (pill) {
@@ -15068,7 +15116,7 @@
           <th>แผนก / ตำแหน่ง</th>
           <th>สิทธิ์ใช้งาน</th>
           <th>เบอร์โทรศัพท์</th>
-          <th class="text-end pe-3">จัดการ</th>
+          <th class="text-end pe-3">สถานะ</th>
         `;
 
         items.forEach(emp => {
@@ -15090,12 +15138,9 @@
               <td>${roleBadge}</td>
               <td class="fs-8 text-muted">${emp.phone || '-'}</td>
               <td class="text-end pe-3">
-                <button class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-1 fw-semibold me-1 fs-8" onclick="openDbRecordEditModal('employees', '${emp.id}')">
-                  <i class="bi bi-pencil-square me-1"></i>แก้ไข
-                </button>
-                <button class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1 fs-8" onclick="deleteDbRecord('employees', '${emp.id}')" title="ลบพนักงานท่านนี้">
-                  <i class="bi bi-trash"></i>
-                </button>
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-1">
+                  <i class="bi bi-eye me-1"></i>ดูอย่างเดียว
+                </span>
               </td>
             </tr>
           `;
@@ -15247,10 +15292,13 @@
     };
 
     window.openAddNewDbRecordModal = function() {
+      if (MAIN_STOCK_ONLY_MODE && (currentDbCollection === 'employees' || currentDbCollection === 'attendance')) {
+        return blockMainPersonnelMutation(currentDbCollection === 'employees' ? 'เพิ่มข้อมูลบุคลากร' : 'เพิ่มข้อมูลลงเวลา');
+      }
       if (currentDbCollection === 'equipment') {
         openAddEquipmentModal();
       } else if (currentDbCollection === 'employees') {
-        openAddEmployeeModal();
+        return blockMainPersonnelMutation('เพิ่มข้อมูลบุคลากร');
       } else if (currentDbCollection === 'categories') {
         openCategoryModal();
       } else {
@@ -15259,6 +15307,9 @@
     };
 
     window.openDbRecordEditModal = function(coll, recordId) {
+      if (MAIN_STOCK_ONLY_MODE && (coll === 'employees' || coll === 'attendance')) {
+        return blockMainPersonnelMutation(coll === 'employees' ? 'แก้ไขข้อมูลบุคลากร' : 'แก้ไขข้อมูลลงเวลา');
+      }
       document.getElementById('dbEditTargetColl').value = coll;
       document.getElementById('dbEditTargetId').value = recordId;
 
@@ -15340,6 +15391,10 @@
     window.saveDbRecordFromModal = async function() {
       const coll = document.getElementById('dbEditTargetColl').value;
       const recordId = document.getElementById('dbEditTargetId').value;
+
+      if (MAIN_STOCK_ONLY_MODE && (coll === 'employees' || coll === 'attendance')) {
+        return blockMainPersonnelMutation(coll === 'employees' ? 'แก้ไขข้อมูลบุคลากร' : 'แก้ไขข้อมูลลงเวลา');
+      }
 
       const fieldInputs = document.querySelectorAll('.db-edit-field');
       const updatedData = {};
@@ -15431,6 +15486,9 @@
     };
 
     window.deleteDbRecord = async function(coll, recordId) {
+      if (MAIN_STOCK_ONLY_MODE && (coll === 'employees' || coll === 'attendance')) {
+        return blockMainPersonnelMutation(coll === 'employees' ? 'ลบข้อมูลบุคลากร' : 'ลบข้อมูลลงเวลา');
+      }
       const ok = await window.showConfirmDialog({
         title: "ลบข้อมูลจากฐานข้อมูล",
         message: `ต้องการลบข้อมูล ID: "${recordId}" ออกจากระบบใช่หรือไม่?`,
@@ -15526,9 +15584,8 @@
     async function fetchInitialFirestoreData(isRetry = false) {
       if (!isFirebaseReady || !db) return;
       try {
-        const [empSnap, attSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap, posSnap] = await Promise.allSettled([
+        const [empSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap, posSnap] = await Promise.allSettled([
           getDocs(collection(db, "employees")),
-          getDocs(collection(db, "attendance")),
           getDocs(collection(db, "categories")),
           getDocs(collection(db, "equipment")),
           getDocs(collection(db, "transactions")),
@@ -15629,12 +15686,6 @@
           hasData = true;
         }
 
-        if (attSnap.status === 'fulfilled' && !attSnap.value.empty) {
-          attendanceLogs = attSnap.value.docs.map(d => ({ id: d.id, ...d.data() }));
-          renderAttendanceTable();
-          hasData = true;
-        }
-
         if (deptSnap.status === 'fulfilled' && !deptSnap.value.empty) {
           const deptMap = new Map();
           for (const dSnap of deptSnap.value.docs) {
@@ -15711,18 +15762,9 @@
             populatePositionDropdowns();
             hasData = true;
           } else if (defaultPositionsList && defaultPositionsList.length > 0) {
-            // Auto seed default positions to Firestore if empty
+            // Read-only fallback for legacy UI; never seed organization data from index.html.
             positionsList = [...defaultPositionsList];
             populatePositionDropdowns();
-            if (isFirebaseReady && db) {
-              try {
-                for (const p of defaultPositionsList) {
-                  await setDoc(doc(db, "positions", p.id), p);
-                }
-              } catch(seedErr) {
-                console.warn("Auto seed positions to Firestore notice:", seedErr);
-              }
-            }
             hasData = true;
           }
         }
@@ -15746,34 +15788,19 @@
       if (isListenersAttached) return;
       isListenersAttached = true;
 
+      if (typeof window.floraLogo?.connectGlobalLogoFirestore === 'function' && db) {
+        window.floraLogo.connectGlobalLogoFirestore({ db, doc, setDoc, onSnapshot, getDoc, getDocs, collection, deleteDoc });
+      }
+
       // Trigger parallel direct fetch to ensure data lands immediately
       fetchInitialFirestoreData();
 
       try {
-        onSnapshot(collection(db, "employees"), async (snapshot) => {
-          const deptMap = {
-            "เจ้าหน้าที่สำนักงาน (Staff)": "แผนกงานธุรการ",
-            "แผนกเรือนกระจกและเพาะชำ": "แผนกงานทดลอง",
-            "แผนกตกแต่งและตัดแต่งกิ่ง": "แผนกทีมเจดีย์/แปลง G",
-            "แผนกระบบน้ำและบำรุงดิน": "แผนกทีมถนนธรรมชัย/เฟื้องฟ้า/ผสมดิน",
-            "สวนกุหลาบและไม้ดอก": "แผนกทีมกุหลาบ",
-            "สวนไม้ผลและไม้ยืนต้น": "แผนกทีมไม้ดอกหลังวิหารคดคอร์ 13-20(ปอ)",
-            "แผนกดูแลไม้ดอก (Rose & Tulip)": "แผนกทีมกุหลาบ",
-            "แผนกไม้ประดับใบ (Indoor Flora)": "แผนกงานทดลอง"
-          };
-
+        onSnapshot(collection(db, "employees"), (snapshot) => {
           if (snapshot.empty) {
             employeeList = [];
           } else {
-            employeeList = snapshot.docs.map(d => {
-              const data = d.data();
-              let updatedDept = data.department;
-              if (deptMap[data.department]) {
-                updatedDept = deptMap[data.department];
-                try { updateDoc(doc(db, "employees", d.id), { department: updatedDept }); } catch(e){}
-              }
-              return { id: d.id, ...data, department: updatedDept };
-            });
+            employeeList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
           }
           saveToLocalStorage();
           renderEmployeeDirectory();
@@ -15784,16 +15811,10 @@
           console.warn("Firestore employees sync notice:", err.message);
         });
 
-        onSnapshot(collection(db, "attendance"), async (snapshot) => {
-          if (snapshot.empty) {
-            attendanceLogs = [];
-          } else {
-            attendanceLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          }
-          saveToLocalStorage();
-          renderAttendanceTable();
+        onSnapshot(collection(db, "deleted_employees"), (snapshot) => {
+          deletedEmployees = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         }, (err) => {
-          console.warn("Firestore attendance sync notice:", err.message);
+          console.warn("Firestore deleted employees sync notice:", err.message);
         });
 
         onSnapshot(collection(db, "categories"), async (snapshot) => {
@@ -15907,18 +15928,7 @@
           console.warn("Firestore transactions sync notice:", err.message);
         });
 
-        onSnapshot(collection(db, "departments"), async (snapshot) => {
-          const legacyDepts = [
-            "เจ้าหน้าที่สำนักงาน (Staff)",
-            "แผนกเรือนกระจกและเพาะชำ",
-            "แผนกตกแต่งและตัดแต่งกิ่ง",
-            "แผนกระบบน้ำและบำรุงดิน",
-            "สวนกุหลาบและไม้ดอก",
-            "สวนไม้ผลและไม้ยืนต้น",
-            "แผนกดูแลไม้ดอก (Rose & Tulip)",
-            "แผนกไม้ประดับใบ (Indoor Flora)"
-          ];
-
+        onSnapshot(collection(db, "departments"), (snapshot) => {
           let fsDepts = [];
           if (!snapshot.empty) {
             const deptMap = new Map();
@@ -15927,28 +15937,10 @@
               const name = (data.name || dSnap.id || '').trim();
               const officialCode = (data.code || data.id || dSnap.id || '').trim();
 
-              if (legacyDepts.includes(name)) {
-                try { await deleteDoc(dSnap.ref); } catch(e){}
-                continue;
-              }
-
               if (name) {
-                // Auto-migrate if document ID !== department code
-                if (isFirebaseReady && db && officialCode && dSnap.id !== officialCode) {
-                  try {
-                    await setDoc(doc(db, "departments", officialCode), { id: officialCode, code: officialCode, name }, { merge: true });
-                    await deleteDoc(dSnap.ref);
-                  } catch(migErr) {
-                    console.warn("Auto migrate department docId notice:", migErr);
-                  }
-                }
-
                 const key = name.toLowerCase();
                 if (!deptMap.has(key)) {
                   deptMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name });
-                } else if (dSnap.id !== officialCode) {
-                  // Duplicate document with non-standard ID, delete it
-                  try { await deleteDoc(dSnap.ref); } catch(e){}
                 }
               }
             }
@@ -16028,7 +16020,7 @@
           console.warn("Firestore locations sync notice:", err.message);
         });
 
-        onSnapshot(collection(db, "positions"), async (snapshot) => {
+        onSnapshot(collection(db, "positions"), (snapshot) => {
           let fsPositions = [];
           if (!snapshot.empty) {
             const posMap = new Map();
@@ -16040,21 +16032,9 @@
               const order = data.order || 999;
 
               if (name) {
-                // Auto-migrate if document ID !== position code
-                if (isFirebaseReady && db && officialCode && dSnap.id !== officialCode) {
-                  try {
-                    await setDoc(doc(db, "positions", officialCode), { id: officialCode, code: officialCode, name, group, order }, { merge: true });
-                    await deleteDoc(dSnap.ref);
-                  } catch(migErr) {
-                    console.warn("Auto migrate position docId notice:", migErr);
-                  }
-                }
-
                 const key = name.toLowerCase();
                 if (!posMap.has(key)) {
                   posMap.set(key, { id: officialCode || dSnap.id, code: officialCode || dSnap.id, name, group, order });
-                } else if (dSnap.id !== officialCode) {
-                  try { await deleteDoc(dSnap.ref); } catch(e){}
                 }
               }
             }
@@ -16572,7 +16552,6 @@
         return 0;
       }
 
-      const targetDbId = "ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1";
       const primarySourceDbId = customSourceDbId ? customSourceDbId.trim() : "ai-studio-floragardenv2-c509b5a5-f4a3-4546-bbae-c5f21564ba7d";
 
       try {
@@ -16824,43 +16803,6 @@
           recordedErrors.push(...primaryResult.errors);
         }
 
-        // 2. If primary returned 0 docs, ASK USER FIRST via confirm dialog
-        if (totalDocsCopied === 0) {
-          console.log("[Migration] Primary source returned 0 docs.");
-          
-          let userChoice = null;
-          if (showFeedback) {
-            const errSummary = recordedErrors.length > 0 ? `\n\n(รายละเอียดข้อความแจ้งเตือน: ${recordedErrors[0]})` : "";
-            userChoice = confirm(
-              `ℹ️ ตรวจสอบฐานข้อมูล "${primarySourceDbId}" แล้ว ไม่พบข้อมูล${errSummary}\n\n` +
-              "คุณต้องการให้ระบบลองตรวจสอบฐานข้อมูลสำรองอื่นๆ ในโปรเจกต์ 'flora-gaden' หรือไม่?\n\n" +
-              "• กด 'ตกลง (OK)' = ค้นหาจากฐานข้อมูลเดิมตัวอื่น (Flora Garden New / Default)\n" +
-              "• กด 'ยกเลิก (Cancel)' = ป้อน Database ID เอง หรือหยุดการทำงาน"
-            );
-          }
-
-          if (userChoice) {
-            showToast("⏳ กำลังตรวจสอบฐานข้อมูลสำรองอื่นๆ ในโปรเจกต์...");
-            if (typeof window.updateBackupProgress === 'function') {
-              window.updateBackupProgress(50, "กำลังค้นหาฐานข้อมูลสำรอง...", "กำลังตรวจค้นฐานข้อมูลตัวอื่นในโปรเจกต์...", true, 'bg-warning');
-            }
-            const otherCandidates = [
-              { id: "ai-studio-floragardennew-077d9b3a-d839-404a-986e-0ab7c5c9be6e", name: "Flora Garden New (077d9b3a)" },
-              { id: "ai-studio-1c1eba69-e70f-482c-b553-e77fc7efbd4f", name: "Flora Garden 1c1eba69" },
-              { id: "(default)", name: "Default Database" }
-            ];
-
-            for (const cand of otherCandidates) {
-              const candResult = await testAndCopyFromDb(cand.id, cand.name);
-              if (candResult.count > 0) {
-                console.log(`[Migration] Successfully recovered ${candResult.count} docs from candidate '${cand.name}' (${cand.id})!`);
-                totalDocsCopied += candResult.count;
-                break; // Found and copied data
-              }
-            }
-          }
-        }
-
         console.log(`[Migration] Migration execution finished. Total docs copied: ${totalDocsCopied}`);
 
         if (totalDocsCopied > 0) {
@@ -16953,7 +16895,7 @@
       if (showFeedback) {
         const ok = await window.showConfirmDialog({
           title: "ล้างข้อมูลซ้ำซ้อนและจัดระเบียบ Document ID",
-          message: "ระบบจะทำการสแกน collections (categories, departments, locations, equipment, employees) เพื่อรวมเอกสารที่ซ้ำกัน และจัดระเบียบให้ชื่อ Document ID ตรงกับ code: ประจำตัวอย่างถูกต้อง และลบเอกสารที่รหัสซ้ำ/random ออก ยืนยันดำเนินการหรือไม่?",
+          message: "ระบบจะสแกนเฉพาะข้อมูลคลัง (categories, locations, equipment) เพื่อรวมเอกสารที่ซ้ำกัน โดยไม่แก้ไขบุคลากรหรือโครงสร้าง ยืนยันดำเนินการหรือไม่?",
           type: "primary",
           icon: "bi-stars",
           confirmText: "เริ่มจัดระเบียบและล้างตัวซ้ำ"
@@ -16976,10 +16918,8 @@
 
       const collectionsToCheck = [
         { name: "categories", codePrefix: "CAT", nameField: "name" },
-        { name: "departments", codePrefix: "DEP", nameField: "name" },
         { name: "locations", codePrefix: "LOC", nameField: "name" },
-        { name: "equipment", codePrefix: "EQ", nameField: "name" },
-        { name: "employees", codePrefix: "EMP", nameField: "name" }
+        { name: "equipment", codePrefix: "EQ", nameField: "name" }
       ];
 
       for (let cIdx = 0; cIdx < collectionsToCheck.length; cIdx++) {
@@ -17115,6 +17055,7 @@
     let parsedExcelEmployeesData = [];
 
     window.triggerImportEmployeeExcel = function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('นำเข้าข้อมูลบุคลากร');
       const fileInput = document.getElementById('excelEmpFileInput');
       if (fileInput) {
         fileInput.value = '';
@@ -17156,6 +17097,10 @@
     };
 
     window.handleImportEmployeeExcel = function(event) {
+      if (MAIN_PERSONNEL_READ_ONLY) {
+        if (event?.target) event.target.value = '';
+        return blockMainPersonnelMutation('นำเข้าข้อมูลบุคลากร');
+      }
       const file = event.target.files && event.target.files[0];
       if (!file) return;
 
@@ -17314,6 +17259,7 @@
     };
 
     window.saveImportedEmployeeExcelData = async function() {
+      if (MAIN_PERSONNEL_READ_ONLY) return blockMainPersonnelMutation('นำเข้าข้อมูลบุคลากร');
       if (!parsedExcelEmployeesData || parsedExcelEmployeesData.length === 0) {
         showToast("ไม่พบรายการพนักงานที่จะนำเข้า");
         return;
@@ -17424,18 +17370,6 @@
       parsedExcelEmployeesData = [];
     };
 
-    window.copyDataFromDefaultToNewDatabase = window.copyDataFromOldDatabases;
-
-    async function runAutoMigration() {
-      if (!localStorage.getItem("firestore_migrated_v4")) {
-        console.log("[AutoMigration] Executing complete data copy from (default) into target database...");
-        const count = await window.copyDataFromOldDatabases(true);
-        if (typeof count === 'number') {
-          localStorage.setItem("firestore_migrated_v4", "true");
-        }
-      }
-    }
-
     // ==================== FLOATING SCROLL NAVIGATION (BACK TO TOP & GO TO BOTTOM) ====================
     window.scrollToPageTop = function() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -17515,10 +17449,8 @@
       document.addEventListener('DOMContentLoaded', () => {
         initApp();
         initScrollNavWatcher();
-        setTimeout(runAutoMigration, 2000);
       });
     } else {
       initApp();
       initScrollNavWatcher();
-      setTimeout(runAutoMigration, 2000);
     }

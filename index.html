@@ -87,6 +87,7 @@
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="global_logo.css">
 </head>
 <body>
 
@@ -96,7 +97,7 @@
       
       <!-- Brand Header -->
       <div class="text-center mb-3">
-        <div class="d-inline-flex align-items-center justify-content-center p-3 bg-white bg-opacity-10 rounded-circle mb-2 shadow">
+        <div class="d-inline-flex align-items-center justify-content-center p-2 bg-white bg-opacity-10 rounded-circle mb-2 shadow" data-flora-logo="badge" data-logo-size="64">
           <i class="bi bi-flower1 display-4 text-warning"></i>
         </div>
         <h2 class="fw-bold text-white mb-1 blink-text">ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย</h2>
@@ -146,19 +147,21 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark navbar-flora sticky-top">
   <div class="container-fluid px-3 px-md-4">
-    <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#">
-      <i class="bi bi-flower1 fs-3 text-warning"></i>
+    <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#" title="คลิกเพื่อจัดการโลโก้องค์กร" onclick="if(typeof openGlobalLogoModal === 'function') { openGlobalLogoModal(); return false; }">
+      <div class="d-flex align-items-center justify-content-center overflow-hidden" data-flora-logo="navbar" data-logo-size="32" style="width: 32px; height: 32px;">
+        <i class="bi bi-flower1 fs-3 text-warning"></i>
+      </div>
       <div>
         <div class="lh-1 fs-5 blink-text">ทดสอบ โครงการทุ่งสวรรค์ ตะวันฉาย</div>
         <small class="text-blue-50 fw-normal fs-8">ระบบพนักงาน และ สต๊อกอุปกรณ์</small>
       </div>
     </a>
 
-    <!-- ปุ่ม ผังโครงสร้างบุคลากร อยู่กึ่งกลางระหว่าง โลโก้ กับ ปุ่มย้อนกลับ -->
+    <!-- ปุ่ม ผังองค์กรและระบบบุคลากร อยู่กึ่งกลางระหว่าง โลโก้ กับ ปุ่มย้อนกลับ -->
     <div class="d-flex align-items-center gap-1.5 mx-auto my-1">
-      <a href="org_chart.html" target="_blank" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" title="เปิดศูนย์ผังโครงสร้างและจัดการบุคลากร (Org Chart)">
+      <a href="org_chart.html" target="_blank" class="btn btn-warning btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm text-dark d-flex align-items-center gap-1.5" title="เปิดศูนย์ผังองค์กรและระบบบุคลากร (Org Chart & Personnel)">
         <i class="bi bi-diagram-3-fill fs-6 text-primary"></i>
-        <span>ผังโครงสร้างบุคลากร (Org Chart)</span>
+        <span>ผังองค์กรและระบบบุคลากร</span>
       </a>
     </div>
 
@@ -199,7 +202,7 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 px-1">
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <i class="bi bi-bar-chart-line-fill text-success fs-5"></i>
-        <span class="fw-bold text-dark fs-7">สรุปข้อมูล สต๊อกอุปกรณ์ บุคลากร</span>
+        <span class="fw-bold text-dark fs-7">สรุปข้อมูลสต๊อกคลังอุปกรณ์</span>
         <!-- Clear Cache Button moved here -->
         <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1 fw-bold shadow-sm d-flex align-items-center gap-1.5" onclick="clearDatabaseCache()" title="ล้างแคชฐานข้อมูลท้องถิ่นเพื่อดึงข้อมูลใหม่จากเซิร์ฟเวอร์ทันที">
           <i class="bi bi-arrow-clockwise fs-7"></i>
@@ -280,12 +283,12 @@
       <div class="col-6 col-md-3">
         <div class="card stat-card p-3 bg-white">
           <div class="d-flex align-items-center">
-            <div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
-              <i class="bi bi-people-fill"></i>
+            <div class="stat-icon bg-danger bg-opacity-10 text-danger me-3">
+              <i class="bi bi-exclamation-triangle-fill"></i>
             </div>
             <div>
-              <div class="text-muted fs-7">บุคลากรทั้งหมด</div>
-              <h4 id="statTotalEmp" class="fw-bold mb-0 text-primary">0</h4>
+              <div class="text-muted fs-7">รายการสต๊อกต่ำ</div>
+              <h4 id="statLowStock" class="fw-bold mb-0 text-danger">0</h4>
             </div>
           </div>
         </div>
@@ -299,12 +302,6 @@
       </li>
       <li class="nav-item staff-only-element d-none" role="presentation">
         <button class="nav-link" id="transaction-tab" data-bs-toggle="tab" data-bs-target="#transaction-pane" type="button" role="tab">บันทึก เบิก-จ่าย-ยืม-คืน</button>
-      </li>
-      <li class="nav-item staff-only-element d-none" role="presentation">
-        <button class="nav-link" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance-pane" type="button" role="tab">ลงเวลาเข้า-ออก/การลา</button>
-      </li>
-      <li class="nav-item staff-only-element d-none" role="presentation">
-        <button class="nav-link" id="employees-tab" data-bs-toggle="tab" data-bs-target="#employees-pane" type="button" role="tab">รายชื่อบุคลากร</button>
       </li>
       <li class="nav-item staff-only-element d-none" role="presentation">
         <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage-pane" type="button" role="tab">จัดการคลังอุปกรณ์ <span id="manageLowStockBadge"></span></button>
@@ -381,12 +378,21 @@
                 <a class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold" href="org_chart.html" target="_blank">
                   <i class="bi bi-diagram-3-fill text-success fs-6"></i>
                   <div>
-                    <div class="lh-1 text-dark fw-bold">ศูนย์ผังโครงสร้างและจัดการบุคลากร (Org Chart)</div>
-                    <small class="text-muted fs-8 fw-normal">เพิ่ม แก้ไข ย้ายสายงาน และพิมพ์ผังความละเอียดสูง</small>
+                    <div class="lh-1 text-dark fw-bold">ศูนย์ผังองค์กรและระบบบุคลากร</div>
+                    <small class="text-muted fs-8 fw-normal">ผังสายงาน ลำดับขั้น จัดการข้อมูลบุคลากร และพิมพ์บัตร</small>
                   </div>
                 </a>
               </li>
-              <li class="admin-only-element d-none"><hr class="dropdown-divider my-1"></li>
+              <li><hr class="dropdown-divider my-1"></li>
+              <li id="globalLogoMenuItem">
+                <button class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold text-warning" onclick="openGlobalLogoModal()" title="จัดการและเลือกไฟล์รูปภาพโลโก้องค์กร (4 มุมผังองค์กร และเมนูหลัก)">
+                  <i class="bi bi-flower1 text-warning fs-6"></i>
+                  <div>
+                    <div class="lh-1 text-dark fw-bold">จัดการโลโก้องค์กร</div>
+                    <small class="text-muted fs-8 fw-normal">เลือกไฟล์รูปภาพโลโก้ใหม่ หรือใช้ทานตะวัน</small>
+                  </div>
+                </button>
+              </li>
               <li class="super-admin-only-element d-none" id="imageOptimizerMenuItem">
                 <button class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center gap-2 fw-semibold text-warning" onclick="openImageOptimizerModal()" title="ตั้งค่าการย่อและบีบอัดรูปภาพก่อนอัปโหลด Storage (เฉพาะ Admin jaru072@gmail.com)">
                   <i class="bi bi-lightning-charge-fill text-warning fs-6"></i>
@@ -415,22 +421,6 @@
                   <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-pencil-square text-primary fs-6"></i>
                     <span>บันทึก เบิก-จ่าย-ยืม-คืน</span>
-                  </div>
-                </button>
-              </li>
-              <li class="staff-only-element d-none">
-                <button class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center justify-content-between fw-semibold" id="gear-item-attendance" onclick="switchNavTab('attendance-tab')">
-                  <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-clock-history text-warning fs-6"></i>
-                    <span>ลงเวลาเข้า-ออก/การลา</span>
-                  </div>
-                </button>
-              </li>
-              <li class="staff-only-element d-none">
-                <button class="dropdown-item rounded-3 py-2 px-3 d-flex align-items-center justify-content-between fw-semibold" id="gear-item-employees" onclick="switchNavTab('employees-tab')">
-                  <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-person-lines-fill text-info fs-6"></i>
-                    <span>รายชื่อบุคลากร</span>
                   </div>
                 </button>
               </li>
@@ -788,7 +778,7 @@
       </div>
 
       <!-- ==================== TAB 3: ATTENDANCE TRACKER ==================== -->
-      <div class="tab-pane fade" id="attendance-pane" role="tabpanel">
+      <div class="tab-pane fade d-none" id="attendance-pane" role="tabpanel" aria-hidden="true">
         <div class="row g-4">
           <!-- Clock In/Out & Leave Form -->
           <div class="col-12 col-lg-5">
@@ -908,7 +898,7 @@
       </div>
 
       <!-- ==================== TAB 4: EMPLOYEES DIRECTORY ==================== -->
-      <div class="tab-pane fade" id="employees-pane" role="tabpanel">
+      <div class="tab-pane fade d-none" id="employees-pane" role="tabpanel" aria-hidden="true">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
           <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2 border-bottom pb-3">
             <div>
@@ -942,12 +932,7 @@
                 </button>
               </div>
 
-              <!-- Import Excel Button (Admin Only) -->
-              <button class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold shadow-sm admin-only-element d-none" onclick="triggerImportEmployeeExcel()" title="นำเข้าข้อมูลพนักงานจากไฟล์ Excel (.xlsx, .xls, .csv)">
-                <i class="bi bi-file-earmark-excel-fill me-1"></i> นำเข้าจาก Excel
-              </button>
-              <input type="file" id="excelEmpFileInput" accept=".xlsx, .xls, .csv" class="d-none" onchange="handleImportEmployeeExcel(event)" />
-
+              <!-- Read-only personnel tools -->
               <button class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold shadow-sm" onclick="openPrintEmployeeBadgeModal('ALL')">
                 <i class="bi bi-printer-fill me-1"></i> สั่งพิมพ์บัตร
               </button>
@@ -982,19 +967,13 @@
                 </div>
                 <div>
                   <span class="fs-7 text-dark fw-bold">เลือกบุคลากรอยู่ <span id="empSelectedCountText" class="badge bg-primary fs-7 rounded-pill px-2.5">0</span> คน</span>
-                  <small class="text-muted d-block fs-8">เลือกหลายรายการพร้อมกัน สามารถอัปเดตแผนก ตำแหน่ง หรือพิมพ์บัตรแบบกลุ่มได้ทันที</small>
+                  <small class="text-muted d-block fs-8">เลือกหลายรายการเพื่อพิมพ์บัตรแบบกลุ่ม</small>
                 </div>
               </div>
 
               <div class="d-flex flex-wrap align-items-center gap-2">
-                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="openBulkUpdateEmpModal()">
-                  <i class="bi bi-pencil-square me-1"></i> แก้ไขแผนก / ตำแหน่งแบบกลุ่ม
-                </button>
                 <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="executeBulkPrintBadges()">
                   <i class="bi bi-printer-fill me-1"></i> พิมพ์บัตรรายการที่เลือก
-                </button>
-                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5 fw-bold shadow-sm" onclick="executeBulkDeleteEmployees()">
-                  <i class="bi bi-trash-fill me-1"></i> ลบที่เลือก
                 </button>
                 <button type="button" class="btn btn-sm btn-link text-muted fw-semibold text-decoration-none" onclick="clearEmployeeSelections()">
                   <i class="bi bi-x-circle me-1"></i> ยกเลิกการเลือก
@@ -1017,7 +996,7 @@
                   <th class="py-3">แผนก (Department)</th>
                   <th class="py-3">ตำแหน่ง / รายละเอียด</th>
                   <th class="py-3">เบอร์โทรศัพท์</th>
-                  <th class="text-center py-3" style="width: 180px;">จัดการ</th>
+                  <th class="text-center py-3" style="width: 180px;">เครื่องมือ</th>
                 </tr>
               </thead>
               <tbody id="employeeTableBody">
@@ -3507,150 +3486,12 @@
                 <i class="bi bi-person-x-fill text-danger display-5 mb-2"></i>
                 <h6 class="fw-bold text-danger mb-1">ไม่พบรายชื่อพนักงานในระบบ</h6>
                 <p class="text-muted fs-8 mb-3">รหัส/ชื่อที่ค้นหา: <span id="scannedEmpUnknownCodeText" class="font-monospace fw-bold text-dark"></span></p>
-                <button class="btn btn-success btn-sm rounded-pill fw-bold w-100 py-2" onclick="openAddEmployeeModalFromScanner()">
-                  <i class="bi bi-person-plus-fill me-1"></i> เพิ่มพนักงานใหม่ในระบบ
-                </button>
+                <a class="btn btn-primary btn-sm rounded-pill fw-bold w-100 py-2" href="org_chart.html" target="_blank">
+                  <i class="bi bi-diagram-3-fill me-1"></i> เปิดผังโครงสร้างบุคลากร
+                </a>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== MODAL: DATABASE INSPECTOR (นำทางดูฐานข้อมูล) ==================== -->
-  <div class="modal fade" id="databaseInspectorModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-      <div class="modal-content border-0 shadow-lg rounded-4">
-        <div class="modal-header bg-dark text-white p-3">
-          <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-hdd-rack-fill fs-4 text-info"></i>
-            <div>
-              <h5 class="modal-title fw-bold mb-0">ศูนย์ควบคุมและสำรวจฐานข้อมูล (Database Inspector)</h5>
-              <small class="text-white-50 fs-8">ตำแหน่งที่จัดเก็บข้อมูล: Browser LocalStorage & Cloud Firestore Collections</small>
-            </div>
-          </div>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body p-4 bg-light">
-          <!-- Database Architecture Card -->
-          <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white border-start border-4 border-success">
-                <div class="d-flex align-items-center gap-3">
-                  <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle">
-                    <i class="bi bi-cpu-fill fs-3"></i>
-                  </div>
-                  <div>
-                    <h6 class="fw-bold mb-1 text-dark">1. Local Storage</h6>
-                    <p class="fs-7 text-muted mb-0">แคชข้อมูลบนเบราว์เซอร์ เพิ่ม/แก้ไข/ลบ ข้อมูลจะคงอยู่อย่างถาวร</p>
-                    <span class="badge bg-success mt-2">Status: Active & Persistent 🟢</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white border-start border-4 border-info">
-                <div class="d-flex align-items-center gap-3">
-                  <div class="bg-info bg-opacity-10 text-info p-3 rounded-circle">
-                    <i class="bi bi-cloud-check-fill fs-3 text-info"></i>
-                  </div>
-                  <div>
-                    <h6 class="fw-bold mb-1 text-dark">2. Cloud Firestore</h6>
-                    <p class="fs-7 text-muted mb-0">คอลเลกชัน: <code>employees</code>, <code>equipment</code>, <code>transactions</code></p>
-                    <span class="badge bg-info text-dark mt-2">Project: flora-gaden 🟢</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white border-start border-4 border-warning">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle">
-                      <i class="bi bi-images fs-3 text-warning"></i>
-                    </div>
-                    <div>
-                      <h6 class="fw-bold mb-1 text-dark">3. Firebase Storage</h6>
-                      <p class="fs-7 text-muted mb-0">คลังรูปภาพ: <code>equipment_images</code> & <code>employee_photos</code></p>
-                      <div class="d-flex align-items-center gap-2 mt-2">
-                        <span class="badge bg-warning text-dark">Bucket 🟢</span>
-                        <button id="imageOptimizerStorageBtn" type="button" class="btn btn-sm btn-outline-warning rounded-pill px-2 py-0 fs-8 fw-bold super-admin-only-element d-none" onclick="openImageOptimizerModal()" title="ตั้งค่าระบบบีบอัดและย่อรูปภาพอัตโนมัติ (เฉพาะ Admin jaru072@gmail.com)">
-                          <i class="bi bi-lightning-charge-fill me-1"></i> ตั้งค่าการบีบอัดรูปภาพ
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Collection Tabs & Data Explorer -->
-          <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-            <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
-              <ul class="nav nav-pills" id="dbTab" role="tablist">
-                <li class="nav-item">
-                  <button class="nav-link active rounded-pill px-3 fs-7 fw-bold" id="db-emp-tab" data-bs-toggle="tab" data-bs-target="#db-emp-pane" type="button">
-                    <i class="bi bi-people-fill me-1"></i> employees (<span id="dbCountEmp">0</span>)
-                  </button>
-                </li>
-                <li class="nav-item">
-                  <button class="nav-link rounded-pill px-3 fs-7 fw-bold" id="db-equip-tab" data-bs-toggle="tab" data-bs-target="#db-equip-pane" type="button">
-                    <i class="bi bi-box-seam-fill me-1"></i> equipment (<span id="dbCountEquip">0</span>)
-                  </button>
-                </li>
-                <li class="nav-item">
-                  <button class="nav-link rounded-pill px-3 fs-7 fw-bold" id="db-tx-tab" data-bs-toggle="tab" data-bs-target="#db-tx-pane" type="button">
-                    <i class="bi bi-card-checklist me-1"></i> transactions (<span id="dbCountTx">0</span>)
-                  </button>
-                </li>
-                <li class="nav-item">
-                  <button class="nav-link rounded-pill px-3 fs-7 fw-bold" id="db-att-tab" data-bs-toggle="tab" data-bs-target="#db-att-pane" type="button">
-                    <i class="bi bi-clock-history me-1"></i> attendance (<span id="dbCountAtt">0</span>)
-                  </button>
-                </li>
-              </ul>
-
-              <div class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-outline-info btn-sm rounded-pill px-3 fs-7" onclick="window.copyDataFromOldDatabases(true)" title="ดึงคัดลอกข้อมูลจากฐานข้อมูลเดิมและ default มาใส่ในฐานข้อมูลใหม่">
-                  <i class="bi bi-cloud-download me-1"></i> ดึงข้อมูลจากฐานข้อมูลเดิม
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fs-7" onclick="exportDatabaseJson()">
-                  <i class="bi bi-download me-1"></i> ส่งออก JSON
-                </button>
-                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 fs-7" onclick="scanAndCleanupOrphanedStorageImages()" title="สแกนหาไฟล์รูปภาพขยะที่ไม่ถูกใช้ใน Firestore แล้วลบออกจาก Storage">
-                  <i class="bi bi-broom me-1"></i> สแกนและลบรูปขยะ
-                </button>
-                <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fs-7" onclick="purgeEntireDatabaseAndStorage()" title="ลบข้อมูลเอกสารทั้งหมดใน Firestore และระบบ (ไม่ลบรูปภาพใน Storage)">
-                  <i class="bi bi-trash3-fill me-1"></i> ลบฐานข้อมูลทั้งหมด
-                </button>
-              </div>
-            </div>
-
-            <!-- Tab Content JSON Viewer -->
-            <div class="tab-content border rounded-3 p-3 bg-dark text-light overflow-auto" style="max-height: 380px;">
-              <div class="tab-pane fade show active" id="db-emp-pane" role="tabpanel">
-                <pre class="mb-0 text-success fs-7" id="dbEmpJsonCode">// Loading employees collection JSON...</pre>
-              </div>
-              <div class="tab-pane fade" id="db-equip-pane" role="tabpanel">
-                <pre class="mb-0 text-info fs-7" id="dbEquipJsonCode">// Loading equipment collection JSON...</pre>
-              </div>
-              <div class="tab-pane fade" id="db-tx-pane" role="tabpanel">
-                <pre class="mb-0 text-warning fs-7" id="dbTxJsonCode">// Loading transactions collection JSON...</pre>
-              </div>
-              <div class="tab-pane fade" id="db-att-pane" role="tabpanel">
-                <pre class="mb-0 text-primary fs-7" id="dbAttJsonCode">// Loading attendance collection JSON...</pre>
-              </div>
-            </div>
-          </div>
-
-        </div>
-        <div class="modal-footer bg-white">
-          <button type="button" class="btn btn-secondary rounded-pill px-4 fw-semibold" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
         </div>
       </div>
     </div>
@@ -4862,9 +4703,6 @@
             <button class="btn btn-outline-light btn-sm rounded-pill fw-semibold fs-8" onclick="openBackupRestoreModalFromDbEditor()">
               <i class="bi bi-download me-1"></i> สำรอง/กู้คืน JSON
             </button>
-            <button class="btn btn-danger btn-sm rounded-pill fw-semibold fs-8" onclick="purgeEntireDatabaseAndStorage()" title="ลบข้อมูลเอกสารทั้งหมดในระบบและ Firestore (ไม่ลบรูปภาพใน Storage)">
-              <i class="bi bi-trash3-fill me-1"></i> ลบฐานข้อมูลทั้งหมด
-            </button>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
         </div>
@@ -4881,7 +4719,7 @@
                   <span class="badge bg-light text-dark ms-1" id="dbBadgeEquip">0</span>
                 </button>
               </li>
-              <li class="nav-item">
+              <li class="nav-item d-none" aria-hidden="true">
                 <button class="nav-link btn-sm rounded-pill py-1.5 px-3 fw-bold fs-7 d-flex align-items-center gap-1.5" id="pill-employees" onclick="switchDbCollection('employees')">
                   <i class="bi bi-people-fill text-primary"></i>
                   <span>บุคลากร</span>
@@ -4895,7 +4733,7 @@
                   <span class="badge bg-light text-dark ms-1" id="dbBadgeTx">0</span>
                 </button>
               </li>
-              <li class="nav-item">
+              <li class="nav-item d-none" aria-hidden="true">
                 <button class="nav-link btn-sm rounded-pill py-1.5 px-3 fw-bold fs-7 d-flex align-items-center gap-1.5" id="pill-attendance" onclick="switchDbCollection('attendance')">
                   <i class="bi bi-clock-history text-info"></i>
                   <span>ประวัติลงเวลา</span>
@@ -4905,7 +4743,7 @@
               <li class="nav-item">
                 <button class="nav-link btn-sm rounded-pill py-1.5 px-3 fw-bold fs-7 d-flex align-items-center gap-1.5" id="pill-categories" onclick="switchDbCollection('categories')">
                   <i class="bi bi-tags-fill text-secondary"></i>
-                  <span>หมวดหมู่ & แผนก</span>
+                  <span>หมวดหมู่คลัง</span>
                   <span class="badge bg-light text-dark ms-1" id="dbBadgeCat">0</span>
                 </button>
               </li>
@@ -4917,7 +4755,7 @@
                 <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="dbSearchInput" class="form-control border-start-0 bg-light fs-8" placeholder="ค้นหาข้อมูล..." oninput="renderDbEditorTable()" />
               </div>
-              <button class="btn btn-success btn-sm rounded-pill fw-semibold px-3" onclick="openAddNewDbRecordModal()">
+              <button id="dbAddRecordButton" class="btn btn-success btn-sm rounded-pill fw-semibold px-3" onclick="openAddNewDbRecordModal()">
                 <i class="bi bi-plus-lg me-1"></i> เพิ่มรายการ
               </button>
             </div>
@@ -5396,6 +5234,7 @@
 
 
   <!-- Application Main Logic -->
+  <script type="module" src="/global_logo.js"></script>
   <script type="module" src="script.js"></script>
   <script type="module" src="backup_restore.js"></script>
 
