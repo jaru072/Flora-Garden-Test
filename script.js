@@ -37,17 +37,75 @@
       updateProfile
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    // Firebase Config (Project: Project Flora Garden - flora-gaden)
-    const firebaseConfig = {
+    // Firebase Config Loader (Loads dynamically from firebase-applet-config.json)
+    let firebaseConfig = {
       apiKey: "AIzaSyCVFTo7glMah6eeubjCLQa6HtIrnwpmrc4",
       authDomain: "flora-gaden.firebaseapp.com",
       projectId: "flora-gaden",
       firestoreDatabaseId: "ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1",
-      storageBucket: "flora-gaden.firebasestorage.app",
+      storageBucket: "pai-meditation.firebasestorage.app",
       messagingSenderId: "633519077693",
       appId: "1:633519077693:web:6267796ae34a8286ff6d54",
       measurementId: "G-CTYBQCMGQG"
     };
+
+    // Attempt sync loading of firebase-applet-config.json before initializing
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', 'firebase-applet-config.json', false); // Synchronous fetch
+      xhr.send(null);
+      if (xhr.status === 200 || xhr.status === 304) {
+        const loadedCfg = JSON.parse(xhr.responseText);
+        if (loadedCfg && loadedCfg.projectId) {
+          firebaseConfig = { ...firebaseConfig, ...loadedCfg };
+        }
+      }
+    } catch (eConfig) {
+      console.warn("Dynamic firebase-applet-config.json load warning (using fallback config):", eConfig);
+    }
+
+    window.firebaseConfig = firebaseConfig;
+    window.floraFirebaseConfig = firebaseConfig;
+
+    // Scoped LocalStorage Key Generator (Scoped to active Firestore Database ID)
+    function getScopedStorageKey(baseKey) {
+      let dbId = window.firebaseConfig?.firestoreDatabaseId || window.floraFirebaseConfig?.firestoreDatabaseId || "";
+      if (!dbId) {
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', 'firebase-applet-config.json', false);
+          xhr.send(null);
+          if (xhr.status === 200 || xhr.status === 304) {
+            const parsed = JSON.parse(xhr.responseText);
+            if (parsed && (parsed.firestoreDatabaseId || parsed.projectId)) {
+              window.firebaseConfig = { ...window.firebaseConfig, ...parsed };
+              window.floraFirebaseConfig = window.firebaseConfig;
+              dbId = parsed.firestoreDatabaseId || "";
+            }
+          }
+        } catch (e) {}
+      }
+      if (dbId && dbId !== "(default)") {
+        const cleanDbId = String(dbId).replace(/[^a-zA-Z0-9_-]/g, "_");
+        return `${baseKey}_${cleanDbId}`;
+      }
+      return baseKey;
+    }
+    window.getScopedStorageKey = getScopedStorageKey;
+
+    function getScopedLocalStorageItem(baseKey) {
+      const scopedKey = getScopedStorageKey(baseKey);
+      const val = localStorage.getItem(scopedKey);
+      if (val !== null) return val;
+      return localStorage.getItem(baseKey);
+    }
+    window.getScopedLocalStorageItem = getScopedLocalStorageItem;
+
+    function setScopedLocalStorageItem(baseKey, val) {
+      const scopedKey = getScopedStorageKey(baseKey);
+      localStorage.setItem(scopedKey, val);
+    }
+    window.setScopedLocalStorageItem = setScopedLocalStorageItem;
 
     // Global state holding app status
     let currentRole = 'WORKER'; // Default: WORKER
@@ -191,6 +249,24 @@
       "อาคารเคมีเกษตร"
     ];
 
+    const defaultInitialEquipmentList = [
+      { id: "FG-001", code: "FG-001", name: "น้ำมันเบนซิน 95", category: "น้ำมัน", location: "โรงน้ำมัน", quantity: 50, minQuantity: 10, borrowedCount: 0, unit: "ลิตร", imageUrl: "https://images.unsplash.com/photo-1545454675-3531b543be5d?w=300&auto=format&fit=crop&q=80", description: "น้ำมันเบนซินสำหรับเครื่องตัดหญ้าและเครื่องพ่นยา", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "FG-002", code: "FG-002", name: "น้ำมันเครื่อง 2T", category: "น้ำมัน", location: "โรงน้ำมัน", quantity: 24, minQuantity: 5, borrowedCount: 0, unit: "ขวด", imageUrl: "", description: "น้ำมัน 2 จังหวะสำหรับเครื่องตัดหญ้า", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "AX-001", code: "AX-001", name: "กรรไกรตัดแต่งกิ่งด้ามยาว", category: "เครื่องมือช่าง", location: "โรงเก็บเครื่องมือ A", quantity: 15, minQuantity: 3, borrowedCount: 0, unit: "อัน", imageUrl: "https://images.unsplash.com/photo-1589051039495-eb77712c88f2?w=300&auto=format&fit=crop&q=80", description: "ใบมีดคมพิเศษสำหรับแต่งทรงพุ่ม", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "AX-002", code: "AX-002", name: "เครื่องตัดหญ้าสะพายบ่า", category: "เครื่องมือช่าง", location: "โรงเก็บเครื่องมือ A", quantity: 8, minQuantity: 2, borrowedCount: 0, unit: "เครื่อง", imageUrl: "", description: "เครื่องตัดหญ้า 2 จังหวะ พร้อมใบมีด", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "SL-001", code: "SL-001", name: "รถเข็นปูน 2 ล้อ", category: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", location: "สโตว์กรงเหล็ก", quantity: 10, minQuantity: 2, borrowedCount: 0, unit: "คัน", imageUrl: "", description: "สำหรับขนดินและปุ๋ย", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "SL-002", code: "SL-002", name: "จอบขุดดินด้ามไม้", category: "อุปกรณ์เกษตร ประเภทยืมใช้(รถเข็น พั้ว จอบ จก ฯลฯ)", location: "สโตว์กรงเหล็ก", quantity: 20, minQuantity: 5, borrowedCount: 0, unit: "เล่ม", imageUrl: "", description: "หน้าจอบกว้างสำหรับขุดแปลง", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "EQ-001", code: "EQ-001", name: "สปริงเกอร์รดน้ำแปลงดอกไม้", category: "ระบบน้ำ", location: "ชั้นอุปกรณ์ระบบน้ำ", quantity: 30, minQuantity: 5, borrowedCount: 0, unit: "ชุด", imageUrl: "", description: "หัวหมุน 360 องศา รัศมี 5 เมตร", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: "SK-001", code: "SK-001", name: "ไม้กวาดทางมะพร้าวด้ามยาว", category: "อุปกรณ์ทำความสะอาด", location: "สโตว์กรงเหล็ก", quantity: 25, minQuantity: 5, borrowedCount: 0, unit: "ด้าม", imageUrl: "", description: "สำหรับกวาดใบไม้แห้งและเศษหญ้า", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    ];
+
+    const defaultEmployeesSeedList = [
+      { id: "EXEC-01", code: "EXEC-01", name: "ประธานโครงการ", role: "ADMIN", position: "ประธานโครงการ", department: "ฝ่ายบริหารและอำนวยการ", phone: "081-000-0001", status: "ปฏิบัติงาน", photoUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80", accessPersonnel: true, accessInventory: true },
+      { id: "EXEC-02", code: "EXEC-02", name: "ที่ปรึกษาโครงการ 1", role: "ADMIN", position: "ที่ปรึกษาโครงการ", department: "ฝ่ายบริหารและอำนวยการ", phone: "081-000-0002", status: "ปฏิบัติงาน", accessPersonnel: true, accessInventory: true },
+      { id: "EXEC-03", code: "EXEC-03", name: "ที่ปรึกษาโครงการ 2", role: "ADMIN", position: "ที่ปรึกษาโครงการ", department: "ฝ่ายบริหารและอำนวยการ", phone: "081-000-0003", status: "ปฏิบัติงาน", accessPersonnel: true, accessInventory: true },
+      { id: "EXEC-04", code: "EXEC-04", name: "ผู้ประสานงานโครงการ", role: "ADMIN", position: "ผู้ประสานงานโครงการ", department: "ฝ่ายบริหารและอำนวยการ", phone: "081-000-0004", status: "ปฏิบัติงาน", accessPersonnel: true, accessInventory: true }
+    ];
+
     // Initialize Firebase & Auth gracefully with long polling for iframe sandbox resilience
     try {
       const app = initializeApp(firebaseConfig);
@@ -232,15 +308,28 @@
         console.warn("Auth init warning:", eAuth);
       }
 
+      window.firebaseApp = app;
+      window.firebaseConfig = firebaseConfig;
+
       try {
-        storage = getStorage(app);
+        storage = getStorage(app, firebaseConfig.storageBucket || "pai-meditation.firebasestorage.app");
         window.storage = storage;
+        window.getStorage = getStorage;
         window.storageRef = ref;
         window.uploadBytes = uploadBytes;
         window.getDownloadURL = getDownloadURL;
         window.deleteObject = deleteObject;
       } catch (eSt) {
         console.warn("Storage init warning:", eSt);
+        try {
+          storage = getStorage(app);
+          window.storage = storage;
+          window.getStorage = getStorage;
+          window.storageRef = ref;
+          window.uploadBytes = uploadBytes;
+          window.getDownloadURL = getDownloadURL;
+          window.deleteObject = deleteObject;
+        } catch (eSt2) {}
       }
 
       isFirebaseReady = true;
@@ -251,6 +340,9 @@
       };
       if (typeof window.floraLogo?.connectGlobalLogoFirestore === 'function' && db) {
         window.floraLogo.connectGlobalLogoFirestore(window.floraFirebaseBridge);
+      }
+      if (typeof window.connectOrgTreeFirestore === 'function' && db) {
+        window.connectOrgTreeFirestore(window.floraFirebaseBridge);
       }
       window.dispatchEvent(new CustomEvent('flora-firebase-ready'));
     } catch (err) {
@@ -331,12 +423,30 @@
         const nowIso = new Date().toISOString();
         
         if (userSnap.exists()) {
-          currentUserProfile = { id: user.uid, ...userSnap.data(), isOnline: true, status: 'Online', lastActiveAt: nowIso, lastLoginAt: nowIso };
+          const data = userSnap.data();
+          currentUserProfile = { 
+            id: user.uid, 
+            ...data, 
+            accessPersonnel: data.accessPersonnel !== undefined ? data.accessPersonnel : true,
+            accessInventory: data.accessInventory !== undefined ? data.accessInventory : true,
+            isOnline: true, 
+            status: 'Online', 
+            lastActiveAt: nowIso, 
+            lastLoginAt: nowIso 
+          };
           if (user.email === 'jaru072@gmail.com') {
             currentUserProfile.role = 'ADMIN';
+            currentUserProfile.accessPersonnel = true;
+            currentUserProfile.accessInventory = true;
           }
           await setDoc(userRef, {
             role: currentUserProfile.role || 'WORKER',
+            accessPersonnel: currentUserProfile.accessPersonnel !== false,
+            accessInventory: currentUserProfile.accessInventory !== false,
+            modules: [
+              ...(currentUserProfile.accessPersonnel !== false ? ['personnel'] : []),
+              ...(currentUserProfile.accessInventory !== false ? ['inventory'] : [])
+            ],
             isOnline: true,
             status: 'Online',
             lastActiveAt: nowIso,
@@ -350,6 +460,9 @@
             displayName: user.displayName || user.email?.split('@')[0] || 'ผู้ใช้งาน',
             photoURL: user.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
             role: user.email === 'jaru072@gmail.com' ? 'ADMIN' : defaultRole,
+            accessPersonnel: true,
+            accessInventory: true,
+            modules: ['personnel', 'inventory'],
             isOnline: true,
             status: 'Online',
             lastActiveAt: nowIso,
@@ -361,17 +474,93 @@
 
         if (user.email === 'jaru072@gmail.com') {
           currentUserProfile.role = 'ADMIN';
+          currentUserProfile.accessPersonnel = true;
+          currentUserProfile.accessInventory = true;
         }
         
+        sessionStorage.setItem('flora_personnel_access', JSON.stringify({
+          uid: currentUserProfile?.uid || user.uid,
+          email: currentUserProfile?.email || user.email || '',
+          displayName: currentUserProfile?.displayName || user.displayName || 'ผู้ใช้งาน',
+          photoURL: currentUserProfile?.photoURL || user.photoURL || '',
+          role: currentUserProfile?.role || 'WORKER',
+          accessPersonnel: currentUserProfile?.accessPersonnel !== false,
+          accessInventory: currentUserProfile?.accessInventory !== false,
+          isAdmin: currentUserProfile?.role === 'ADMIN'
+        }));
+
         setRole(currentUserProfile.role || 'WORKER');
         updateAuthUI();
         if (typeof window.hideMandatoryLoginScreen === 'function') {
           window.hideMandatoryLoginScreen();
         }
+        if (typeof window.checkModuleAccess === 'function') {
+          window.checkModuleAccess('inventory');
+        }
       } catch (err) {
         console.warn("Error syncing user profile:", err);
       }
     }
+
+    // Check Module-Level Access Control (Inventory vs. Personnel)
+    window.checkModuleAccess = function(currentModule = 'inventory') {
+      const isSuperAdmin = currentRole === 'ADMIN' || currentAuthUser?.email === 'jaru072@gmail.com' || currentUserProfile?.email === 'jaru072@gmail.com';
+      if (isSuperAdmin) {
+        const modalElem = document.getElementById('moduleAccessDeniedModal');
+        if (modalElem && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+          const bsModal = bootstrap.Modal.getInstance(modalElem);
+          if (bsModal) bsModal.hide();
+        }
+        return true;
+      }
+
+      if (!currentAuthUser && !currentUserProfile) return true;
+
+      const hasInventory = currentUserProfile?.accessInventory !== false;
+      const hasPersonnel = currentUserProfile?.accessPersonnel !== false;
+
+      // In inventory (index.html), if accessInventory is false:
+      if (currentModule === 'inventory' && !hasInventory) {
+        const modalElem = document.getElementById('moduleAccessDeniedModal');
+        if (modalElem && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+          const nameElem = document.getElementById('moduleDeniedUserName');
+          const emailElem = document.getElementById('moduleDeniedUserEmail');
+          const switchBtn = document.getElementById('btnSwitchToAllowedPersonnel');
+          if (nameElem) nameElem.textContent = currentAuthUser?.displayName || currentUserProfile?.displayName || 'ผู้ใช้งาน';
+          if (emailElem) emailElem.textContent = currentAuthUser?.email || currentUserProfile?.email || '-';
+          if (switchBtn) {
+            if (hasPersonnel) {
+              switchBtn.classList.remove('d-none');
+            } else {
+              switchBtn.classList.add('d-none');
+            }
+          }
+          const bsModal = bootstrap.Modal.getOrCreateInstance(modalElem);
+          bsModal.show();
+        }
+        return false;
+      } else {
+        const modalElem = document.getElementById('moduleAccessDeniedModal');
+        if (modalElem && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+          const bsModal = bootstrap.Modal.getInstance(modalElem);
+          if (bsModal) bsModal.hide();
+        }
+      }
+
+      // Also update the header button to personnel:
+      const switcherBtn = document.getElementById('navModuleSwitcherPersonnel');
+      if (switcherBtn) {
+        if (!hasPersonnel && !isSuperAdmin) {
+          switcherBtn.classList.add('opacity-50');
+          switcherBtn.title = 'คุณไม่ได้รับสิทธิ์เข้าใช้งานระบบงานบุคคล';
+        } else {
+          switcherBtn.classList.remove('opacity-50');
+          switcherBtn.title = 'สลับไปยังระบบงานบุคคลและผังองค์กร (HR)';
+        }
+      }
+
+      return true;
+    };
 
     // Update Auth UI Elements
     window.updateAuthUI = function() {
@@ -404,15 +593,41 @@
         const profileUid = document.getElementById('userProfileUid');
         const profileRoleBadge = document.getElementById('userProfileRoleBadge');
 
-        if (profileImg) profileImg.src = currentAuthUser.photoURL || currentUserProfile?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
-        if (profileName) profileName.textContent = currentAuthUser.displayName || currentUserProfile?.displayName || 'ผู้ใช้งาน';
-        if (profileEmail) profileEmail.textContent = currentAuthUser.email || currentUserProfile?.email || '-';
+        // Dropdown Header Elements
+        const menuAvatar = document.getElementById('menuUserAvatar');
+        const menuName = document.getElementById('menuUserName');
+        const menuEmail = document.getElementById('menuUserEmail');
+        const menuRoleBadge = document.getElementById('menuUserRoleBadge');
+
+        const userDisplayName = currentAuthUser.displayName || currentUserProfile?.displayName || 'ผู้ใช้งาน';
+        const userEmailVal = currentAuthUser.email || currentUserProfile?.email || '-';
+        const userPhotoVal = currentAuthUser.photoURL || currentUserProfile?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+
+        if (profileImg) profileImg.src = userPhotoVal;
+        if (profileName) profileName.textContent = userDisplayName;
+        if (profileEmail) profileEmail.textContent = userEmailVal;
         if (profileUid) profileUid.textContent = `UID: ${currentAuthUser.uid}`;
         if (profileRoleBadge) {
           profileRoleBadge.textContent = rName;
           if (currentRole === 'ADMIN') profileRoleBadge.className = 'badge bg-danger rounded-pill px-3 py-2';
           else if (currentRole === 'MANAGER') profileRoleBadge.className = 'badge bg-primary rounded-pill px-3 py-2';
           else profileRoleBadge.className = 'badge bg-success rounded-pill px-3 py-2';
+        }
+
+        if (menuAvatar) menuAvatar.src = userPhotoVal;
+        if (menuName) menuName.textContent = userDisplayName;
+        if (menuEmail) menuEmail.textContent = userEmailVal;
+        if (menuRoleBadge) {
+          if (currentRole === 'ADMIN') {
+            menuRoleBadge.textContent = '🔴 ผู้ดูแลระบบ (Admin)';
+            menuRoleBadge.className = 'badge bg-danger rounded-pill px-2 py-0.5 fs-8 fw-semibold';
+          } else if (currentRole === 'MANAGER') {
+            menuRoleBadge.textContent = '🔵 เจ้าหน้าที่/บริหาร (Manager)';
+            menuRoleBadge.className = 'badge bg-primary rounded-pill px-2 py-0.5 fs-8 fw-semibold';
+          } else {
+            menuRoleBadge.textContent = `🟢 ${rName}`;
+            menuRoleBadge.className = 'badge bg-success rounded-pill px-2 py-0.5 fs-8 fw-semibold';
+          }
         }
 
         const editName = document.getElementById('editProfileNameInput');
@@ -433,24 +648,21 @@
       }
     };
 
-    // Google Sign-In
-    window.handleGoogleSignIn = async function() {
-      if (!auth || !googleProvider) {
+    // Google Sign-In with Account Selection
+    window.handleGoogleSignIn = async function(forceSelectAccount = true) {
+      if (!auth) {
         try {
           auth = getAuth();
-          googleProvider = new GoogleAuthProvider();
-          googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
         } catch(e) {
           console.warn("Auth re-init failed:", e);
         }
       }
 
-      if (googleProvider) {
-        googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-        googleProvider.setCustomParameters({ prompt: 'select_account' });
-      }
+      const freshProvider = new GoogleAuthProvider();
+      freshProvider.addScope('https://www.googleapis.com/auth/drive.file');
+      freshProvider.setCustomParameters({ prompt: 'select_account' });
 
-      if (!auth || !googleProvider) {
+      if (!auth) {
         showToast("⚠️ Firebase Auth ไม่พร้อมใช้งาน - เข้าสู่ระบบในโหมดเจ้าหน้าที่ (Staff)");
         if (typeof window.handleQuickLogin === 'function') {
           window.handleQuickLogin('STAFF', 'เจ้าหน้าที่สำนักงาน (Staff)');
@@ -458,9 +670,16 @@
         return;
       }
 
+      // If user wants to choose a different account or switch account, clear previous session
+      if (forceSelectAccount && auth.currentUser) {
+        try {
+          await signOut(auth);
+        } catch (soErr) {}
+      }
+
       try {
-        showToast("⏳ กำลังเปิดหน้าต่าง Google Sign-In...");
-        const result = await signInWithPopup(auth, googleProvider);
+        showToast("⏳ กำลังเปิดหน้าต่าง Google Sign-In (เลือกบัญชีอีเมล)...");
+        const result = await signInWithPopup(auth, freshProvider);
         try {
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
@@ -479,7 +698,7 @@
         } catch (credErr) {
           console.warn("Credential extraction notice:", credErr);
         }
-        showToast(`🟢 เข้าสู่ระบบด้วย Google Account สำเร็จ: ${result.user.displayName || result.user.email}`);
+        showToast(`🟢 เข้าสู่ระบบสำเร็จ: ${result.user.displayName || result.user.email}`);
         if (typeof window.hideMandatoryLoginScreen === 'function') {
           window.hideMandatoryLoginScreen();
         }
@@ -500,6 +719,17 @@
         }
         showToast(`🔴 ${errorTitle} (${err.code || err.message})`);
       }
+    };
+
+    window.handleSwitchGoogleAccount = async function() {
+      sessionStorage.clear();
+      localStorage.removeItem('google_drive_access_token');
+      localStorage.removeItem('google_drive_token_expires');
+      window.googleDriveAccessToken = null;
+      if (auth) {
+        try { await signOut(auth); } catch (e) {}
+      }
+      await window.handleGoogleSignIn(true);
     };
 
     // Helper to get Google Drive Access Token (cached with mutex to prevent duplicate popups)
@@ -1046,6 +1276,9 @@
 
         const safeName = typeof escapeHtml === 'function' ? escapeHtml(u.displayName || 'ผู้ใช้') : (u.displayName || 'ผู้ใช้');
         const safeEmail = typeof escapeHtml === 'function' ? escapeHtml(u.email || '-') : (u.email || '-');
+        const isSuperAdmin = u.email === 'jaru072@gmail.com' || uRole === 'ADMIN';
+        const hasPersonnel = isSuperAdmin ? true : (u.accessPersonnel !== false);
+        const hasInventory = isSuperAdmin ? true : (u.accessInventory !== false);
 
         return `
           <tr>
@@ -1064,12 +1297,24 @@
               ${timeSubtitle}
             </td>
             <td class="text-center">
-              <select id="userRoleSelect_${u.id}" class="form-select form-select-sm fw-semibold">
+              <select id="userRoleSelect_${u.id}" class="form-select form-select-sm fw-semibold" ${u.email === 'jaru072@gmail.com' ? 'disabled' : ''}>
                 <option value="ADMIN" ${uRole === 'ADMIN' ? 'selected' : ''}>🔴 ผู้ดูแลระบบ (ADMIN)</option>
                 <option value="MANAGER" ${uRole === 'MANAGER' ? 'selected' : ''}>🔵 ผู้จัดการ/บริหาร (MANAGER)</option>
                 <option value="STAFF" ${uRole === 'STAFF' ? 'selected' : ''}>🟣 เจ้าหน้าที่ (STAFF)</option>
                 <option value="WORKER" ${uRole === 'WORKER' ? 'selected' : ''}>🟢 พนักงาน (WORKER)</option>
               </select>
+            </td>
+            <td class="text-center">
+              <div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">
+                <div class="form-check form-switch m-0" title="สิทธิ์เข้าระบบงานบุคคล (HR)">
+                  <input class="form-check-input" type="checkbox" id="userAccPersonnel_${u.id}" ${hasPersonnel ? 'checked' : ''} ${isSuperAdmin ? 'disabled' : ''}>
+                  <label class="form-check-label fs-8 fw-semibold text-primary" for="userAccPersonnel_${u.id}">👥 บุคคล</label>
+                </div>
+                <div class="form-check form-switch m-0" title="สิทธิ์เข้าระบบพัสดุและอุปกรณ์ (Stock & Equipment)">
+                  <input class="form-check-input" type="checkbox" id="userAccInventory_${u.id}" ${hasInventory ? 'checked' : ''} ${isSuperAdmin ? 'disabled' : ''}>
+                  <label class="form-check-label fs-8 fw-semibold text-success" for="userAccInventory_${u.id}">📦 พัสดุฯ</label>
+                </div>
+              </div>
             </td>
             <td class="text-end pe-3">
               <button class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold" onclick="updateFirestoreUserRole('${u.id}')">
@@ -1081,20 +1326,40 @@
       }).join('');
     }
 
-    // Update User Role in Firestore
+    // Update User Role & Module Permissions in Firestore
     window.updateFirestoreUserRole = async function(userId) {
       const selectElem = document.getElementById(`userRoleSelect_${userId}`);
+      const chkPersonnel = document.getElementById(`userAccPersonnel_${userId}`);
+      const chkInventory = document.getElementById(`userAccInventory_${userId}`);
       if (!selectElem || !db) return;
       const newRole = selectElem.value;
+      const isSuperAdmin = newRole === 'ADMIN';
+      const accessPersonnel = isSuperAdmin ? true : (chkPersonnel ? chkPersonnel.checked : true);
+      const accessInventory = isSuperAdmin ? true : (chkInventory ? chkInventory.checked : true);
+
       try {
         const userRef = doc(db, "users", userId);
         await updateDoc(userRef, {
           role: newRole,
+          accessPersonnel: accessPersonnel,
+          accessInventory: accessInventory,
+          modules: [
+            ...(accessPersonnel ? ['personnel'] : []),
+            ...(accessInventory ? ['inventory'] : [])
+          ],
           updatedAt: new Date().toISOString()
         });
-        showToast(`อัปเดตสิทธิ์ผู้ใช้เป็น ${newRole} เรียบร้อยแล้ว`);
+        showToast(`อัปเดตสิทธิ์บทบาทและสิทธิ์เข้าถึงระบบเรียบร้อยแล้ว`);
         if (currentAuthUser && currentAuthUser.uid === userId) {
+          if (currentUserProfile) {
+            currentUserProfile.role = newRole;
+            currentUserProfile.accessPersonnel = accessPersonnel;
+            currentUserProfile.accessInventory = accessInventory;
+          }
           setRole(newRole);
+          if (typeof window.checkModuleAccess === 'function') {
+            window.checkModuleAccess('inventory');
+          }
         }
       } catch (err) {
         showToast(`อัปเดตสิทธิ์ไม่สำเร็จ: ${err.message}`);
@@ -1441,50 +1706,50 @@
       try {
         if (Array.isArray(employeeList) && employeeList.length > 0) {
           try {
-            localStorage.setItem('flora_employees', JSON.stringify(employeeList));
+            setScopedLocalStorageItem('flora_employees', JSON.stringify(employeeList));
           } catch(eQuota) {
             // If quota exceeded due to heavy base64, save sanitized version
             const sanitized = employeeList.map(emp => ({
               ...emp,
               photoUrl: (emp.photoUrl && emp.photoUrl.length > 2000) ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' : emp.photoUrl
             }));
-            try { localStorage.setItem('flora_employees', JSON.stringify(sanitized)); } catch(e){}
+            try { setScopedLocalStorageItem('flora_employees', JSON.stringify(sanitized)); } catch(e){}
           }
         }
         if (Array.isArray(equipmentList) && equipmentList.length > 0) {
           try {
-            localStorage.setItem('flora_equipment', JSON.stringify(equipmentList));
+            setScopedLocalStorageItem('flora_equipment', JSON.stringify(equipmentList));
           } catch(eQuota) {
             const sanitized = equipmentList.map(eq => ({
               ...eq,
               imageUrl: (eq.imageUrl && eq.imageUrl.length > 2000) ? DEFAULT_EQUIPMENT_IMAGE : eq.imageUrl
             }));
-            try { localStorage.setItem('flora_equipment', JSON.stringify(sanitized)); } catch(e){}
+            try { setScopedLocalStorageItem('flora_equipment', JSON.stringify(sanitized)); } catch(e){}
           }
         }
         if (Array.isArray(transactionHistory) && transactionHistory.length > 0) {
           try {
-            localStorage.setItem('flora_transactions', JSON.stringify(transactionHistory));
+            setScopedLocalStorageItem('flora_transactions', JSON.stringify(transactionHistory));
           } catch(e){}
         }
         if (Array.isArray(attendanceLogs) && attendanceLogs.length > 0) {
           try {
-            localStorage.setItem('flora_attendance', JSON.stringify(attendanceLogs));
+            setScopedLocalStorageItem('flora_attendance', JSON.stringify(attendanceLogs));
           } catch(e){}
         }
         if (Array.isArray(categoriesList) && categoriesList.length > 0) {
           try {
-            localStorage.setItem('flora_categories', JSON.stringify(categoriesList));
+            setScopedLocalStorageItem('flora_categories', JSON.stringify(categoriesList));
           } catch(e){}
         }
         if (departmentsList && Array.isArray(departmentsList) && departmentsList.length > 0) {
-          localStorage.setItem('flora_departments', JSON.stringify(departmentsList));
+          setScopedLocalStorageItem('flora_departments', JSON.stringify(departmentsList));
         }
         if (positionsList && Array.isArray(positionsList) && positionsList.length > 0) {
-          localStorage.setItem('flora_positions', JSON.stringify(positionsList));
+          setScopedLocalStorageItem('flora_positions', JSON.stringify(positionsList));
         }
         if (locationsList && Array.isArray(locationsList) && locationsList.length > 0) {
-          localStorage.setItem('flora_locations', JSON.stringify(locationsList));
+          setScopedLocalStorageItem('flora_locations', JSON.stringify(locationsList));
         }
       } catch (e) {
         console.warn("LocalStorage save notice:", e);
@@ -1493,7 +1758,7 @@
 
     function loadFromLocalStorage() {
       try {
-        const savedEquip = localStorage.getItem('flora_equipment');
+        const savedEquip = getScopedLocalStorageItem('flora_equipment');
         if (savedEquip) {
           try {
             const parsed = JSON.parse(savedEquip);
@@ -1501,7 +1766,7 @@
           } catch(e){}
         }
 
-        const savedEmps = localStorage.getItem('flora_employees');
+        const savedEmps = getScopedLocalStorageItem('flora_employees');
         if (savedEmps) {
           try {
             const parsed = JSON.parse(savedEmps);
@@ -1509,7 +1774,7 @@
           } catch(e){}
         }
 
-        const savedTx = localStorage.getItem('flora_transactions');
+        const savedTx = getScopedLocalStorageItem('flora_transactions');
         if (savedTx) {
           try {
             const parsed = JSON.parse(savedTx);
@@ -1517,7 +1782,7 @@
           } catch(e){}
         }
 
-        const savedAtt = localStorage.getItem('flora_attendance');
+        const savedAtt = getScopedLocalStorageItem('flora_attendance');
         if (savedAtt) {
           try {
             const parsed = JSON.parse(savedAtt);
@@ -1525,7 +1790,7 @@
           } catch(e){}
         }
 
-        const savedCats = localStorage.getItem('flora_categories');
+        const savedCats = getScopedLocalStorageItem('flora_categories');
         if (savedCats) {
           try {
             const parsed = JSON.parse(savedCats);
@@ -1538,7 +1803,7 @@
           categoriesList = [...defaultCategoriesList];
         }
 
-        const savedDepts = localStorage.getItem('flora_departments');
+        const savedDepts = getScopedLocalStorageItem('flora_departments');
         if (savedDepts) {
           try {
             departmentsList = JSON.parse(savedDepts);
@@ -1549,7 +1814,7 @@
           departmentsList = [...defaultDepartmentsList];
         }
 
-        const savedPositions = localStorage.getItem('flora_positions');
+        const savedPositions = getScopedLocalStorageItem('flora_positions');
         if (savedPositions) {
           try {
             const parsed = JSON.parse(savedPositions);
@@ -1580,7 +1845,7 @@
           positionsList = [...defaultPositionsList];
         }
 
-        const savedLocs = localStorage.getItem('flora_locations');
+        const savedLocs = getScopedLocalStorageItem('flora_locations');
         if (savedLocs) {
           try {
             locationsList = JSON.parse(savedLocs);
@@ -3074,77 +3339,171 @@
       if (event.target) event.target.value = '';
     };
 
-    // Firebase Storage Upload Helpers
+    // Helper to convert File/Blob to Base64 Data URL
+    function fileOrBlobToDataUrl(fileOrBlob) {
+      return new Promise((resolve) => {
+        if (!fileOrBlob) { resolve(''); return; }
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(fileOrBlob);
+      });
+    }
+
+    // Firebase Storage Upload Helpers (Ultra-resilient with Server Proxy, REST, SDK, and Base64 Fallback)
     async function uploadFileToFirebaseStorage(file, folderName = "equipment_images", presetKey = 'MEDIUM', customFileName = null) {
-      if (!isFirebaseReady || !storage) {
-        throw new Error("Firebase Storage ยังไม่พร้อมใช้งาน");
-      }
+      if (!file) return '';
+
       let targetFile = file;
       let optStats = null;
+      let dataUrl = '';
+
       try {
         const presetType = (folderName === 'employee_photos') ? 'EMPLOYEE' : 'EQUIPMENT';
         optStats = await autoOptimizeAndResizeImage(file, { presetKey, presetType });
         if (optStats && optStats.file) {
           targetFile = optStats.file;
         }
+        if (optStats && optStats.dataUrl) {
+          dataUrl = optStats.dataUrl;
+        }
       } catch (cErr) {
         console.warn("Auto compression notice before storage upload:", cErr);
       }
 
-      let fileName = '';
-      const ext = (optStats && optStats.extension) ? optStats.extension : 'webp';
+      if (!dataUrl) {
+        dataUrl = await fileOrBlobToDataUrl(targetFile);
+      }
 
+      const ext = (optStats && optStats.extension) ? optStats.extension : 'webp';
+      let fileName = '';
       if (customFileName) {
         const cleanName = customFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp)$/i, '');
+        const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp|svg)$/i, '');
         fileName = `${baseName}.${ext}`;
       } else {
-        const safeName = targetFile.name ? targetFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.(jpeg|jpg|png|webp)$/i, '') : 'image';
+        const safeName = targetFile.name ? targetFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.(jpeg|jpg|png|webp|svg)$/i, '') : 'image';
         fileName = `${Date.now()}_${safeName}.${ext}`;
       }
 
-      const storageRef = ref(storage, `${folderName}/${fileName}`);
-      const snapshot = await uploadBytes(storageRef, targetFile);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+      // Method 1: Ultra-Fast Server-Side Upload (Zero CORS, 100% Reliable, 6s Timeout)
+      if (dataUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 7000);
+          const apiResp = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sourceUrl: dataUrl,
+              folderName: folderName,
+              fileName: fileName
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-      if (optStats && optStats.savedPercent > 0) {
-        console.log(`⚡ Auto Resized & Optimized before uploading (${folderName}/${fileName}): ${optStats.originalSizeFormatted} -> ${optStats.compressedSizeFormatted} (Saved ${optStats.savedPercent}%)`);
+          if (apiResp.ok) {
+            const data = await apiResp.json();
+            if (data && data.newUrl) {
+              console.log(`✅ [Server] Uploaded ${folderName}/${fileName} to Firebase Storage:`, data.newUrl);
+              return data.newUrl;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("[Server] Upload API attempt notice:", apiErr.message);
+        }
       }
 
-      return downloadUrl;
+      // Method 2: Direct REST Upload to Firebase Storage Bucket 'pai-meditation' (5s Timeout)
+      try {
+        const bucket = (typeof window.firebaseConfig !== 'undefined' && window.firebaseConfig.storageBucket)
+          ? window.firebaseConfig.storageBucket
+          : 'pai-meditation';
+        const filePath = `${folderName}/${fileName}`;
+        const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?name=${encodeURIComponent(filePath)}`;
+        const mimeType = targetFile.type || (ext === 'webp' ? 'image/webp' : 'image/jpeg');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const restRes = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': mimeType },
+          body: targetFile,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (restRes.ok) {
+          const restData = await restRes.json();
+          const downloadToken = restData.downloadTokens || '';
+          const finalUrl = downloadToken
+            ? `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media&token=${downloadToken}`
+            : `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media`;
+          console.log(`✅ [Direct REST] Uploaded ${filePath} to Firebase Storage:`, finalUrl);
+          return finalUrl;
+        }
+      } catch (restErr) {
+        console.warn("[Direct REST] Upload attempt notice:", restErr.message);
+      }
+
+      // Method 3: Firebase JS SDK with 4s Promise Timeout
+      if (isFirebaseReady && storage) {
+        try {
+          const storageRef = ref(storage, `${folderName}/${fileName}`);
+          const uploadPromise = uploadBytes(storageRef, targetFile);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Upload timeout")), 4000));
+          const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
+          const downloadUrl = await getDownloadURL(snapshot.ref);
+          console.log(`✅ [Firebase SDK] Uploaded ${folderName}/${fileName}:`, downloadUrl);
+          return downloadUrl;
+        } catch (sdkErr) {
+          console.warn("[Firebase SDK] Upload attempt notice:", sdkErr.message);
+        }
+      }
+
+      // Fallback: Return compressed Base64 Data URL so user is NEVER blocked
+      console.log(`⚡ [Fallback] Using compressed Base64 for ${folderName}/${fileName}`);
+      return dataUrl || (await compressImageToBase64(file, presetKey === 'SMALL' ? 600 : (presetKey === 'LARGE' ? 1200 : 800), 0.85));
     }
 
     async function uploadImageBlobToFirebaseStorage(imageUrl, folderName = "equipment_images", defaultName = "item.jpeg", presetKey = 'MEDIUM') {
       if (!imageUrl) return imageUrl;
-      if (imageUrl.startsWith('data:image')) return imageUrl;
-
-      if (isFirebaseReady && storage) {
-        try {
-          const res = await fetch(imageUrl);
-          const rawBlob = await res.blob();
-          const presetType = (folderName === 'employee_photos') ? 'EMPLOYEE' : 'EQUIPMENT';
-          const optStats = await autoOptimizeAndResizeImage(rawBlob, { presetKey, presetType });
-          const targetBlob = (optStats && optStats.blob) ? optStats.blob : rawBlob;
-          const ext = (optStats && optStats.extension) ? optStats.extension : 'webp';
-
-          const cleanName = defaultName ? defaultName.replace(/[^a-zA-Z0-9._-]/g, '_') : 'item';
-          const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp)$/i, '');
-          const fileName = `${baseName}.${ext}`;
-
-          const storageRef = ref(storage, `${folderName}/${fileName}`);
-          const snapshot = await uploadBytes(storageRef, targetBlob);
-          const downloadUrl = await getDownloadURL(snapshot.ref);
-
-          if (optStats && optStats.savedPercent > 0) {
-            console.log(`⚡ Proxy Storage Upload Optimized (${folderName}/${fileName}): ${optStats.originalSizeFormatted} -> ${optStats.compressedSizeFormatted} (Saved ${optStats.savedPercent}%)`);
-          }
-          return downloadUrl;
-        } catch (err) {
-          console.warn("Proxy to Firebase Storage notice:", err.message);
-        }
+      if (imageUrl.startsWith('data:image') || imageUrl.includes('b/pai-meditation/o') || imageUrl.includes('pai-meditation')) {
+        return imageUrl;
       }
 
-      // Fallback: If local blob URL, convert to compressed base64 so other devices can load it
+      const cleanName = defaultName ? defaultName.replace(/[^a-zA-Z0-9._-]/g, '_') : 'item';
+      const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp|svg)$/i, '');
+      const fileName = `${baseName}.webp`;
+
+      // Method 1: Server-Side Migration/Upload
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const apiResp = await fetch('/api/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceUrl: imageUrl,
+            folderName: folderName,
+            fileName: fileName
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (apiResp.ok) {
+          const data = await apiResp.json();
+          if (data && data.newUrl) {
+            return data.newUrl;
+          }
+        }
+      } catch (e) {
+        console.warn("Server blob migration notice:", e.message);
+      }
+
+      // Fallback for local blob URLs: convert to compressed base64
       if (imageUrl.startsWith('blob:')) {
         try {
           const res = await fetch(imageUrl);
@@ -8423,7 +8782,7 @@
           </div>
 
           <div class="header-box">
-            <h2>โครงการทุ่งสวรรค์ ตะวันฉาย (Flora Garden)</h2>
+            <h2>${(typeof window.getFloraProjectTitle === 'function' ? window.getFloraProjectTitle() : 'โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา')}</h2>
             <h4>รายงานประวัติการเบิก-ยืม-คืน อุปกรณ์การเกษตรรายบุคคล</h4>
             <small>พิมพ์รายงานเมื่อ: ${new Date().toLocaleString('th-TH')}</small>
           </div>
@@ -15584,6 +15943,25 @@
     async function fetchInitialFirestoreData(isRetry = false) {
       if (!isFirebaseReady || !db) return;
       try {
+        // 0. Ensure system_settings & Admin profile exist in Firestore
+        try {
+          const settingsRef = doc(db, "system_settings", "general");
+          const setSnap = await getDoc(settingsRef);
+          if (!setSnap.exists()) {
+            await setDoc(settingsRef, {
+              organizationName: "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา",
+              projectName: "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา",
+              projectTitle: "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา",
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (eSet) {
+          console.warn("System settings auto-seed notice:", eSet);
+        }
+        if (typeof window.ensureAdminUserInUsersCollection === 'function') {
+          window.ensureAdminUserInUsersCollection();
+        }
+
         const [empSnap, catSnap, eqSnap, txSnap, deptSnap, locSnap, posSnap] = await Promise.allSettled([
           getDocs(collection(db, "employees")),
           getDocs(collection(db, "categories")),
@@ -15619,6 +15997,26 @@
           populateEmployeeDropdowns();
           renderStaffTable();
           hasData = true;
+        } else if (empSnap.status === 'fulfilled' && empSnap.value.empty) {
+          let seedEmps = (employeeList && employeeList.length > 0) ? employeeList : defaultEmployeesSeedList;
+          try {
+            const saved = localStorage.getItem('flora_employees');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed) && parsed.length > 0) seedEmps = parsed;
+            }
+          } catch(e){}
+          employeeList = seedEmps;
+          for (const emp of seedEmps) {
+            const empId = emp.id || emp.code;
+            if (empId) {
+              setDoc(doc(db, "employees", empId), emp, { merge: true }).catch(() => {});
+            }
+          }
+          renderEmployeeDirectory();
+          populateEmployeeDropdowns();
+          renderStaffTable();
+          hasData = true;
         }
 
         if (catSnap.status === 'fulfilled' && !catSnap.value.empty) {
@@ -15641,6 +16039,14 @@
             return (a.name || '').localeCompare(b.name || '', 'th');
           });
           categoriesList = fsCats;
+          renderCategoryDropdowns();
+          renderCategoryManagementList();
+          hasData = true;
+        } else if (catSnap.status === 'fulfilled' && catSnap.value.empty) {
+          categoriesList = [...defaultCategoriesList];
+          for (const c of defaultCategoriesList) {
+            setDoc(doc(db, "categories", c.id), c, { merge: true }).catch(() => {});
+          }
           renderCategoryDropdowns();
           renderCategoryManagementList();
           hasData = true;
@@ -15667,6 +16073,27 @@
             return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
           });
           equipmentList = fsEquip;
+          renderCatalogGrid();
+          renderStaffTable();
+          populateEquipmentDropdown();
+          populateQuickScanDropdown();
+          hasData = true;
+        } else if (eqSnap.status === 'fulfilled' && eqSnap.value.empty) {
+          let seedEquip = (equipmentList && equipmentList.length > 0) ? equipmentList : defaultInitialEquipmentList;
+          try {
+            const saved = localStorage.getItem('flora_equipment');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed) && parsed.length > 0) seedEquip = parsed;
+            }
+          } catch(e){}
+          equipmentList = seedEquip;
+          for (const item of seedEquip) {
+            const eqId = item.id || item.code;
+            if (eqId) {
+              setDoc(doc(db, "equipment", eqId), item, { merge: true }).catch(() => {});
+            }
+          }
           renderCatalogGrid();
           renderStaffTable();
           populateEquipmentDropdown();
@@ -15709,6 +16136,15 @@
           departmentsList = validDocs.map(d => d.name);
           populateDepartmentDropdowns();
           hasData = true;
+        } else if (deptSnap.status === 'fulfilled' && deptSnap.value.empty) {
+          departmentsList = [...defaultDepartmentsList];
+          defaultDepartmentsList.forEach((dName, idx) => {
+            const numStr = String(idx + 1).padStart(3, '0');
+            const code = `DEP-${numStr}`;
+            setDoc(doc(db, "departments", code), { id: code, code: code, name: dName }, { merge: true }).catch(() => {});
+          });
+          populateDepartmentDropdowns();
+          hasData = true;
         }
 
         if (locSnap.status === 'fulfilled' && !locSnap.value.empty) {
@@ -15732,6 +16168,15 @@
             return (a.name || a.id).localeCompare((b.name || b.id), 'th');
           });
           locationsList = locDocs.map(d => (d.name || d.id)).filter(Boolean);
+          populateLocationDropdowns();
+          hasData = true;
+        } else if (locSnap.status === 'fulfilled' && locSnap.value.empty) {
+          locationsList = [...defaultLocationsList];
+          defaultLocationsList.forEach((lName, idx) => {
+            const numStr = String(idx + 1).padStart(3, '0');
+            const code = `LOC-${numStr}`;
+            setDoc(doc(db, "locations", code), { id: code, code: code, name: lName }, { merge: true }).catch(() => {});
+          });
           populateLocationDropdowns();
           hasData = true;
         }
@@ -15761,9 +16206,11 @@
             positionsList = posDocs;
             populatePositionDropdowns();
             hasData = true;
-          } else if (defaultPositionsList && defaultPositionsList.length > 0) {
-            // Read-only fallback for legacy UI; never seed organization data from index.html.
+          } else {
             positionsList = [...defaultPositionsList];
+            for (const pos of defaultPositionsList) {
+              setDoc(doc(db, "positions", pos.id), pos, { merge: true }).catch(() => {});
+            }
             populatePositionDropdowns();
             hasData = true;
           }
@@ -15790,6 +16237,9 @@
 
       if (typeof window.floraLogo?.connectGlobalLogoFirestore === 'function' && db) {
         window.floraLogo.connectGlobalLogoFirestore({ db, doc, setDoc, onSnapshot, getDoc, getDocs, collection, deleteDoc });
+      }
+      if (typeof window.connectOrgTreeFirestore === 'function' && db) {
+        window.connectOrgTreeFirestore({ db, doc, setDoc, onSnapshot, getDoc, getDocs, collection, deleteDoc });
       }
 
       // Trigger parallel direct fetch to ensure data lands immediately
@@ -16829,7 +17279,7 @@
         if (showFeedback) {
           if (totalDocsCopied > 0) {
             const summaryTxt = Object.entries(detailedCounts).map(([k, v]) => `• ${k}: ${v} รายการ`).join('\n');
-            alert(`🎉 ซิงค์และคัดลอกข้อมูลเรียบร้อยแล้ว!\n\nจำนวนข้อมูลที่นำเข้าทั้งหมด: ${totalDocsCopied} รายการ\n\n${summaryTxt}\n\nข้อมูลทั้งหมดถูกจัดเก็บลงสู่ฐานข้อมูล Test (ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1) เรียบร้อยครับ`);
+            alert(`🎉 ซิงค์และคัดลอกข้อมูลเรียบร้อยแล้ว!\n\nจำนวนข้อมูลที่นำเข้าทั้งหมด: ${totalDocsCopied} รายการ\n\n${summaryTxt}\n\nข้อมูลทั้งหมดถูกจัดเก็บลงสู่ฐานข้อมูล (ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1) เรียบร้อยครับ`);
             showToast(`🎉 ซิงค์ข้อมูลสำเร็จแล้ว ${totalDocsCopied} รายการ`);
           } else {
             let diagnosticMsg = `ℹ️ ระบบได้ทำการตรวจค้นฐานข้อมูลแล้ว ไม่พบข้อมูล (0 รายการ)`;

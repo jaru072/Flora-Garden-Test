@@ -6,12 +6,11 @@
 ✅ org_chart.html
 ✅ index.html
 
-รบกวนช่วยตรวจสอบและตั้งค่าตามนี้:
+รบกวนช่วยตรวจสอบและตั้งค่าตามนี้: 
 1. ตรวจสอบไฟล์ firebase-applet-config.json,script.js,org_chart.html,index.html ให้เชื่อมต่อกับ Database ID ของโปรเจกต์นี้ คือ:
-   👉 ai-studio-floragardenv2-c509b5a5-f4a3-4546-bbae-c5f21564ba7d
-
-2. ปรับปุ่ม "ดึงข้อมูล" ในหน้าสำรองข้อมูล ให้ดึงต้นทางมาจาก Test คือ Database ID:
    👉 ai-studio-floragardentest-b067b23c-205a-446d-8774-e8804286e5e1
 
-3. ทำการ compile_applet ให้เรียบร้อย
+2. ปรับปุ่ม "ดึงข้อมูล" ในหน้าสำรองข้อมูล ให้ดึงต้นทางมาจาก Test คือ Database ID:
+   👉 ai-studio-floragardenv2-c509b5a5-f4a3-4546-bbae-c5f21564ba7d
 
+3. ทำการ compile_applet ให้เรียบร้อย

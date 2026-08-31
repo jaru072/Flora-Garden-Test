@@ -161,7 +161,7 @@
 
     // Direct Firebase Storage REST fallback
     try {
-      const bucket = "flora-gaden.firebasestorage.app";
+      const bucket = window.firebaseConfig?.storageBucket || window.floraFirebaseConfig?.storageBucket || "pai-meditation.firebasestorage.app";
       const ext = mimeType === "image/svg+xml" ? "svg" : (mimeType === "image/webp" ? "webp" : "png");
       const filename = `system_assets/global-logo-${Date.now()}.${ext}`;
       const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodeURIComponent(filename)}`;

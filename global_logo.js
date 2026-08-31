@@ -4,7 +4,31 @@
 (function() {
   "use strict";
 
-  const STORAGE_KEY = "flora_global_logo";
+  function getScopedKey(baseKey) {
+    let dbId = window.firebaseConfig?.firestoreDatabaseId || window.floraFirebaseConfig?.firestoreDatabaseId || "";
+    if (!dbId) {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'firebase-applet-config.json', false);
+        xhr.send(null);
+        if (xhr.status === 200 || xhr.status === 304) {
+          const parsed = JSON.parse(xhr.responseText);
+          if (parsed && (parsed.firestoreDatabaseId || parsed.projectId)) {
+            window.firebaseConfig = { ...window.firebaseConfig, ...parsed };
+            window.floraFirebaseConfig = window.firebaseConfig;
+            dbId = parsed.firestoreDatabaseId || "";
+          }
+        }
+      } catch (e) {}
+    }
+    if (dbId && dbId !== "(default)") {
+      const cleanDbId = String(dbId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      return `${baseKey}_${cleanDbId}`;
+    }
+    return baseKey;
+  }
+
+  const BASE_STORAGE_KEY = "flora_global_logo";
   const LOGO_CHANGED_EVENT = "flora-global-logo-changed";
   
   let memoryLogoUrl = "";
@@ -83,7 +107,7 @@
     }
 
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(getScopedKey(BASE_STORAGE_KEY));
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.url && parsed.isCustom && parsed.url !== "DEFAULT_SUNFLOWER") {
@@ -107,14 +131,163 @@
     updateAllRenderedLogos();
   }
 
+  const BASE_PROJECT_TITLE_KEY = "flora_global_project_title";
+  const PROJECT_TITLE_CHANGED_EVENT = "flora-project-title-changed";
+  const BASE_PROJECT_NOTE_KEY = "flora_global_project_note";
+  const PROJECT_NOTE_CHANGED_EVENT = "flora-project-note-changed";
+
+  function getGlobalProjectTitle() {
+    if (typeof window.getFloraOrgTree === "function") {
+      try {
+        const tree = window.getFloraOrgTree();
+        if (tree && tree.name) return String(tree.name).trim();
+      } catch (e) {}
+    }
+    try {
+      const stored = localStorage.getItem(getScopedKey(BASE_PROJECT_TITLE_KEY));
+      if (stored && stored.trim()) return stored.trim();
+      const treeStored = localStorage.getItem(getScopedKey("flora_org_tree_v2"));
+      if (treeStored) {
+        const parsed = JSON.parse(treeStored);
+        if (parsed && parsed.name) return String(parsed.name).trim();
+      }
+    } catch (e) {}
+    return "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา";
+  }
+
+  function getGlobalProjectNote() {
+    if (typeof window.getFloraOrgTree === "function") {
+      try {
+        const tree = window.getFloraOrgTree();
+        if (tree && typeof tree.note === "string") return String(tree.note).trim();
+      } catch (e) {}
+    }
+    try {
+      const stored = localStorage.getItem(getScopedKey(BASE_PROJECT_NOTE_KEY));
+      if (stored !== null && stored !== undefined) return stored.trim();
+      const treeStored = localStorage.getItem(getScopedKey("flora_org_tree_v2"));
+      if (treeStored) {
+        const parsed = JSON.parse(treeStored);
+        if (parsed && typeof parsed.note === "string") return String(parsed.note).trim();
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  function setGlobalProjectTitle(title) {
+    const clean = String(title || "").trim() || "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา";
+    try {
+      localStorage.setItem(getScopedKey(BASE_PROJECT_TITLE_KEY), clean);
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent(PROJECT_TITLE_CHANGED_EVENT, { detail: { title: clean } }));
+    } catch (e) {}
+    updateAllRenderedTitles(clean);
+  }
+
+  function setGlobalProjectNote(note) {
+    const clean = String(note || "").trim();
+    try {
+      localStorage.setItem(getScopedKey(BASE_PROJECT_NOTE_KEY), clean);
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent(PROJECT_NOTE_CHANGED_EVENT, { detail: { note: clean } }));
+    } catch (e) {}
+    updateAllRenderedNotes(clean);
+  }
+
+  function updateAllRenderedNotes(note) {
+    const projectNote = String(note !== undefined ? note : getGlobalProjectNote()).trim();
+    const bannerNoteEl = document.getElementById('slot-node1-note');
+    if (bannerNoteEl) {
+      if (projectNote) {
+        bannerNoteEl.innerHTML = `<i class="bi bi-info-circle me-1 opacity-75 fs-8"></i>${projectNote.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}`;
+        bannerNoteEl.style.display = 'flex';
+      } else {
+        bannerNoteEl.innerHTML = '';
+        bannerNoteEl.style.display = 'none';
+      }
+    }
+  }
+
+  function updateAllRenderedTitles(title) {
+    const projectTitle = String(title || getGlobalProjectTitle()).trim();
+    if (!projectTitle) return;
+
+    // Update browser title
+    try {
+      if (document.title && document.title.includes(' - ')) {
+        const prefix = document.title.split(' - ')[0].trim();
+        document.title = `${prefix} - ${projectTitle}`;
+      }
+    } catch (e) {}
+
+    // Update all elements with specific data attribute or master classes
+    document.querySelectorAll('[data-flora-project-title], .brand-master-title, .app-master-title').forEach(el => {
+      if (el) el.textContent = projectTitle;
+    });
+
+    const subTitleEl = document.getElementById('orgProjectHeaderSubtitle');
+    if (subTitleEl) subTitleEl.textContent = projectTitle;
+
+    const bannerTitleEl = document.querySelector('.banner-title');
+    if (bannerTitleEl) bannerTitleEl.textContent = projectTitle;
+
+    const navBrandTitle = document.getElementById('navbarMasterBrandTitle');
+    if (navBrandTitle) navBrandTitle.textContent = projectTitle;
+
+    const loginTitle = document.getElementById('loginOverlayProjectTitle');
+    if (loginTitle) loginTitle.textContent = projectTitle;
+
+    updateAllRenderedNotes();
+  }
+
+  function applyFirestoreTreeData(data) {
+    if (!data || typeof data !== "object") return;
+    const tree = data.tree || data;
+    if (tree && typeof tree === "object") {
+      const node1Name = tree.name || (Array.isArray(tree.children) && tree.children[0]?.name) || tree.organizationName || tree.projectName || "";
+      if (node1Name && typeof node1Name === "string" && node1Name.trim()) {
+        const cleanTitle = node1Name.trim();
+        try {
+          localStorage.setItem(getScopedKey(BASE_PROJECT_TITLE_KEY), cleanTitle);
+        } catch (e) {}
+        updateAllRenderedTitles(cleanTitle);
+      }
+      const node1Note = (typeof tree.note === "string" ? tree.note : (tree.organizationNote || tree.projectNote || "")) || "";
+      try {
+        localStorage.setItem(getScopedKey(BASE_PROJECT_NOTE_KEY), String(node1Note).trim());
+      } catch (e) {}
+      updateAllRenderedNotes(node1Note);
+    }
+  }
+
   function applyFirestoreData(data) {
     if (!data || typeof data !== "object") return;
     
+    // Sync Master Organization / Project Name
+    const rawTitle = data.organizationName || data.projectName || data.projectTitle || data.title || "";
+    if (rawTitle && typeof rawTitle === "string" && rawTitle.trim()) {
+      const cleanTitle = rawTitle.trim();
+      try {
+        localStorage.setItem(getScopedKey(BASE_PROJECT_TITLE_KEY), cleanTitle);
+      } catch (e) {}
+      updateAllRenderedTitles(cleanTitle);
+    }
+    const rawNote = data.organizationNote || data.projectNote || data.note || "";
+    if (typeof rawNote === "string") {
+      const cleanNote = rawNote.trim();
+      try {
+        localStorage.setItem(getScopedKey(BASE_PROJECT_NOTE_KEY), cleanNote);
+      } catch (e) {}
+      updateAllRenderedNotes(cleanNote);
+    }
+
     if (data.logoType === "sunflower" || data.globalLogo === "DEFAULT_SUNFLOWER" || data.globalLogoUrl === "DEFAULT_SUNFLOWER") {
       memoryLogoUrl = "";
       isCustomLogoActive = false;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ url: "", isCustom: false, updatedAt: new Date().toISOString() }));
+        localStorage.setItem(getScopedKey(BASE_STORAGE_KEY), JSON.stringify({ url: "", isCustom: false, updatedAt: new Date().toISOString() }));
       } catch (e) {}
       broadcastLogoChange({ url: getSunflowerDataUrl(96), isCustom: false });
       return;
@@ -125,7 +298,7 @@
       memoryLogoUrl = targetUrl;
       isCustomLogoActive = true;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ url: targetUrl, isCustom: true, updatedAt: data.updatedAt || new Date().toISOString() }));
+        localStorage.setItem(getScopedKey(BASE_STORAGE_KEY), JSON.stringify({ url: targetUrl, isCustom: true, updatedAt: data.updatedAt || new Date().toISOString() }));
       } catch (e) {}
       broadcastLogoChange({ url: targetUrl, isCustom: true });
     }
@@ -161,7 +334,7 @@
 
     // Direct Firebase Storage REST fallback
     try {
-      const bucket = "flora-gaden.firebasestorage.app";
+      const bucket = window.firebaseConfig?.storageBucket || window.floraFirebaseConfig?.storageBucket || "pai-meditation.firebasestorage.app";
       const ext = mimeType === "image/svg+xml" ? "svg" : (mimeType === "image/webp" ? "webp" : "png");
       const filename = `system_assets/global-logo-${Date.now()}.${ext}`;
       const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodeURIComponent(filename)}`;
@@ -276,6 +449,7 @@
 
     try {
       const logoDocRef = bridge.doc(bridge.db, "system_settings", "general");
+      const treeDocRef = bridge.doc(bridge.db, "org_structure", "main");
       
       if (typeof bridge.onSnapshot === "function") {
         bridge.onSnapshot(logoDocRef, (snap) => {
@@ -285,6 +459,15 @@
         }, (err) => {
           console.warn("Firestore logo onSnapshot notice:", err);
         });
+
+        bridge.onSnapshot(treeDocRef, (snap) => {
+          if (snap && snap.exists()) {
+            applyFirestoreTreeData(snap.data());
+          }
+        }, (err) => {
+          console.warn("Firestore org_structure onSnapshot notice:", err);
+        });
+
         isFirestoreListenerAttached = true;
       }
 
@@ -292,6 +475,12 @@
         bridge.getDoc(logoDocRef).then((snap) => {
           if (snap && snap.exists()) {
             applyFirestoreData(snap.data());
+          }
+        }).catch(() => {});
+
+        bridge.getDoc(treeDocRef).then((snap) => {
+          if (snap && snap.exists()) {
+            applyFirestoreTreeData(snap.data());
           }
         }).catch(() => {});
       }
@@ -799,6 +988,16 @@
 
   setTimeout(updateAllRenderedLogos, 100);
   setTimeout(updateAllRenderedLogos, 600);
+  setTimeout(updateAllRenderedTitles, 100);
+  setTimeout(updateAllRenderedTitles, 600);
+
+  window.addEventListener("flora-project-title-changed", (e) => {
+    if (e.detail && e.detail.title) updateAllRenderedTitles(e.detail.title);
+  });
+
+  window.addEventListener("flora-project-note-changed", (e) => {
+    if (e.detail && typeof e.detail.note === "string") updateAllRenderedNotes(e.detail.note);
+  });
 
   // Export Public API
   window.floraLogo = {
@@ -811,6 +1010,12 @@
     downloadSunflowerPng,
     renderLogoHtml,
     updateAllRenderedLogos,
+    updateAllRenderedTitles,
+    updateAllRenderedNotes,
+    getGlobalProjectTitle,
+    setGlobalProjectTitle,
+    getGlobalProjectNote,
+    setGlobalProjectNote,
     openGlobalLogoModal,
     closeModal: closeGlobalLogoModal,
     connectGlobalLogoFirestore,
@@ -821,4 +1026,10 @@
   window.closeGlobalLogoModal = closeGlobalLogoModal;
   window.getFloraGlobalLogo = getGlobalLogo;
   window.renderFloraLogoBadge = renderLogoHtml;
+  window.getFloraProjectTitle = getGlobalProjectTitle;
+  window.setFloraProjectTitle = setGlobalProjectTitle;
+  window.getFloraProjectNote = getGlobalProjectNote;
+  window.setFloraProjectNote = setGlobalProjectNote;
+  window.updateAllFloraTitles = updateAllRenderedTitles;
+  window.updateAllFloraNotes = updateAllRenderedNotes;
 })();

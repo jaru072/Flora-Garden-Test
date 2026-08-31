@@ -7,6 +7,9 @@ import JSZip from 'jszip';
 const app = express();
 const PORT = 3000;
 
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 function getStorageBucketName(): string {
   try {
     const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
@@ -15,7 +18,7 @@ function getStorageBucketName(): string {
       if (config.storageBucket) return config.storageBucket;
     }
   } catch (e) {}
-  return 'flora-gaden.firebasestorage.app';
+  return 'pai-meditation';
 }
 
 async function fetchBufferWithRetry(urlStr: string, retries = 3): Promise<Buffer> {
@@ -50,6 +53,101 @@ function getFreeDiskSpaceMB(): number {
 // ----------------------------------------------------
 // API ROUTES (MUST COME BEFORE VITE / STATIC MIDLEWARE)
 // ----------------------------------------------------
+
+// Endpoint 0: Safe Cross-Origin Image Fetch Proxy for Image Migration & Sync
+app.get('/api/proxy-fetch-image', async (req, res) => {
+  try {
+    const targetUrl = req.query.url as string;
+    if (!targetUrl) {
+      res.status(400).send('Missing url parameter');
+      return;
+    }
+    const decodedUrl = decodeURIComponent(targetUrl);
+    const resp = await fetch(decodedUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!resp.ok) {
+      res.status(resp.status).send(`Failed to fetch image: HTTP ${resp.status}`);
+      return;
+    }
+    const contentType = resp.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const arrayBuf = await resp.arrayBuffer();
+    res.send(Buffer.from(arrayBuf));
+  } catch (err: any) {
+    res.status(500).send(err.message || 'Error fetching image');
+  }
+});
+
+// Endpoint 0.5: Direct Server-Side Image Migration / Upload into Firebase Storage Bucket (Zero CORS, Fast & Resilient)
+app.post(['/api/migrate-image', '/api/upload-image'], async (req, res) => {
+  try {
+    const { sourceUrl, folderName = 'equipment_images', fileName = 'item.webp' } = req.body;
+    if (!sourceUrl || typeof sourceUrl !== 'string') {
+      res.status(400).json({ error: 'Missing or invalid sourceUrl parameter' });
+      return;
+    }
+
+    let buffer: Buffer;
+    let mimeType = 'image/webp';
+
+    if (sourceUrl.startsWith('data:')) {
+      const match = sourceUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        mimeType = match[1];
+        buffer = Buffer.from(match[2], 'base64');
+      } else {
+        res.status(400).json({ error: 'Invalid data URI payload' });
+        return;
+      }
+    } else {
+      buffer = await fetchBufferWithRetry(sourceUrl, 3);
+      if (sourceUrl.toLowerCase().includes('.png')) mimeType = 'image/png';
+      else if (sourceUrl.toLowerCase().includes('.jpg') || sourceUrl.toLowerCase().includes('.jpeg')) mimeType = 'image/jpeg';
+      else if (sourceUrl.toLowerCase().includes('.svg')) mimeType = 'image/svg+xml';
+      else mimeType = 'image/webp';
+    }
+
+    const cleanFileName = (fileName || 'item.webp').replace(/[^a-zA-Z0-9._-]/g, '_');
+    if (cleanFileName.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+    else if (cleanFileName.toLowerCase().endsWith('.jpg') || cleanFileName.toLowerCase().endsWith('.jpeg')) mimeType = 'image/jpeg';
+    else if (cleanFileName.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+
+    const bucket = getStorageBucketName(); // 'pai-meditation'
+    const cleanFolder = (folderName || 'equipment_images').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = `${cleanFolder}/${cleanFileName}`;
+    const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?name=${encodeURIComponent(filePath)}`;
+
+    const uploadResp = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': mimeType },
+      body: buffer
+    });
+
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      res.status(uploadResp.status).json({ error: `Upload to Storage bucket '${bucket}' failed: ${errText}` });
+      return;
+    }
+
+    const uploadData: any = await uploadResp.json();
+    const token = uploadData.downloadTokens || '';
+    const newDownloadUrl = token
+      ? `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`
+      : `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media`;
+
+    res.json({
+      success: true,
+      bucket,
+      filePath,
+      newUrl: newDownloadUrl,
+      size: buffer.length
+    });
+  } catch (err: any) {
+    console.error('API /api/migrate-image error:', err);
+    res.status(500).json({ error: err.message || 'Server image migration error' });
+  }
+});
 
 // Endpoint 1: Auto-Backup Images with Smart Diff Check (Size & Modified Timestamp) & Disk Protection
 app.post('/api/auto-backup-images', async (req, res) => {

@@ -1,10 +1,36 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "flora_org_tree_v2";
+  function getScopedKey(baseKey) {
+    let dbId = window.firebaseConfig?.firestoreDatabaseId || window.floraFirebaseConfig?.firestoreDatabaseId || "";
+    if (!dbId) {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'firebase-applet-config.json', false);
+        xhr.send(null);
+        if (xhr.status === 200 || xhr.status === 304) {
+          const parsed = JSON.parse(xhr.responseText);
+          if (parsed && (parsed.firestoreDatabaseId || parsed.projectId)) {
+            window.firebaseConfig = { ...window.firebaseConfig, ...parsed };
+            window.floraFirebaseConfig = window.firebaseConfig;
+            dbId = parsed.firestoreDatabaseId || "";
+          }
+        }
+      } catch (e) {}
+    }
+    if (dbId && dbId !== "(default)") {
+      const cleanDbId = String(dbId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      return `${baseKey}_${cleanDbId}`;
+    }
+    return baseKey;
+  }
+
+  const BASE_STORAGE_KEY = "flora_org_tree_v2";
+  const BASE_PROJECT_TITLE_KEY = "flora_global_project_title";
+  const BASE_PROJECT_NOTE_KEY = "flora_global_project_note";
   const FORMAT = "flora-org-tree";
   const KIND_LABELS = {
-    project: "โครงการ",
+    project: "👑 ชื่อหลักของระบบ (Master Organization Name)",
     position: "ตำแหน่งบริหาร",
     supervision: "สายกำกับ",
     division: "ส่วนงานหลัก",
@@ -103,14 +129,58 @@
     return visit(value, 0);
   }
 
+  function syncMasterTitleToStorageAndDom(title, note) {
+    const cleanTitle = String(title || (tree?.name) || "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา").trim();
+    const cleanNote = String(note !== undefined ? note : (tree?.note || "")).trim();
+    try {
+      localStorage.setItem(getScopedKey(BASE_PROJECT_TITLE_KEY), cleanTitle);
+      localStorage.setItem(getScopedKey(BASE_PROJECT_NOTE_KEY), cleanNote);
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent("flora-project-title-changed", { detail: { title: cleanTitle, note: cleanNote } }));
+      window.dispatchEvent(new CustomEvent("flora-project-note-changed", { detail: { note: cleanNote, title: cleanTitle } }));
+    } catch (e) {}
+    if (typeof window.updateAllFloraTitles === "function") {
+      window.updateAllFloraTitles(cleanTitle);
+    } else {
+      document.querySelectorAll('[data-flora-project-title], .brand-master-title, .app-master-title').forEach(el => {
+        if (el) el.textContent = cleanTitle;
+      });
+      const subTitleEl = document.getElementById('orgProjectHeaderSubtitle');
+      if (subTitleEl) subTitleEl.textContent = cleanTitle;
+      const bannerTitleEl = document.querySelector('.banner-title');
+      if (bannerTitleEl) bannerTitleEl.textContent = cleanTitle;
+    }
+    if (typeof window.updateAllFloraNotes === "function") {
+      window.updateAllFloraNotes(cleanNote);
+    } else {
+      const bannerNoteEl = document.getElementById('slot-node1-note');
+      if (bannerNoteEl) {
+        if (cleanNote) {
+          bannerNoteEl.innerHTML = `<i class="bi bi-info-circle me-1 opacity-75 fs-8"></i>${esc(cleanNote)}`;
+          bannerNoteEl.style.display = 'flex';
+        } else {
+          bannerNoteEl.innerHTML = '';
+          bannerNoteEl.style.display = 'none';
+        }
+      }
+    }
+  }
+
   function loadLocal() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const scopedKey = getScopedKey(BASE_STORAGE_KEY);
+      let saved = localStorage.getItem(scopedKey);
+      if (!saved) saved = localStorage.getItem(BASE_STORAGE_KEY);
       if (saved) tree = validateTree(JSON.parse(saved));
     } catch (error) { console.warn("Tree local data reset:", error); tree = clone(seedTree); }
     selectedId = tree.id;
+    syncMasterTitleToStorageAndDom(tree.name, tree.note);
   }
-  function persistLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tree)); }
+  function persistLocal() { 
+    localStorage.setItem(getScopedKey(BASE_STORAGE_KEY), JSON.stringify(tree)); 
+    syncMasterTitleToStorageAndDom(tree.name, tree.note);
+  }
   function syncDerivedLists() {
     const rows = flatten();
     window.positionsList = rows.filter(({node}) => ["position","role","supervision"].includes(node.kind)).map(({node}, index) => {
@@ -152,6 +222,7 @@
   }
   function dispatchChange(origin = "local") {
     persistLocal(); syncDerivedLists(); reconcileEmployeesFromTree(true); renderManager();
+    syncMasterTitleToStorageAndDom(tree.name);
     window.dispatchEvent(new CustomEvent("flora-org-tree-changed", { detail: { origin, tree: clone(tree) } }));
     if (origin !== "remote" && firestoreBridge) firestoreBridge.write(tree);
     if (origin !== "remote") window.logPersonnelAudit?.("แก้ไขโครงสร้าง Tree", { rootId: tree.id, rootName: tree.name });
@@ -271,23 +342,78 @@
   }
   function renderManagerNode(node) {
     const children = node.children || []; const open = expanded.has(node.id); const selected = selectedId === node.id;
+    const isRoot = node.id === tree.id;
     const matched = query && `${node.code} ${node.name} ${node.note || ""}`.toLocaleLowerCase("th").includes(query.toLocaleLowerCase("th"));
-    return `<li class="flora-tree-item"><div class="flora-tree-row">
+    return `<li class="flora-tree-item ${isRoot ? "flora-tree-root-item" : ""}"><div class="flora-tree-row ${isRoot ? "flora-tree-root-row" : ""}">
       <button class="flora-tree-toggle ${children.length ? "" : "leaf"}" onclick="floraTreeToggle('${node.id}')" aria-label="${children.length ? "เปิดปิดกิ่ง" : "ปลายกิ่ง"}">${children.length ? (open ? "−" : "+") : "•"}</button>
-      <button class="flora-tree-card ${selected ? "selected" : ""} ${matched ? "matched" : ""}" onclick="floraTreeSelect('${node.id}')"><span class="flora-tree-code">${esc(node.code)}</span><span class="flora-tree-copy"><b>${esc(node.name)}</b><small>${esc(KIND_LABELS[node.kind])}${children.length ? ` · ${children.length} โหนดย่อย` : ""}</small></span></button>
-      <span class="flora-tree-actions"><button onclick="floraTreeOpenAdd('${node.id}')" title="เพิ่มโหนดย่อย">＋</button><button onclick="floraTreeOpenEdit('${node.id}')" title="แก้ไข">✎</button>${node.id !== tree.id ? `<button class="danger" onclick="floraTreeDelete('${node.id}')" title="ลบ">⌫</button>` : ""}</span>
+      <button class="flora-tree-card ${selected ? "selected" : ""} ${matched ? "matched" : ""} ${isRoot ? "root-node-card border-warning border-2" : ""}" onclick="floraTreeSelect('${node.id}')">
+        <span class="flora-tree-code ${isRoot ? "bg-warning text-dark fw-bold" : ""}">${isRoot ? "👑 โหนด 1" : esc(node.code)}</span>
+        <span class="flora-tree-copy">
+          <b class="${isRoot ? "text-dark" : ""}">${esc(node.name)}</b>
+          <small class="${isRoot ? "text-success fw-bold" : ""}">${isRoot ? "👑 ชื่อหลักของระบบทั้งหมด (Master Name)" : esc(KIND_LABELS[node.kind])}${children.length ? ` · ${children.length} โหนดย่อย` : ""}</small>
+        </span>
+      </button>
+      <span class="flora-tree-actions">
+        <button onclick="floraTreeOpenAdd('${node.id}')" title="เพิ่มโหนดย่อย">＋</button>
+        <button onclick="floraTreeOpenEdit('${node.id}')" title="${isRoot ? "แก้ไขชื่อหลักของระบบทั้งหมด" : "แก้ไข"}">✎</button>
+        ${!isRoot ? `<button class="danger" onclick="floraTreeDelete('${node.id}')" title="ลบ">⌫</button>` : ""}
+      </span>
       </div>${children.length && open ? `<ul>${children.map(renderManagerNode).join("")}</ul>` : ""}</li>`;
   }
   function renderModalHost() {
     const host = document.getElementById("treeNodeModalHost"); if (!host) return;
     if (!modalState) { host.innerHTML = ""; return; }
-    const editing = modalState.mode === "edit"; const node = editing ? findNode(modalState.targetId) : null;
-    host.innerHTML = `<div class="tree-modal-backdrop" onclick="if(event.target===this) floraTreeCloseModal()"><form class="tree-modal-card" onsubmit="floraTreeSaveNode(event)"><div class="tree-modal-head"><div><small class="text-success fw-bold">${editing ? "แก้ไขโครงสร้าง" : "เพิ่มกิ่งใหม่"}</small><h5>${editing ? "ปรับข้อมูลโหนด" : "สร้างโหนดย่อย"}</h5></div><button type="button" onclick="floraTreeCloseModal()">×</button></div>
-      ${showAdminCodes ? `<label>เลข/รหัสโครงสร้าง<input id="treeFormCode" value="${esc(node?.code || "")}" placeholder="เช่น 1.5" required></label>` : `<input id="treeFormCode" type="hidden" value="${esc(node?.code || `AUTO-${Date.now().toString(36).toUpperCase()}`)}"><div class="tree-code-note"><i class="bi bi-shield-check me-1"></i>ระบบจัดเก็บรหัสภายในให้อัตโนมัติ</div>`}
-      <label>ชื่อหน่วยงานหรือตำแหน่ง<input id="treeFormName" value="${esc(node?.name || "")}" required></label>
-      <label>ประเภทโหนด<select id="treeFormKind" ${editing ? "disabled" : ""}>${Object.entries(KIND_LABELS).filter(([kind])=>kind!=="project").map(([kind,label])=>`<option value="${kind}" ${(node?.kind || "department")===kind ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>${editing ? '<small>ประเภทโหนดถูกล็อกเพื่อป้องกันข้อมูลบุคลากรคลาดเคลื่อน</small>' : ''}</label>
-      <label>หมายเหตุ<textarea id="treeFormNote" rows="3">${esc(node?.note || "")}</textarea></label>
-      <div class="tree-modal-actions"><button type="button" onclick="floraTreeCloseModal()">ยกเลิก</button><button class="primary" type="submit">บันทึกโหนด</button></div></form></div>`;
+    const editing = modalState.mode === "edit"; 
+    const node = editing ? findNode(modalState.targetId) : null;
+    const isRoot = editing && node?.id === tree.id;
+
+    host.innerHTML = `<div class="tree-modal-backdrop" onclick="if(event.target===this) floraTreeCloseModal()"><form class="tree-modal-card" onsubmit="floraTreeSaveNode(event)">
+      <div class="tree-modal-head">
+        <div>
+          <small class="text-success fw-bold">${isRoot ? "👑 โหนดที่ 1 · ศูนย์กลางชื่อระบบ" : (editing ? "แก้ไขโครงสร้าง" : "เพิ่มกิ่งใหม่")}</small>
+          <h5>${isRoot ? "ปรับชื่อหลักของระบบทั้งหมด (Master Name)" : (editing ? "ปรับข้อมูลโหนด" : "สร้างโหนดย่อย")}</h5>
+        </div>
+        <button type="button" onclick="floraTreeCloseModal()">×</button>
+      </div>
+
+      ${isRoot ? `
+        <div class="alert alert-success-subtle p-2.5 rounded-3 fs-8 text-dark mb-3 d-flex gap-2">
+          <i class="bi bi-crown-fill text-warning fs-5 flex-shrink-0"></i>
+          <div>
+            <b>โหนดที่ 1 เป็นชื่อหลักของทุกระบบ (Master Organization Name)</b><br>
+            เมื่อบันทึก ชื่อนี้จะมีผลทันทีกับ: ระบบพัสดุและอุปกรณ์, ผังโครงสร้างบุคลากร, ระบบพิมพ์บัตร/QR Code, แบบฟอร์มใบเบิกพัสดุ และเอกสารส่งออกทั้งหมด
+          </div>
+        </div>
+      ` : ''}
+
+      ${showAdminCodes ? `<label>เลข/รหัสโครงสร้าง<input id="treeFormCode" value="${esc(node?.code || "")}" placeholder="เช่น 1.5" required></label>` : `<input id="treeFormCode" type="hidden" value="${esc(node?.code || `AUTO-${Date.now().toString(36).toUpperCase()}`)}">${isRoot ? '' : '<div class="tree-code-note"><i class="bi bi-shield-check me-1"></i>ระบบจัดเก็บรหัสภายในให้อัตโนมัติ</div>'}`}
+      
+      <label>
+        ${isRoot ? "ชื่อหลักของระบบ / โครงการ (Master Name)" : "ชื่อหน่วยงานหรือตำแหน่ง"}
+        <input id="treeFormName" value="${esc(node?.name || "")}" placeholder="${isRoot ? 'ระบุชื่อหลักของระบบ/องค์กร' : 'ระบุชื่อหน่วยงานหรือตำแหน่ง'}" required>
+      </label>
+
+      <label>ประเภทโหนด
+        ${isRoot ? `
+          <select id="treeFormKind" disabled>
+            <option value="project" selected>👑 ชื่อหลักของระบบ (Master Organization Name)</option>
+          </select>
+          <small class="text-muted">โหนดที่ 1 ถูกกำหนดเป็นชื่อหลักของระบบโดยอัตโนมัติ</small>
+        ` : `
+          <select id="treeFormKind" ${editing ? "disabled" : ""}>
+            ${Object.entries(KIND_LABELS).filter(([kind])=>kind!=="project").map(([kind,label])=>`<option value="${kind}" ${(node?.kind || "department")===kind ? "selected" : ""}>${esc(label)}</option>`).join("")}
+          </select>
+          ${editing ? '<small>ประเภทโหนดถูกล็อกเพื่อป้องกันข้อมูลบุคลากรคลาดเคลื่อน</small>' : ''}
+        `}
+      </label>
+
+      <label>หมายเหตุ<textarea id="treeFormNote" rows="3" placeholder="บันทึกรายละเอียดเพิ่มเติม (ถ้ามี)">${esc(node?.note || "")}</textarea></label>
+      
+      <div class="tree-modal-actions">
+        <button type="button" onclick="floraTreeCloseModal()">ยกเลิก</button>
+        <button class="primary" type="submit"><i class="bi bi-check-lg me-1"></i>${isRoot ? "บันทึกชื่อหลักของระบบ" : "บันทึกโหนด"}</button>
+      </div>
+    </form></div>`;
     setTimeout(() => document.getElementById(showAdminCodes ? "treeFormCode" : "treeFormName")?.focus(), 0);
   }
 
@@ -358,21 +484,42 @@
   };
   window.openAddModalForTreeNode = nodeId => { const a=assignmentFor(nodeId); if (a) window.openAddModalForSlot?.(a.department,a.position); };
   window.handleTreeOrgDrop = async function(event,nodeId) {
-    event.preventDefault(); event.currentTarget?.classList.remove("drop-target-active");
+    if (event) {
+      event.preventDefault?.(); 
+      event.currentTarget?.classList?.remove("drop-target-active");
+    }
     if(window.requirePersonnelAdmin&&!window.requirePersonnelAdmin("ย้ายบุคลากรในผัง"))return;
-    const empId=event.dataTransfer.getData("text/plain")||window.draggedEmpId, emp=(window.employees||[]).find(e=>(e.id||e.code)===empId), a=assignmentFor(nodeId); if (!emp||!a) return;
+    const empId=(event?.dataTransfer?.getData&&event.dataTransfer.getData("text/plain"))||window.draggedEmpId;
+    window.draggedEmpId = null;
+    const emp=(window.employees||[]).find(e=>(e.id||e.code)===empId), a=assignmentFor(nodeId); 
+    if (!emp||!a) return;
     if (typeof window.ensureFloraLeadershipPositionAvailable === "function" && !window.ensureFloraLeadershipPositionAvailable(empId,a.positionNodeId||"",true)) return;
-    emp.department=a.department; emp.departmentNodeId=a.departmentNodeId; emp.position=a.position; emp.positionNodeId=a.positionNodeId;
+    emp.department=a.department; 
+    emp.departmentNodeId=a.departmentNodeId; 
+    emp.position=a.position; 
+    emp.positionNodeId=a.positionNodeId;
     if (typeof window.getFloraRoleForPositionNode === "function") emp.role=window.getFloraRoleForPositionNode(emp.positionNodeId,emp.positionNodeId?emp.role:"WORKER");
     emp.updatedAt=new Date().toISOString();
-    await window.persistEmployeeChanges?.(emp); window.renderOrgChart?.(); window.renderUnassignedDrawer?.();
+    
+    // Instant UI refresh
+    window.orgChartDirty = true;
+    if (typeof window.syncToLocalStorage === 'function') window.syncToLocalStorage();
+    window.renderOrgChart?.(true); 
+    window.renderUnassignedDrawer?.();
+    if (typeof window.showToast === 'function') {
+      window.showToast(`🎯 โยกย้าย [${emp.code || emp.id}] ${emp.name} ไปยัง "${a.department}" สำเร็จ!`);
+    }
+
+    // Persist in background
+    await window.persistEmployeeChanges?.(emp);
   };
   window.getFloraOrgDepartments = getDepartments;
   window.getFloraOrgAssignment = assignmentFor;
   window.getFloraOrgQuickAssignGroups = getQuickAssignGroups;
   window.getFloraOrgNode = id => { const node=findNode(id); return node ? clone(node) : null; };
   window.getFloraOrgTree = () => clone(tree);
-  window.getFloraProjectTitle = () => (tree?.name || "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา").trim();
+  window.getFloraProjectTitle = () => (tree?.name || localStorage.getItem(PROJECT_TITLE_KEY) || "โครงการรัตนบุปผา และผลิตดอกไม้ธรรมยาตรา").trim();
+  window.getFloraProjectNote = () => ((tree?.note !== undefined ? tree.note : (localStorage.getItem(PROJECT_NOTE_KEY) || "")) || "").trim();
   window.syncFloraEmployeesToTree = (persist = true) => reconcileEmployeesFromTree(Boolean(persist));
   window.isEmployeeAssignedToFloraTree = emp => Boolean(resolveEmployeeNode(emp));
   window.resolveFloraAssignmentByLabels = (department, position) => {
@@ -391,12 +538,35 @@
     const chartMode = tab === "org";
     window.currentWorkspaceTab = tab;
 
-    document.getElementById("tabOrgChart")?.classList.toggle("active", chartMode);
-    document.getElementById("tabPersonnelDirectory")?.classList.toggle("active", directoryMode);
-    document.getElementById("tabTreeManager")?.classList.toggle("active", treeMode);
-    document.getElementById("tabPersonnelAttendance")?.classList.toggle("active", attendanceMode);
+    const tabOrg = document.getElementById("tabOrgChart");
+    const tabDir = document.getElementById("tabPersonnelDirectory");
+    const tabTree = document.getElementById("tabTreeManager");
+    const tabAtt = document.getElementById("tabPersonnelAttendance");
 
-    const chartElementIds = ["orgToolbar", "canvasWrapper", "zoomControls", "floatingUnassignedBtn"];
+    [tabOrg, tabDir, tabTree, tabAtt].forEach(btn => {
+      if (btn) {
+        btn.classList.remove("active", "bg-primary", "bg-opacity-10", "text-primary");
+      }
+    });
+
+    const menuLabel = document.getElementById("currentSystemMenuLabel");
+
+    if (chartMode) {
+      tabOrg?.classList.add("active", "bg-primary", "bg-opacity-10", "text-primary");
+      if (menuLabel) menuLabel.textContent = "ผังองค์กร";
+    } else if (directoryMode) {
+      tabDir?.classList.add("active", "bg-primary", "bg-opacity-10", "text-primary");
+      if (menuLabel) menuLabel.textContent = "สารบรรณ";
+    } else if (treeMode) {
+      tabTree?.classList.add("active", "bg-primary", "bg-opacity-10", "text-primary");
+      if (menuLabel) menuLabel.textContent = "โครงสร้าง";
+    } else if (attendanceMode) {
+      tabAtt?.classList.add("active", "bg-primary", "bg-opacity-10", "text-primary");
+      if (menuLabel) menuLabel.textContent = "เวลา/การลา";
+    }
+
+    // Keep orgToolbar visible across tabs so users can always switch tabs using the System Menu Dropdown
+    const chartElementIds = ["canvasWrapper", "zoomControls", "floatingUnassignedBtn"];
     chartElementIds.forEach(id => {
       const el = document.getElementById(id);
       if (el) {
@@ -444,15 +614,89 @@
       }
     }
   };
+  let isTreeFirestoreListenerAttached = false;
   window.connectOrgTreeFirestore = function(api) {
     if (!api?.db || !api.doc || !api.setDoc || !api.onSnapshot) return;
-    const ref=api.doc(api.db,"org_structure","main");
-    firestoreBridge={write: async nextTree=>{ if(applyingRemote||!window.personnelAccess?.isAdmin)return; try{ await api.setDoc(ref,{format:FORMAT,version:2,tree:clone(nextTree),updatedAt:new Date().toISOString()},{merge:true}); }catch(error){ console.warn("Tree Firestore save:",error); } }};
-    api.onSnapshot(ref,snapshot=>{
-      if(snapshot.exists()&&snapshot.data()?.tree){ try{ applyingRemote=true; tree=validateTree(snapshot.data().tree); selectedId=findNode(selectedId)?selectedId:tree.id; expanded.add(tree.id); dispatchChange("remote"); }catch(error){ console.warn("Tree Firestore data:",error); }finally{applyingRemote=false;} }
-      else if(window.personnelAccess?.isAdmin) firestoreBridge.write(tree);
-    },error=>console.warn("Tree Firestore listener:",error));
+    const ref = api.doc(api.db, "org_structure", "main");
+    const settingsRef = api.doc(api.db, "system_settings", "general");
+    firestoreBridge = {
+      write: async nextTree => { 
+        if (applyingRemote) return; 
+        try { 
+          await api.setDoc(ref, { format: FORMAT, version: 2, tree: clone(nextTree), updatedAt: new Date().toISOString() }, { merge: true }); 
+          if (nextTree?.name) {
+            await api.setDoc(settingsRef, { 
+              organizationName: nextTree.name, 
+              projectName: nextTree.name, 
+              projectTitle: nextTree.name, 
+              organizationNote: nextTree.note || '',
+              updatedAt: new Date().toISOString() 
+            }, { merge: true });
+          }
+        } catch(error) { console.warn("Tree Firestore save:", error); } 
+      }
+    };
+
+    if (!isTreeFirestoreListenerAttached) {
+      isTreeFirestoreListenerAttached = true;
+      if (typeof api.getDoc === "function") {
+        api.getDoc(ref).then(snapshot => {
+          if (snapshot && snapshot.exists() && snapshot.data()?.tree) {
+            try {
+              applyingRemote = true;
+              tree = validateTree(snapshot.data().tree);
+              selectedId = findNode(selectedId) ? selectedId : tree.id;
+              expanded.add(tree.id);
+              dispatchChange("remote");
+            } catch (error) {
+              console.warn("Tree Firestore initial getDoc:", error);
+            } finally {
+              applyingRemote = false;
+            }
+          } else {
+            firestoreBridge.write(tree);
+          }
+        }).catch(err => {
+          console.warn("Tree Firestore initial fetch notice:", err);
+          firestoreBridge.write(tree);
+        });
+      }
+
+      api.onSnapshot(ref, snapshot => {
+        if (snapshot && snapshot.exists() && snapshot.data()?.tree) {
+          try {
+            applyingRemote = true;
+            tree = validateTree(snapshot.data().tree);
+            selectedId = findNode(selectedId) ? selectedId : tree.id;
+            expanded.add(tree.id);
+            dispatchChange("remote");
+          } catch(error) { console.warn("Tree Firestore data:", error); }
+          finally { applyingRemote = false; }
+        } else if (!snapshot.exists()) {
+          firestoreBridge.write(tree);
+        }
+      }, error => console.warn("Tree Firestore listener:", error));
+    }
   };
 
-  window.addEventListener("DOMContentLoaded",()=>{ loadLocal(); syncDerivedLists(); renderManager(); });
+  window.addEventListener("flora-personnel-api-ready", () => {
+    if (window.personnelApi) window.connectOrgTreeFirestore(window.personnelApi);
+  });
+  window.addEventListener("flora-firebase-ready", () => {
+    if (window.floraFirebaseBridge) window.connectOrgTreeFirestore(window.floraFirebaseBridge);
+  });
+
+  let treeBridgeAttempts = 0;
+  const treeBridgeTimer = setInterval(() => {
+    treeBridgeAttempts++;
+    const b = window.floraFirebaseBridge || (window.personnelApi && window.personnelApi.db ? window.personnelApi : null);
+    if (b) {
+      window.connectOrgTreeFirestore(b);
+      clearInterval(treeBridgeTimer);
+    } else if (treeBridgeAttempts > 30) {
+      clearInterval(treeBridgeTimer);
+    }
+  }, 250);
+
+  window.addEventListener("DOMContentLoaded", () => { loadLocal(); syncDerivedLists(); renderManager(); });
 })();

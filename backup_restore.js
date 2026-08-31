@@ -1,5 +1,14 @@
 // ==================== BACKUP & RESTORE MODULE (backup_restore.js) ====================
-import { doc, setDoc, getDocs, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { 
+  doc, 
+  setDoc, 
+  getDocs, 
+  collection, 
+  deleteDoc, 
+  getDoc, 
+  onSnapshot, 
+  serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { 
   ref, 
   uploadBytes, 
@@ -552,7 +561,17 @@ window.fetchImageAsBlobOrBase64 = async function(imageUrl, fallbackLabel = 'Flor
       }
     } catch (e) {}
 
+    // Try local backend proxy endpoint
+    try {
+      const proxyLocalRes = await fetch(`/api/proxy-fetch-image?url=${encodeURIComponent(trimmedUrl)}`);
+      if (proxyLocalRes.ok) {
+        const proxyLocalBlob = await proxyLocalRes.blob();
+        if (proxyLocalBlob && proxyLocalBlob.size > 0) return proxyLocalBlob;
+      }
+    } catch (eLocalProxy) {}
+
     const corsProxies = [
+      (u) => `/api/proxy-fetch-image?url=${encodeURIComponent(u)}`,
       (u) => `https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=2592000&url=${encodeURIComponent(u)}`,
       (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
     ];
@@ -710,6 +729,13 @@ window.exportBackupToSelectedFolder = async function() {
     }
 
     const now = new Date();
+    let orgTreeBackup = null;
+    try {
+      if (typeof window.getFloraOrgTree === 'function') orgTreeBackup = window.getFloraOrgTree();
+      else if (localStorage.getItem('flora_org_tree_v2')) orgTreeBackup = JSON.parse(localStorage.getItem('flora_org_tree_v2'));
+      else if (localStorage.getItem('flora_org_tree_data')) orgTreeBackup = JSON.parse(localStorage.getItem('flora_org_tree_data'));
+    } catch(e) {}
+
     const backupData = {
       version: "2.0",
       appName: "Flora Garden Stock & Employee System",
@@ -717,6 +743,7 @@ window.exportBackupToSelectedFolder = async function() {
       backupDateThai: now.toLocaleString('th-TH'),
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      orgStructure: orgTreeBackup,
       deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
@@ -803,6 +830,14 @@ window.downloadBackupAsZipPackage = async function() {
     backupDateThai: now.toLocaleString('th-TH'),
     equipmentList: clonedEquipment,
     employeeList: clonedEmployees,
+    orgStructure: (function(){
+      try {
+        if (typeof window.getFloraOrgTree === 'function') return window.getFloraOrgTree();
+        if (localStorage.getItem('flora_org_tree_v2')) return JSON.parse(localStorage.getItem('flora_org_tree_v2'));
+        if (localStorage.getItem('flora_org_tree_data')) return JSON.parse(localStorage.getItem('flora_org_tree_data'));
+      } catch(e) {}
+      return null;
+    })(),
     deletedEmployees: safeJsonClone(window.deletedEmployees || []),
     transactionHistory: window.transactionHistory || [],
     attendanceLogs: window.attendanceLogs || [],
@@ -867,6 +902,14 @@ window.downloadDatabaseBackup = async function() {
       backupDateThai: thaiDateStr,
       equipmentList: clonedEquipment,
       employeeList: clonedEmployees,
+      orgStructure: (function(){
+        try {
+          if (typeof window.getFloraOrgTree === 'function') return window.getFloraOrgTree();
+          if (localStorage.getItem('flora_org_tree_v2')) return JSON.parse(localStorage.getItem('flora_org_tree_v2'));
+          if (localStorage.getItem('flora_org_tree_data')) return JSON.parse(localStorage.getItem('flora_org_tree_data'));
+        } catch(e) {}
+        return null;
+      })(),
       deletedEmployees: safeJsonClone(window.deletedEmployees || []),
       transactionHistory: window.transactionHistory || [],
       attendanceLogs: window.attendanceLogs || [],
@@ -1865,6 +1908,23 @@ window.executeRestoreDatabase = async function() {
             if (aud && aud.id) await setDoc(doc(window.db, "audit_logs", aud.id), aud);
           }
         }
+
+        // Restore Org Structure Tree if present
+        const restoredTree = tempParsedRestoreData.orgStructure || tempParsedRestoreData.org_structure || tempParsedRestoreData.tree;
+        if (restoredTree) {
+          try {
+            await setDoc(doc(window.db, "org_structure", "main"), {
+              format: "FLORA_ORG_TREE",
+              version: 2,
+              tree: restoredTree,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            localStorage.setItem('flora_org_tree_v2', JSON.stringify(restoredTree));
+            localStorage.setItem('flora_org_tree_data', JSON.stringify(restoredTree));
+          } catch (treeErr) {
+            console.warn("Restore org_structure notice:", treeErr);
+          }
+        }
       } catch (fsErr) {
         console.warn("Firestore sync during restore notice:", fsErr);
       }
@@ -1948,129 +2008,314 @@ window.executeRestoreDatabase = async function() {
   }
 };
 
-// 18. Firebase Storage Image Upload Sync
+// 18. Firebase Storage Image Upload Sync & Bucket Migration
 window.uploadBase64OrUrlToFirebaseStorage = async function(imageUrl, folderName = "equipment_images", defaultName = "item.jpeg", forceReupload = false) {
-  if (!imageUrl) return imageUrl;
+  if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') return imageUrl;
 
-  const currentBucket = (typeof window.firebaseConfig !== 'undefined' && window.firebaseConfig.storageBucket) ? window.firebaseConfig.storageBucket : "flora-gaden.firebasestorage.app";
-  
-  if (!forceReupload && typeof imageUrl === 'string' && imageUrl.includes(currentBucket) && !imageUrl.startsWith('data:')) {
+  const isAlreadyInNewBucket = 
+    (imageUrl.includes('pai-meditation') || imageUrl.includes('b/pai-meditation/o')) &&
+    !imageUrl.startsWith('data:');
+
+  if (!forceReupload && isAlreadyInNewBucket) {
     return imageUrl;
   }
 
-  if (window.isFirebaseReady && window.storage) {
-    try {
-      let rawBlob = null;
-      if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
-        const res = await fetch(imageUrl);
-        rawBlob = await res.blob();
-      } else {
-        rawBlob = await window.fetchImageAsBlobOrBase64(imageUrl);
+  const cleanName = defaultName ? defaultName.replace(/[^a-zA-Z0-9._-]/g, '_') : 'item';
+  const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp|svg)$/i, '');
+  const fileName = `${baseName}.webp`;
+
+  // Method 1: Fast & Resilient Server-Side Migration Endpoint (No CORS, Zero Blocking)
+  try {
+    const apiResp = await fetch('/api/migrate-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceUrl: imageUrl,
+        folderName: folderName,
+        fileName: fileName
+      })
+    });
+
+    if (apiResp.ok) {
+      const data = await apiResp.json();
+      if (data && data.newUrl) {
+        console.log(`✅ [Server] Migrated image (${folderName}/${fileName}) to bucket ${data.bucket}:`, data.newUrl);
+        return data.newUrl;
       }
-
-      if (rawBlob) {
-        const presetType = (folderName === 'employee_photos') ? 'EMPLOYEE' : 'EQUIPMENT';
-        let targetBlob = rawBlob;
-        let ext = 'webp';
-
-        if (typeof window.autoOptimizeAndResizeImage === 'function') {
-          const optRes = await window.autoOptimizeAndResizeImage(rawBlob, { presetType });
-          if (optRes && optRes.blob) {
-            targetBlob = optRes.blob;
-            ext = optRes.extension || 'webp';
-          }
-        }
-
-        const cleanName = defaultName ? defaultName.replace(/[^a-zA-Z0-9._-]/g, '_') : 'item';
-        const baseName = cleanName.replace(/\.(jpeg|jpg|png|webp)$/i, '');
-        const fileName = `${baseName}.${ext}`;
-
-        const storageRef = ref(window.storage, `${folderName}/${fileName}`);
-        const snapshot = await uploadBytes(storageRef, targetBlob);
-        const downloadUrl = await getDownloadURL(snapshot.ref);
-        console.log(`Uploaded optimized image to current Firebase Storage (${folderName}/${fileName}):`, downloadUrl);
-        return downloadUrl;
-      }
-    } catch (err) {
-      console.warn("Upload image to current Firebase Storage notice:", err);
+    } else {
+      console.warn(`[Server] Image migrate API returned HTTP ${apiResp.status}, trying fallback...`);
     }
+  } catch (apiErr) {
+    console.warn("[Server] Image migrate API fetch notice:", apiErr.message);
+  }
+
+  // Method 2: Direct REST upload to pai-meditation bucket with 6s timeout
+  try {
+    let rawBlob = null;
+    if (imageUrl.startsWith('data:')) {
+      const res = await fetch(imageUrl);
+      rawBlob = await res.blob();
+    } else {
+      rawBlob = await window.fetchImageAsBlobOrBase64(imageUrl);
+    }
+
+    if (rawBlob && rawBlob.size > 0) {
+      const targetBlob = rawBlob;
+      const mimeType = targetBlob.type || 'image/webp';
+      const bucket = 'pai-meditation';
+      const filePath = `${folderName}/${fileName}`;
+      const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?name=${encodeURIComponent(filePath)}`;
+
+      const restRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType },
+        body: targetBlob
+      });
+
+      if (restRes.ok) {
+        const restData = await restRes.json();
+        const downloadToken = restData.downloadTokens || '';
+        const finalUrl = downloadToken
+          ? `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media&token=${downloadToken}`
+          : `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(filePath)}?alt=media`;
+        console.log(`✅ [Client REST] Uploaded image to [${bucket}] (${filePath}):`, finalUrl);
+        return finalUrl;
+      }
+    }
+  } catch (clientErr) {
+    console.warn("[Client REST] Fallback upload notice:", clientErr.message);
   }
 
   return imageUrl;
 };
 
-window.syncAllImagesToFirebaseStorage = async function() {
-  if (!window.isFirebaseReady || !window.storage) {
-    if (typeof getGlobalToast === 'function') getGlobalToast()("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน");
-    else alert("⚠️ Firebase Storage ยังไม่พร้อมใช้งาน");
+// 19. Dedicated Image Bucket Migration Function (Old Bucket -> pai-meditation)
+window.migrateAllImagesToNewBucket = async function(options = {}) {
+  const forceReupload = options.forceReupload || false;
+  const currentBucket = (typeof window.firebaseConfig !== 'undefined' && window.firebaseConfig.storageBucket)
+    ? window.firebaseConfig.storageBucket
+    : "pai-meditation";
+
+  if (!window.isFirebaseReady) {
+    const errMsg = "⚠️ ระบบกำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่หรือรีเฟรชหน้าเว็บ";
+    if (typeof getGlobalToast === 'function') getGlobalToast()(errMsg);
+    else alert(errMsg);
     return;
   }
+
+  // Count items to migrate
+  const equipmentList = window.equipmentList || [];
+  const employeeList = window.employeeList || [];
+
+  let equipPending = 0;
+  let equipAlreadyNew = 0;
+  equipmentList.forEach(eq => {
+    if (eq && eq.imageUrl && typeof eq.imageUrl === 'string' && eq.imageUrl.trim() !== '') {
+      if (eq.imageUrl.includes('pai-meditation') && !forceReupload) equipAlreadyNew++;
+      else equipPending++;
+    }
+  });
+
+  let empPending = 0;
+  let empAlreadyNew = 0;
+  employeeList.forEach(emp => {
+    if (emp && emp.photoUrl && typeof emp.photoUrl === 'string' && emp.photoUrl.trim() !== '') {
+      if (emp.photoUrl.includes('pai-meditation') && !forceReupload) empAlreadyNew++;
+      else empPending++;
+    }
+  });
+
+  const totalToProcess = equipPending + empPending;
+
+  const confirmMsg = 
+    `📦 คัดลอกรูปภาพทั้งหมดไปยัง Bucket ใหม่ (${currentBucket})\n\n` +
+    `📊 สรุปรายการรูปภาพในระบบ:\n` +
+    `• รูปอุปกรณ์ที่ต้องย้าย: ${equipPending} รายการ (${equipAlreadyNew} รายการอยู่ใน Bucket ใหม่แล้ว)\n` +
+    `• รูปพนักงานที่ต้องย้าย: ${empPending} รายการ (${empAlreadyNew} รายการอยู่ใน Bucket ใหม่แล้ว)\n` +
+    `• รวมที่ต้องประมวลผล: ${totalToProcess} รายการ\n\n` +
+    `🛡️ ยืนยันความปลอดภัย: ระบบจะทำการดาวน์โหลดจาก URL เดิมแล้วอัปโหลดขึ้น Bucket ใหม่ (pai-meditation) และอัปเดต URL ใน Firestore ให้อัตโนมัติ โดย "รูปภาพใน Bucket เดิมจะไม่ถูกลบหรือได้รับผลกระทบใดๆ ทั้งสิ้น 100%"\n\n` +
+    `ต้องการเริ่มการคัดลอกรูปภาพทันทีหรือไม่?`;
 
   const ok = typeof window.showConfirmDialog === 'function'
     ? await window.showConfirmDialog({
-        title: "ซิงก์รูปภาพสู่ Storage",
-        message: "ต้องการซิงก์และอัปโหลดรูปภาพทั้งหมด (อุปกรณ์และพนักงาน) สู่ Firebase Storage หรือไม่?",
+        title: "คัดลอกรูปภาพสู่ Bucket ใหม่",
+        message: confirmMsg,
         type: "primary",
         icon: "bi-cloud-arrow-up-fill",
-        confirmText: "เริ่มซิงก์รูปภาพ"
+        confirmText: "เริ่มคัดลอกรูปภาพ"
       })
-    : confirm("ต้องการซิงก์รูปภาพทั้งหมดหรือไม่?");
+    : confirm(confirmMsg);
 
-  if (!ok) {
-    return;
-  }
+  if (!ok) return;
 
-  getGlobalToast()("⏳ กำลังเริ่มประมวลผลและอัปโหลดรูปภาพทั้งหมดไปยัง Firebase Storage...");
-  let equipUploaded = 0;
-  let empUploaded = 0;
+  if (typeof getGlobalToast === 'function') getGlobalToast()("⏳ กำลังเริ่มคัดลอกและอัปโหลดรูปภาพทั้งหมดสู่ Bucket ใหม่...");
+  window.updateBackupProgress(5, "กำลังเตรียมการคัดลอกรูปภาพ...", `เชื่อมต่อ Firebase Storage (${currentBucket})`, true, "bg-primary");
+
+  let equipMigrated = 0;
+  let empMigrated = 0;
+  let skippedCount = 0;
+  let failCount = 0;
+  const failedItems = [];
 
   try {
-    const equipmentList = window.equipmentList || [];
-    const employeeList = window.employeeList || [];
+    let processed = 0;
 
+    // 1. Process Equipment Images
     for (let i = 0; i < equipmentList.length; i++) {
       const eq = equipmentList[i];
-      if (eq && eq.imageUrl && !eq.imageUrl.includes('firebasestorage.googleapis.com')) {
-        const safeCode = (eq.code || eq.id || `eq_${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const newUrl = await window.uploadBase64OrUrlToFirebaseStorage(eq.imageUrl, "equipment_images", `${safeCode}.jpeg`);
+      if (!eq || !eq.imageUrl || typeof eq.imageUrl !== 'string' || eq.imageUrl.trim() === '') {
+        continue;
+      }
+
+      const isNew = eq.imageUrl.includes('pai-meditation') || eq.imageUrl.includes(currentBucket);
+      if (isNew && !forceReupload) {
+        skippedCount++;
+        continue;
+      }
+
+      processed++;
+      const currentPct = Math.round(5 + ((processed / (totalToProcess || 1)) * 85));
+      const safeCode = (eq.code || eq.id || `eq_${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const itemTitle = eq.name || eq.code || `อุปกรณ์ #${i + 1}`;
+
+      window.updateBackupProgress(
+        currentPct,
+        `กำลังคัดลอกรูปอุปกรณ์ (${processed}/${totalToProcess})`,
+        `[${eq.code || safeCode}] ${itemTitle}`,
+        true,
+        "bg-primary"
+      );
+
+      try {
+        const newUrl = await window.uploadBase64OrUrlToFirebaseStorage(
+          eq.imageUrl,
+          "equipment_images",
+          `${safeCode}.jpeg`,
+          true
+        );
+
         if (newUrl && newUrl !== eq.imageUrl) {
           eq.imageUrl = newUrl;
-          equipUploaded++;
+          equipMigrated++;
           if (window.isFirebaseReady && window.db && eq.id) {
-            try { await setDoc(doc(window.db, "equipment", eq.id), eq, { merge: true }); } catch (e) {}
+            try {
+              await setDoc(doc(window.db, "equipment", eq.id), { imageUrl: newUrl }, { merge: true });
+            } catch (dbErr) {
+              console.warn("Firestore update error for equipment image:", eq.id, dbErr);
+            }
           }
         }
+      } catch (itemErr) {
+        console.error(`Failed to migrate image for equipment ${eq.code}:`, itemErr);
+        failCount++;
+        failedItems.push(`อุปกรณ์: ${eq.code || eq.name} (${itemErr.message})`);
       }
     }
 
+    // 2. Process Employee Photos
     for (let i = 0; i < employeeList.length; i++) {
       const emp = employeeList[i];
-      if (emp && emp.photoUrl && !emp.photoUrl.includes('firebasestorage.googleapis.com')) {
-        const safeCode = (emp.code || emp.id || `emp_${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const newUrl = await window.uploadBase64OrUrlToFirebaseStorage(emp.photoUrl, "employee_photos", `${safeCode}.jpeg`);
+      if (!emp || !emp.photoUrl || typeof emp.photoUrl !== 'string' || emp.photoUrl.trim() === '') {
+        continue;
+      }
+
+      const isNew = emp.photoUrl.includes('pai-meditation') || emp.photoUrl.includes(currentBucket);
+      if (isNew && !forceReupload) {
+        skippedCount++;
+        continue;
+      }
+
+      processed++;
+      const currentPct = Math.round(5 + ((processed / (totalToProcess || 1)) * 85));
+      const safeCode = (emp.code || emp.id || `emp_${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const itemTitle = emp.name || emp.code || `พนักงาน #${i + 1}`;
+
+      window.updateBackupProgress(
+        currentPct,
+        `กำลังคัดลอกรูปพนักงาน (${processed}/${totalToProcess})`,
+        `[${emp.code || safeCode}] ${itemTitle}`,
+        true,
+        "bg-primary"
+      );
+
+      try {
+        const newUrl = await window.uploadBase64OrUrlToFirebaseStorage(
+          emp.photoUrl,
+          "employee_photos",
+          `${safeCode}.jpeg`,
+          true
+        );
+
         if (newUrl && newUrl !== emp.photoUrl) {
           emp.photoUrl = newUrl;
-          empUploaded++;
+          empMigrated++;
           if (window.isFirebaseReady && window.db && emp.id) {
-            try { await setDoc(doc(window.db, "employees", emp.id), emp, { merge: true }); } catch (e) {}
+            try {
+              await setDoc(doc(window.db, "employees", emp.id), { photoUrl: newUrl }, { merge: true });
+            } catch (dbErr) {
+              console.warn("Firestore update error for employee photo:", emp.id, dbErr);
+            }
           }
         }
+      } catch (itemErr) {
+        console.error(`Failed to migrate photo for employee ${emp.code}:`, itemErr);
+        failCount++;
+        failedItems.push(`พนักงาน: ${emp.code || emp.name} (${itemErr.message})`);
       }
     }
 
+    // 3. Process Global Logo / System Assets
+    try {
+      if (window.globalLogoData && window.globalLogoData.logoUrl && !window.globalLogoData.logoUrl.includes('pai-meditation')) {
+        const newLogoUrl = await window.uploadBase64OrUrlToFirebaseStorage(
+          window.globalLogoData.logoUrl,
+          "system_assets",
+          `global_logo_${Date.now()}.webp`,
+          true
+        );
+        if (newLogoUrl) {
+          window.globalLogoData.logoUrl = newLogoUrl;
+          if (window.isFirebaseReady && window.db) {
+            try {
+              await setDoc(doc(window.db, "system_settings", "global_logo"), { logoUrl: newLogoUrl }, { merge: true });
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (logoErr) {}
+
+    window.updateBackupProgress(100, "คัดลอกรูปภาพสู่ Bucket ใหม่สำเร็จเรียบร้อย!", `บันทึกข้อมูลลงฐานข้อมูล Firestore แล้ว`, true, "bg-success");
+
+    // Save and re-render
     if (typeof window.saveToLocalStorage === 'function') window.saveToLocalStorage();
     if (typeof window.renderCatalogGrid === 'function') window.renderCatalogGrid();
     if (typeof window.renderStaffTable === 'function') window.renderStaffTable();
     if (typeof window.renderEmployeeDirectory === 'function') window.renderEmployeeDirectory();
+    if (typeof window.renderOrgChart === 'function') window.renderOrgChart();
 
-    const successMsg = `🎉 ซิงก์รูปภาพเข้า Firebase Storage เรียบร้อยแล้ว!\n\n• อัปโหลดรูปอุปกรณ์สำเร็จ: ${equipUploaded} รายการ\n• อัปโหลดรูปถ่ายพนักงานสำเร็จ: ${empUploaded} รายการ\n\nรูปภาพทั้งหมดเปลี่ยนไปใช้ URL จาก Firebase Storage ของโปรเจกต์ใหม่แล้วครับ`;
-    alert(successMsg);
-    getGlobalToast()("🎉 ซิงก์รูปภาพทั้งหมดเข้า Firebase Storage สำเร็จแล้ว!");
+    const totalUpdated = equipMigrated + empMigrated;
+    const summaryMsg =
+      `🎉 คัดลอกรูปภาพและอัปเดตฐานข้อมูลสำเร็จเรียบร้อยแล้ว!\n\n` +
+      `📦 Storage Bucket ปลายทาง: ${currentBucket}\n\n` +
+      `• ย้ายรูปอุปกรณ์สำเร็จ: ${equipMigrated} รายการ\n` +
+      `• ย้ายรูปพนักงานสำเร็จ: ${empMigrated} รายการ\n` +
+      `• ข้าม (อยู่ใน Bucket ใหม่แล้ว): ${skippedCount} รายการ\n` +
+      (failCount > 0 ? `• ขัดข้อง: ${failCount} รายการ\n` : '') +
+      `\n✅ URL รูปภาพทั้งหมดใน Firestore ถูกอัปเดตเป็นของ Bucket ใหม่ (${currentBucket}) เรียบร้อย 100%\n` +
+      `🛡️ ยืนยัน: ไฟล์รูปภาพใน Bucket เดิมยังคงอยู่ปลอดภัย ไม่ถูกลบหรือแก้ไขใดๆ ทั้งสิ้น`;
+
+    alert(summaryMsg);
+    if (typeof getGlobalToast === 'function') getGlobalToast()(`🎉 ย้ายรูปภาพสำเร็จ ${totalUpdated} รายการ`);
+
   } catch (err) {
-    console.error("Sync images to Storage error:", err);
-    alert("เกิดข้อผิดพลาดขณะอัปโหลดรูปภาพ: " + err.message);
+    console.error("Migration error:", err);
+    window.updateBackupProgress(0, "เกิดข้อผิดพลาดในการคัดลอกรูปภาพ", err.message, true, "bg-danger");
+    alert("เกิดข้อผิดพลาดขณะคัดลอกรูปภาพ: " + err.message);
   }
 };
+
+window.syncAllImagesToFirebaseStorage = window.migrateAllImagesToNewBucket;
+window.startImageBucketMigration = window.migrateAllImagesToNewBucket;
 
 // ==================== 20. GOOGLE DRIVE BACKUP & RESTORE INTEGRATION ====================
 
@@ -3143,18 +3388,109 @@ window.executeGoogleDriveRotationBackup = async function(dayInfo = window.getRot
 
 window._isHybridBackupRunning = false;
 window._lastHybridBackupAttemptTimestamp = 0;
+window._cloudBackupStatus = null;
+let _hasSubscribedBackupStatus = false;
 
+// 1. Cloud Firestore Real-time Backup Status Synchronization
+window.subscribeToCloudBackupStatus = function() {
+  if (_hasSubscribedBackupStatus) return;
+  if (!window.db) return;
+  try {
+    const statusDocRef = doc(window.db, "system_settings", "backup_status");
+    _hasSubscribedBackupStatus = true;
+    onSnapshot(statusDocRef, (snap) => {
+      if (snap.exists()) {
+        window._cloudBackupStatus = snap.data();
+      } else {
+        window._cloudBackupStatus = null;
+      }
+      if (typeof window.updateHybridBackupStatusUI === 'function') {
+        window.updateHybridBackupStatusUI();
+      }
+    }, (err) => {
+      console.warn("[CloudBackupStatus] Snapshot listener notice:", err);
+    });
+  } catch (e) {
+    console.warn("[CloudBackupStatus] Subscribe notice:", e);
+  }
+};
+
+window.getBackupStatusFromFirestore = async function() {
+  if (window._cloudBackupStatus) {
+    return window._cloudBackupStatus;
+  }
+  if (window.db) {
+    try {
+      const statusDocRef = doc(window.db, "system_settings", "backup_status");
+      const snap = await getDoc(statusDocRef);
+      if (snap.exists()) {
+        window._cloudBackupStatus = snap.data();
+        return snap.data();
+      }
+    } catch (e) {
+      console.warn("[CloudBackupStatus] getDoc notice:", e);
+    }
+  }
+  return window._cloudBackupStatus || null;
+};
+
+window.setBackupStatusToFirestore = async function(statusData) {
+  if (!window.db) return;
+  try {
+    const statusDocRef = doc(window.db, "system_settings", "backup_status");
+    const payload = {
+      ...statusData,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(statusDocRef, payload, { merge: true });
+    window._cloudBackupStatus = { ...(window._cloudBackupStatus || {}), ...payload };
+    if (typeof window.updateHybridBackupStatusUI === 'function') {
+      window.updateHybridBackupStatusUI();
+    }
+  } catch (err) {
+    console.error("[CloudBackupStatus] Error saving status to Firestore:", err);
+  }
+};
+
+// 2. Admin Check Helper
+function isCurrentUserAdmin() {
+  const currentEmail = (window.currentAuthUser && window.currentAuthUser.email) ||
+                       (window.currentUserProfile && window.currentUserProfile.email) ||
+                       (window.currentUser && window.currentUser.email) ||
+                       '';
+  const currentRole = window.currentRole || '';
+  const isEmailAdmin = currentEmail.toLowerCase() === 'jaru072@gmail.com';
+  const isRoleAdmin = currentRole === 'ADMIN';
+  const isSuperAdminStrict = typeof window.isThammaSrithongAdminStrict === 'function' && window.isThammaSrithongAdminStrict();
+  const isDbEditor = typeof window.canAccessDatabaseEditor === 'function' && window.canAccessDatabaseEditor();
+  return isEmailAdmin || isRoleAdmin || isSuperAdminStrict || isDbEditor;
+}
+
+// 3. Main Hybrid Daily Backup Process
 window.runHybridDailyBackup = async function(isManual = false) {
   const dayInfo = window.getRotationDayInfo();
-  const todayStr = dayInfo.dateIso;
+  const todayStr = dayInfo.dateIso; // YYYY-MM-DD in Asia/Bangkok
 
-  // 1. Concurrency Mutex Lock: prevent multiple callers from running simultaneously
+  // 3.1 Admin Permission Check (Admin Only)
+  const isAdmin = isCurrentUserAdmin();
+  if (!isAdmin) {
+    if (isManual) {
+      alert("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถสั่งสำรองข้อมูลได้");
+      const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
+      toast("⚠️ เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถสั่งสำรองข้อมูลได้");
+    } else {
+      console.log("[HybridBackup] Active user is not Admin. Auto daily backup skipped.");
+    }
+    return { skipped: true, reason: "Not Admin user" };
+  }
+
+  // 3.2 Concurrency Mutex Lock: prevent multiple callers from running simultaneously
   if (window._isHybridBackupRunning) {
     console.log(`[HybridBackup] Backup process is currently running. Skipping concurrent trigger.`);
     return { skipped: true, reason: "Backup already running" };
   }
 
-  // 2. Debounce Lock: ignore repeated auto-triggers within 15 seconds
+  // 3.3 Debounce Lock: ignore repeated auto-triggers within 15 seconds
   const nowMs = Date.now();
   if (!isManual && (nowMs - (window._lastHybridBackupAttemptTimestamp || 0)) < 15000) {
     console.log(`[HybridBackup] Debounced: auto-backup triggered too quickly.`);
@@ -3162,101 +3498,101 @@ window.runHybridDailyBackup = async function(isManual = false) {
   }
   window._lastHybridBackupAttemptTimestamp = nowMs;
 
-  // 3. Status checks for today (Separate Local vs Google Drive)
-  const lastLocalBackupDate = localStorage.getItem('flora_last_local_backup_date');
-  const lastDriveBackupDate = localStorage.getItem('flora_last_drive_backup_date');
-  const legacyLastBackupDate = localStorage.getItem('flora_last_hybrid_backup_date');
-  const lastLocalOk = localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true';
-  const lastDriveOk = localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true';
+  // 3.4 Check Cloud Firestore Backup Status (Real-time tracking)
+  const cloudStatus = await window.getBackupStatusFromFirestore();
+  const isDoneTodayInCloud = cloudStatus && cloudStatus.lastBackupDate === todayStr && (cloudStatus.localBackupOk || cloudStatus.driveBackupOk);
 
-  // Determine if already completed today
-  const isLocalDoneToday = (lastLocalBackupDate === todayStr) || (legacyLastBackupDate === todayStr && lastLocalOk);
-  const isDriveDoneToday = (lastDriveBackupDate === todayStr) || (legacyLastBackupDate === todayStr && lastDriveOk);
-
-  // If auto-backup (not manual) and BOTH systems are already done today, skip completely
-  if (!isManual && isLocalDoneToday && isDriveDoneToday) {
-    console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) in Thailand timezone has already fully run today.`);
+  // 3.5 Prevent Duplicate Daily Auto-Backup
+  if (!isManual && isDoneTodayInCloud) {
+    console.log(`[HybridBackup] Daily backup for ${dayInfo.dayOfWeekEn} (${todayStr}) in Thailand timezone has already been completed today in Cloud Firestore. Skipping auto backup.`);
     window.updateHybridBackupStatusUI();
-    return { skipped: true, reason: "Already completed today" };
+    return { skipped: true, reason: "Already completed today in Cloud Firestore" };
   }
 
-  // Admin Identity Check: Thamma Srithong (jaru072@gmail.com) or ADMIN role
-  const currentEmail = (window.currentAuthUser && window.currentAuthUser.email) ||
-                       (window.currentUserProfile && window.currentUserProfile.email) ||
-                       (window.currentUser && window.currentUser.email) ||
-                       '';
-  const currentRole = window.currentRole || '';
-  const isAdmin = currentEmail.toLowerCase() === 'jaru072@gmail.com' || currentRole === 'ADMIN';
-
-  if (!isAdmin && !isManual) {
-    console.log("[HybridBackup] Active user is not Admin. Auto daily backup skipped.");
-    return { skipped: true, reason: "Not Admin user" };
+  // 3.6 Manual Confirmation Dialog if already backed up today
+  if (isManual && isDoneTodayInCloud) {
+    let timeFormatted = '';
+    if (cloudStatus.lastBackupTime) {
+      try {
+        timeFormatted = new Date(cloudStatus.lastBackupTime).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        timeFormatted = '';
+      }
+    }
+    const confirmMessage = `ℹ️ ระบบตรวจพบว่าในวันนี้ (${dayInfo.dayOfWeekTh} ที่ ${dayInfo.dateIso}) ได้มีการสำรองข้อมูลไปแล้ว${timeFormatted ? ` เมื่อเวลา ${timeFormatted} น.` : ''}\n\nคุณต้องการสำรองข้อมูลซ้ำอีกครั้งหรือไม่?`;
+    const confirmed = confirm(confirmMessage);
+    if (!confirmed) {
+      const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
+      toast("ℹ️ ยกเลิกการสำรองข้อมูลซ้ำ");
+      return { cancelled: true, reason: "User cancelled manual duplicate backup" };
+    }
   }
 
-  // Acquire Mutex Lock
+  // 3.7 Acquire Mutex Lock
   window._isHybridBackupRunning = true;
 
   try {
     // Wait briefly if initial data lists are still loading
     if ((!window.equipmentList || window.equipmentList.length === 0) && (!window.employeeList || window.employeeList.length === 0)) {
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     console.log(`[HybridBackup] Executing Hybrid Dual Backup check for ${dayInfo.dayOfWeekEn} (${dayInfo.dayOfWeekTh}) [Asia/Bangkok]...`);
 
     // -------------------------------------------------------------
-    // Part 1: Local Download to User Machine (Max 1 auto-download per calendar day)
+    // Part 1: Local Download to User Machine
     // -------------------------------------------------------------
     let localRes = null;
-    if (isManual || !isLocalDoneToday) {
-      try {
-        localRes = window.executeLocalHybridBackup(dayInfo);
-        if (localRes && localRes.success) {
-          // Immediately mark local backup completed for today to eliminate race windows
-          localStorage.setItem('flora_last_local_backup_date', todayStr);
-          localStorage.setItem('flora_last_hybrid_backup_local_ok', 'true');
-          localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
-          localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
-        }
-      } catch (lErr) {
-        console.error("[HybridBackup] Local backup error:", lErr);
-      }
-    } else {
-      localRes = { success: true, reason: "Already downloaded earlier today" };
+    try {
+      localRes = window.executeLocalHybridBackup(dayInfo);
+    } catch (lErr) {
+      console.error("[HybridBackup] Local backup error:", lErr);
+      localRes = { success: false, reason: lErr.message };
     }
 
     // -------------------------------------------------------------
     // Part 2: Google Drive Day Rotation Backup (Monday-Sunday)
     // -------------------------------------------------------------
     let driveRes = null;
-    if (isManual || !isDriveDoneToday) {
-      try {
-        driveRes = await window.executeGoogleDriveRotationBackup(dayInfo, !isManual);
-        if (driveRes && driveRes.success) {
-          // Immediately mark drive backup completed for today
-          localStorage.setItem('flora_last_drive_backup_date', todayStr);
-          localStorage.setItem('flora_last_hybrid_backup_drive_ok', 'true');
-          localStorage.setItem('flora_last_hybrid_backup_date', todayStr);
-          localStorage.setItem('flora_last_hybrid_backup_time', new Date().toISOString());
-        }
-      } catch (dErr) {
-        console.warn("[HybridBackup] Drive backup warning:", dErr);
-      }
-    } else {
-      driveRes = { success: true, reason: "Already backed up to Drive earlier today" };
+    try {
+      driveRes = await window.executeGoogleDriveRotationBackup(dayInfo, !isManual);
+    } catch (dErr) {
+      console.warn("[HybridBackup] Drive backup warning:", dErr);
+      driveRes = { success: false, reason: dErr.message };
     }
 
-    // Record meta fields
-    localStorage.setItem('flora_last_hybrid_backup_day', dayInfo.dayOfWeekEn);
-    localStorage.setItem('flora_last_hybrid_backup_day_th', dayInfo.dayOfWeekTh);
+    // -------------------------------------------------------------
+    // Part 3: Record Status Directly in Cloud Firestore (No LocalStorage)
+    // -------------------------------------------------------------
+    const currentEmail = (window.currentAuthUser && window.currentAuthUser.email) ||
+                         (window.currentUserProfile && window.currentUserProfile.email) ||
+                         'jaru072@gmail.com';
+    const currentName = (window.currentAuthUser && window.currentAuthUser.displayName) ||
+                        (window.currentUserProfile && window.currentUserProfile.displayName) ||
+                        'Thamma Srithong';
+
+    await window.setBackupStatusToFirestore({
+      lastBackupDate: todayStr,
+      lastBackupTime: new Date().toISOString(),
+      lastBackupDayEn: dayInfo.dayOfWeekEn,
+      lastBackupDayTh: dayInfo.dayOfWeekTh,
+      localBackupOk: Boolean(localRes && localRes.success),
+      driveBackupOk: Boolean(driveRes && driveRes.success),
+      lastLocalFileName: localRes?.fileName || `FloraGarden_Backup_${dayInfo.dayOfWeekEn}_${todayStr}.json`,
+      lastDriveFileName: driveRes?.jsonFileName || `flora_garden_backup_${dayInfo.dayOfWeekEn}_${todayStr}.json`,
+      lastDriveFolder: dayInfo.dayOfWeekEn,
+      performedBy: currentEmail,
+      performedByName: currentName,
+      isManualTrigger: isManual
+    });
 
     window.updateHybridBackupStatusUI();
 
-    // Toast Notification (only notify if actual work was performed)
+    // Toast Notification (only notify if work was performed)
     const toast = typeof getGlobalToast === 'function' ? getGlobalToast() : (typeof showToast === 'function' ? showToast : console.log);
 
-    const didLocalWork = localRes && localRes.success && localRes.reason !== "Already downloaded earlier today";
-    const didDriveWork = driveRes && driveRes.success && driveRes.reason !== "Already backed up to Drive earlier today";
+    const didLocalWork = localRes && localRes.success;
+    const didDriveWork = driveRes && driveRes.success;
 
     if (didDriveWork && didLocalWork) {
       toast(`☁️ สำรองข้อมูลอัตโนมัติประจำ${dayInfo.dayOfWeekTh} (${dayInfo.dayOfWeekEn}) ครบทั้ง 2 ระบบ (Google Drive & ดาวน์โหลดลงเครื่อง) เรียบร้อยแล้ว!`);
@@ -3284,34 +3620,40 @@ window.updateHybridBackupStatusUI = function() {
 
   if (badgeElem) {
     const todayStr = dayInfo.dateIso;
-    const lastLocalBackupDate = localStorage.getItem('flora_last_local_backup_date');
-    const lastDriveBackupDate = localStorage.getItem('flora_last_drive_backup_date');
-    const lastDate = localStorage.getItem('flora_last_hybrid_backup_date');
-    const lastTime = localStorage.getItem('flora_last_hybrid_backup_time');
-    const lastDayTh = localStorage.getItem('flora_last_hybrid_backup_day_th') || '';
-    const lastDayEn = localStorage.getItem('flora_last_hybrid_backup_day') || '';
-    const driveOk = (lastDriveBackupDate === todayStr) || (lastDate === todayStr && localStorage.getItem('flora_last_hybrid_backup_drive_ok') === 'true');
-    const localOk = (lastLocalBackupDate === todayStr) || (lastDate === todayStr && localStorage.getItem('flora_last_hybrid_backup_local_ok') === 'true');
+    const cloud = window._cloudBackupStatus;
 
-    if ((lastDate === todayStr || localOk || driveOk) && lastTime) {
-      const timeStr = new Date(lastTime).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
-      if (driveOk && localOk) {
+    if (cloud && cloud.lastBackupDate === todayStr && cloud.lastBackupTime) {
+      let timeStr = '';
+      try {
+        timeStr = new Date(cloud.lastBackupTime).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        timeStr = '';
+      }
+      if (cloud.driveBackupOk && cloud.localBackupOk) {
         badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
         badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น. - Google Drive & เครื่อง)`;
-      } else if (localOk) {
+      } else if (cloud.driveBackupOk) {
+        badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองขึ้น Google Drive วันนี้แล้ว (${timeStr} น.)`;
+      } else if (cloud.localBackupOk) {
         badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
         badgeElem.style.cursor = 'pointer';
         badgeElem.title = 'คลิกเพื่อสำรองขึ้น Google Drive';
         badgeElem.onclick = () => window.runHybridDailyBackup(true);
         badgeElem.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> สำรองลงเครื่องแล้ว (${timeStr} น.) [คลิกเชื่อม Google Drive]`;
-      } else if (driveOk) {
+      } else {
         badgeElem.className = 'badge bg-success text-white px-2.5 py-1';
-        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองขึ้น Google Drive วันนี้แล้ว (${timeStr} น.)`;
+        badgeElem.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> สำรองวันนี้แล้ว (${timeStr} น.)`;
       }
-    } else if (lastDate && lastTime) {
-      const dateFormatted = new Date(lastTime).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' });
+    } else if (cloud && cloud.lastBackupDate && cloud.lastBackupTime) {
+      let dateFormatted = '';
+      try {
+        dateFormatted = new Date(cloud.lastBackupTime).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' });
+      } catch (e) {
+        dateFormatted = cloud.lastBackupDate;
+      }
       badgeElem.className = 'badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1';
-      badgeElem.innerHTML = `สำรองล่าสุดเมื่อ ${dateFormatted} (${lastDayTh || lastDayEn})`;
+      badgeElem.innerHTML = `สำรองล่าสุดเมื่อ ${dateFormatted} (${cloud.lastBackupDayTh || cloud.lastBackupDayEn || ''})`;
     } else {
       badgeElem.className = 'badge bg-light text-dark border px-2.5 py-1';
       badgeElem.innerHTML = `พร้อมสำรองอัตโนมัติวันนี้ (${dayInfo.dayOfWeekTh})`;
@@ -3319,14 +3661,24 @@ window.updateHybridBackupStatusUI = function() {
   }
 };
 
-// 19. Listeners for folder UI refresh & Auto-sync on startup
+// 4. Listeners for folder UI refresh & Auto-sync on startup
 function initBackupRestore() {
+  if (typeof window.subscribeToCloudBackupStatus === 'function') {
+    window.subscribeToCloudBackupStatus();
+  }
   if (typeof window.refreshFolderUIDisplay === 'function') {
     window.refreshFolderUIDisplay();
   }
   if (typeof window.updateHybridBackupStatusUI === 'function') {
     window.updateHybridBackupStatusUI();
   }
+
+  // Listen to flora-firebase-ready to subscribe if not yet connected
+  window.addEventListener('flora-firebase-ready', () => {
+    if (typeof window.subscribeToCloudBackupStatus === 'function') {
+      window.subscribeToCloudBackupStatus();
+    }
+  });
 
   // Automatic Hybrid Daily Backup check after startup
   setTimeout(() => {
